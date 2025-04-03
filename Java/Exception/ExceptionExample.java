@@ -1,3 +1,5 @@
+package Java.Exception;
+
 public class ExceptionExample {
     public static void main(String[] args) {
         try {

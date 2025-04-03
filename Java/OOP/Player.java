@@ -1,3 +1,4 @@
+package Java.OOP;
 // 繼承 & 封裝
 class Player extends Character {
     private int power; // 封裝

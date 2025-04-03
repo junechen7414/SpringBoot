@@ -1,3 +1,4 @@
+package Java.OOP;
 // 抽象類別：抽象
 abstract class Character {
     protected String name;
