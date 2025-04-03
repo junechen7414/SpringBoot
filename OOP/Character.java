@@ -1,0 +1,12 @@
+// 抽象類別：抽象
+abstract class Character {
+    protected String name;
+    protected int health;
+
+    public Character(String name, int health) {
+        this.name = name;
+        this.health = health;
+    }
+
+    public abstract void attack();
+}
