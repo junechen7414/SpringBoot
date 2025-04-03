@@ -5,6 +5,6 @@ class Enemy extends Character {
 
     @Override // 標註覆寫父類別方法
     public void attack() { // 多型
-        System.out.println(name + " 使用火球攻擊！");
-    }
+        System.out.println(getName() + " 使用火球攻擊！");
+    }    
 }
