@@ -2,21 +2,11 @@
     "configurations": [
         {
             "type": "java",
-            "name": "Spring Boot-RestapiApplication<restapi>",
+            "name": "Spring Boot-DemoApplication<demo>",
             "request": "launch",
             "cwd": "${workspaceFolder}",
-            "mainClass": "com.example.restapi.RestapiApplication",
-            "projectName": "restapi",
-            "args": "",
-            "envFile": "${workspaceFolder}/.env"
-        },
-        {
-            "type": "java",
-            "name": "Spring Boot-IocApplication<ioc>",
-            "request": "launch",
-            "cwd": "${workspaceFolder}",
-            "mainClass": "com.example.ioc.IocApplication",
-            "projectName": "ioc",
+            "mainClass": "com.example.demo.DemoApplication",
+            "projectName": "demo",
             "args": "",
             "envFile": "${workspaceFolder}/.env"
         }
