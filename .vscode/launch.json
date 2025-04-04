@@ -9,6 +9,16 @@
             "projectName": "restapi",
             "args": "",
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-IocApplication<ioc>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.example.ioc.IocApplication",
+            "projectName": "ioc",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }
