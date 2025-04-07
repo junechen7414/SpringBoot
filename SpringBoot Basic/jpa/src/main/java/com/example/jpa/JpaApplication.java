@@ -17,8 +17,15 @@ public class JpaApplication implements CommandLineRunner {
 
 	@Override
 	public void run(String... args) throws Exception {
-		System.out.println("Starting database connection test...");
-		testService.testConnection();
-		System.out.println("Database connection test finished.");
+		System.out.println("--- Spring Boot JPA 演示應用程式啟動 ---");
+
+		// 呼叫 Service 層的方法來執行 JPA 操作
+		testService.performJpaOperations();
+
+		// 可以選擇性地保留或移除原始的 testConnection 呼叫
+		// System.out.println("\n--- 執行額外的連線測試 ---");
+		// testService.testConnection();
+
+		System.out.println("\n--- 應用程式執行完畢 ---");
 	}
 }

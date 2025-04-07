@@ -16,6 +16,8 @@ public class TestEntity {
 
     private String name;
 
+    private Integer value; // 新增 value 欄位
+
     // Getters and Setters
     public Long getId() {
         return id;
@@ -31,5 +33,13 @@ public class TestEntity {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public Integer getValue() {
+        return value;
+    }
+
+    public void setValue(Integer value) {
+        this.value = value;
     }
 }
