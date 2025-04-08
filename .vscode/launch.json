@@ -2,6 +2,36 @@
     "configurations": [
         {
             "type": "java",
+            "name": "ExceptionExample",
+            "request": "launch",
+            "mainClass": "Java.Exception.ExceptionExample"
+        },
+        {
+            "type": "java",
+            "name": "CollectionComparison",
+            "request": "launch",
+            "mainClass": "Java.DataSetObject.CollectionComparison"
+        },
+        {
+            "type": "java",
+            "name": "FileCopyExample",
+            "request": "launch",
+            "mainClass": "Java.IOStream.FileCopyExample"
+        },
+        {
+            "type": "java",
+            "name": "Game",
+            "request": "launch",
+            "mainClass": "Java.OOP.Game"
+        },
+        {
+            "type": "java",
+            "name": "ListExample",
+            "request": "launch",
+            "mainClass": "Java.DataSetObject.ListExample"
+        },
+        {
+            "type": "java",
             "name": "Spring Boot-DemoApplication<demo>",
             "request": "launch",
             "cwd": "${workspaceFolder}",
