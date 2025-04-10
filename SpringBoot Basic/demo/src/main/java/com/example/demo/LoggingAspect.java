@@ -9,9 +9,9 @@ import org.springframework.stereotype.Component;
 @Component  // 讓 IoC 容器管理此切面元件
 public class LoggingAspect {
 
-    // 切面：在所有 根路徑 中的所有方法執行前進行日誌紀錄
-    @Before("execution(* com.example.demo.*.*(..))")
+    // 切面：在 com.example.demo 及其子套件中的所有方法執行前進行日誌紀錄
+    @Before("execution(* com.example.demo..*.*(..))") // Modified pointcut to include subpackages
     public void logBefore(JoinPoint joinPoint) {
-        System.out.println("進入方法: " + joinPoint.getSignature().getName());
+        System.out.println("AOP Log - Entering method: " + joinPoint.getSignature().toShortString()); // Improved log message
     }
 }

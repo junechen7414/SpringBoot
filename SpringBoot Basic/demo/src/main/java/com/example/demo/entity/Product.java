@@ -1,4 +1,4 @@
-package com.example.jpa;
+package com.example.demo.entity;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -7,16 +7,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "TEST_TABLE") // 您可以根據需要更改表格名稱
-public class TestEntity {
+@Table(name = "PRODUCTS") // Renamed table
+public class Product { // Renamed class
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // 或其他適合您資料庫的生成策略
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private String name;
 
-    private Integer value; // 新增 value 欄位
+    private Integer price; // Renamed field from value to price
 
     // Getters and Setters
     public Long getId() {
@@ -35,11 +35,11 @@ public class TestEntity {
         this.name = name;
     }
 
-    public Integer getValue() {
-        return value;
+    public Integer getPrice() { // Renamed getter
+        return price;
     }
 
-    public void setValue(Integer value) {
-        this.value = value;
+    public void setPrice(Integer price) { // Renamed setter
+        this.price = price;
     }
 }
