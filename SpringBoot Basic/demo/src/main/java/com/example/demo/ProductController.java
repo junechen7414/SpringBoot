@@ -10,6 +10,12 @@ import org.springframework.web.bind.annotation.*; // Import necessary annotation
 import java.util.List; // Import List
 import java.util.Optional; // Import Optional
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.Parameter;
+
+
 @RestController // 標示為 REST 控制器
 @RequestMapping("/api") // Add base path for API endpoints
 public class ProductController {
@@ -95,6 +101,20 @@ public ResponseEntity<List<Product>> getProductsByName(
         // return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         return new ResponseEntity<>(products, HttpStatus.OK);
     }
+    return new ResponseEntity<>(products, HttpStatus.OK);
+}
+
+// 取得價格高於指定金額的商品
+// GET /api/products/above-price?price=...
+@Operation(summary = "查詢價格高於指定金額的商品")
+@ApiResponses({
+    @ApiResponse(responseCode = "200", description = "成功回傳商品列表"),
+    @ApiResponse(responseCode = "400", description = "參數錯誤")
+})
+@Parameter(name = "price", description = "金額", required = true)
+@GetMapping("/products/above-price")
+public ResponseEntity<List<Product>> getProductsAbovePrice(@RequestParam Integer price) {
+    List<Product> products = productService.getProductsAbovePrice(price);
     return new ResponseEntity<>(products, HttpStatus.OK);
 }
 

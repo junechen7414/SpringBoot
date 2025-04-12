@@ -2,6 +2,12 @@
     "configurations": [
         {
             "type": "java",
+            "name": "StreamExample",
+            "request": "launch",
+            "mainClass": "StreamExample"
+        },
+        {
+            "type": "java",
             "name": "ExceptionExample",
             "request": "launch",
             "mainClass": "Java.Exception.ExceptionExample"
@@ -38,7 +44,8 @@
             "mainClass": "com.example.demo.DemoApplication",
             "projectName": "demo",
             "args": "",
-            "envFile": "${workspaceFolder}/.env"
+            "envFile": "${workspaceFolder}/.env",
+            "vmArgs": " -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=51586 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dspring.jmx.enabled=true -Djava.rmi.server.hostname=localhost -Dspring.application.admin.enabled=true -Dspring.boot.project.name=demo"
         }
     ]
 }

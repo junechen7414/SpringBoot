@@ -65,5 +65,11 @@ public class ProductService { // Renamed class
         return productRepository.findByNameWithNativeSql(name);
     }
 
-    // Removed original demo methods (performJpaOperations, testConnection)
+    // 使用 Stream API 和 Lambda 運算式篩選價格高於指定金額的商品
+    public List<Product> getProductsAbovePrice(Integer price) {
+        List<Product> allProducts = productRepository.findAll();
+        return allProducts.stream()
+                .filter(product -> product.getPrice() > price)
+                .collect(java.util.stream.Collectors.toList());
+    }
 }
