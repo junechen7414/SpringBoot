@@ -48,5 +48,22 @@ public class ProductService { // Renamed class
         return false;
     }
 
+    // --- Custom Query Methods ---
+
+    // 使用 JPA Query Method 根據名稱查詢 (區分大小寫)
+    public List<Product> findProductsByName(String name) {
+        return productRepository.findByName(name);
+    }
+
+    // 使用 JPQL 根據名稱查詢 (區分大小寫)
+    public List<Product> findProductsByNameJpql(String name) {
+        return productRepository.findByNameWithJpql(name);
+    }
+
+    // 使用 Native SQL 根據名稱查詢 (區分大小寫)
+    public List<Product> findProductsByNameNative(String name) {
+        return productRepository.findByNameWithNativeSql(name);
+    }
+
     // Removed original demo methods (performJpaOperations, testConnection)
 }

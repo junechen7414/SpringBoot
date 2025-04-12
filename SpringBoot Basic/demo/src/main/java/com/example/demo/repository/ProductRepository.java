@@ -7,40 +7,27 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> { // Renamed interface and updated generic type
 
-    // 1. JPA Query Method: 根據 name 欄位查詢 (忽略大小寫)
-    Optional<Product> findByNameIgnoreCase(String name);
+    // --- 自訂查詢方法範例：使用三種不同方式實現相同功能 (根據名稱精確查詢) ---
 
-    // 2. JPQL: 使用 @Query 註解和 JPQL 語法查詢
-    @Query("SELECT p FROM Product p WHERE p.name = :name") // Updated JPQL to use Product
+    // 1. JPA Query Method: 根據方法命名規則自動生成查詢
+    // 根據 name 欄位查詢 (區分大小寫)
+    List<Product> findByName(String name);
+
+    // 2. JPQL: 使用 @Query 註解和 JPQL (Java Persistence Query Language) 語法查詢
+    // 操作 Entity 物件和屬性，非資料庫表格和欄位
+    @Query("SELECT p FROM Product p WHERE p.name = :name")
     List<Product> findByNameWithJpql(@Param("name") String name);
 
     // 3. Native SQL: 使用 @Query 註解和原生 SQL 語法查詢
-    @Query(value = "SELECT * FROM PRODUCTS WHERE name = :name", nativeQuery = true) // Updated Native SQL for table name
+    // 直接編寫特定資料庫的 SQL，彈性最大但無資料庫獨立性
+    @Query(value = "SELECT * FROM PRODUCTS WHERE name = :name", nativeQuery = true)
     List<Product> findByNameWithNativeSql(@Param("name") String name);
 
-    // --- 以下為 ProductService 中可能使用的方法 ---
-
-    // JPA Query Method: 查詢名稱包含特定字串的 Entity (忽略大小寫)
-    List<Product> findByNameContainingIgnoreCase(String namePart);
-
-    // JPA Query Method: 查詢名稱包含特定字串的 Entity (區分大小寫)
-    List<Product> findByNameContaining(String namePart);
-
-    // JPQL: 查詢 price 大於指定值的 Entity
-    @Query("SELECT p FROM Product p WHERE p.price > :minPrice") // Updated JPQL for field name and parameter name
-    List<Product> findByPriceGreaterThanJpql(@Param("minPrice") Integer price); // Renamed method and parameter
-
-    // Native SQL: 根據名稱查詢
-    @Query(value = "SELECT * FROM PRODUCTS WHERE name = :exactName", nativeQuery = true) // Updated Native SQL for table name
-    List<Product> findByNameNative(@Param("exactName") String name);
-
-
-    // --- 繼承自 JpaRepository 的方法範例 (無需自行定義) ---
+    // --- 繼承自 JpaRepository 的方法範例 (無需自行定義，常見方法列舉) ---
     // save(Product entity): 新增或更新 Entity
     // findById(Long id): 根據 ID 查詢
     // findAll(): 查詢所有
