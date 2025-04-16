@@ -1,19 +1,29 @@
 package com.example.demo;
 
-import com.example.demo.entity.Product;
-import com.example.demo.service.ProductService; // Import ProductService
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus; // Import HttpStatus
-import org.springframework.http.ResponseEntity; // Import ResponseEntity
-import org.springframework.web.bind.annotation.*; // Import necessary annotations
-
 import java.util.List; // Import List
 import java.util.Optional; // Import Optional
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus; // Import HttpStatus
+import org.springframework.http.ResponseEntity; // Import ResponseEntity
+// Import necessary annotations
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.demo.entity.Product;
+import com.example.demo.service.ProductService; // Import ProductService
+
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.Parameter;
 
 
 @RestController // 標示為 REST 控制器
@@ -35,8 +45,8 @@ public ResponseEntity<Product> createProduct(@RequestBody Product product) {
     return new ResponseEntity<>(createdProduct, HttpStatus.CREATED);
 }
 
-// 讀取所有 (GET /api/getProducts)
-@GetMapping("/getProducts")
+// 讀取所有 (GET /api/getAllProducts)
+@GetMapping("/getAllProducts")
 public ResponseEntity<List<Product>> getAllProducts() {
     List<Product> products = productService.getAllProducts();
     return new ResponseEntity<>(products, HttpStatus.OK);

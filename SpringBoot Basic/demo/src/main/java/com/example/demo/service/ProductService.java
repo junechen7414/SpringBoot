@@ -1,16 +1,17 @@
 package com.example.demo.service;
 
-import com.example.demo.entity.Product; // Updated import path for Product
-import com.example.demo.repository.ProductRepository; // Updated import path for ProductRepository
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Optional;
+import com.example.demo.entity.Product; // Updated import path for Product
+import com.example.demo.repository.ProductRepository; // Updated import path for ProductRepository
 
 @Service
-public class ProductService { // Renamed class
+public class ProductService {
 
     @Autowired
     private ProductRepository productRepository; // Updated repository type and name
@@ -18,29 +19,29 @@ public class ProductService { // Renamed class
     // --- CRUD Operations for API ---
 
     @Transactional
-    public Product createProduct(Product product) { // Renamed method and parameter type
+    public Product createProduct(Product product) {
         return productRepository.save(product);
     }
 
-    public List<Product> getAllProducts() { // Renamed method and return type
+    public List<Product> getAllProducts() {
         return productRepository.findAll();
     }
 
-    public Optional<Product> getProductById(Long id) { // Renamed method and return type
+    public Optional<Product> getProductById(Long id) {
         return productRepository.findById(id);
     }
 
     @Transactional
-    public Optional<Product> updateProduct(Long id, Product productDetails) { // Renamed method and parameter type
+    public Optional<Product> updateProduct(Long id, Product productDetails) {
         return productRepository.findById(id).map(existingProduct -> {
             existingProduct.setName(productDetails.getName());
-            existingProduct.setPrice(productDetails.getPrice()); // Updated to use price
+            existingProduct.setPrice(productDetails.getPrice());
             return productRepository.save(existingProduct);
         });
     }
 
     @Transactional
-    public boolean deleteProduct(Long id) { // Renamed method
+    public boolean deleteProduct(Long id) {
         if (productRepository.existsById(id)) {
             productRepository.deleteById(id);
             return true;

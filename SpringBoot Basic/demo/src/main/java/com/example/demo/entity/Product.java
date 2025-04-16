@@ -1,17 +1,17 @@
 package com.example.demo.entity;
 
+import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
 
 
-@Schema(description = "商品資料模型") // Add Swagger schema description
+@Schema(description = "商品資料模型")
 @Entity
-@Table(name = "PRODUCTS") // Renamed table
-public class Product { // Renamed class
+@Table(name = "PRODUCTS")
+public class Product {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,7 +22,7 @@ public class Product { // Renamed class
     private String name;
 
     @Schema(description = "商品價格")
-    private Integer price; // Renamed field from value to price
+    private Integer price;
 
     // Getters and Setters
     public Long getId() {
@@ -41,11 +41,11 @@ public class Product { // Renamed class
         this.name = name;
     }
 
-    public Integer getPrice() { // Renamed getter
+    public Integer getPrice() {
         return price;
     }
 
-    public void setPrice(Integer price) { // Renamed setter
+    public void setPrice(Integer price) {
         this.price = price;
     }
 }
