@@ -40,8 +40,8 @@ public class ProductController {
 
 // 建立 (POST /api/createProducts)
 @PostMapping("/createProducts")
-public ResponseEntity<Product> createProduct(@RequestBody Product product) {
-    Product createdProduct = productService.createProduct(product);
+public ResponseEntity<Product> createProduct(@RequestBody Product_DTO product_dto) {
+    Product createdProduct = productService.createProduct(product_dto);
     return new ResponseEntity<>(createdProduct, HttpStatus.CREATED);
 }
 
@@ -62,9 +62,9 @@ public ResponseEntity<Product> getProductById(@PathVariable Long id) {
 }
 
 // 更新 (PUT /api/updateProduct/{id})
-@PutMapping("/updateProduct/{id}")
-public ResponseEntity<Product> updateProduct(@PathVariable Long id, @RequestBody Product productDetails) {
-    Optional<Product> updatedProductOptional = productService.updateProduct(id, productDetails);
+@PutMapping("/updateProduct")
+public ResponseEntity<Product> updateProduct(@RequestBody Product productDetails) {
+    Optional<Product> updatedProductOptional = productService.updateProduct(productDetails);
     return updatedProductOptional
             .map(product -> new ResponseEntity<>(product, HttpStatus.OK))
             .orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));

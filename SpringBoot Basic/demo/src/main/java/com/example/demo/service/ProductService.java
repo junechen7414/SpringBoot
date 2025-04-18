@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.demo.Product_DTO;
 import com.example.demo.entity.Product; // Updated import path for Product
 import com.example.demo.repository.ProductRepository; // Updated import path for ProductRepository
 
@@ -19,8 +20,9 @@ public class ProductService {
     // --- CRUD Operations for API ---
 
     @Transactional
-    public Product createProduct(Product product) {
-        return productRepository.save(product);
+    public Product createProduct(Product_DTO product_dto) {
+        Product newProduct = new Product(product_dto.getName(), product_dto.getPrice());
+        return productRepository.save(newProduct);        
     }
 
     public List<Product> getAllProducts() {
@@ -32,12 +34,17 @@ public class ProductService {
     }
 
     @Transactional
-    public Optional<Product> updateProduct(Long id, Product productDetails) {
-        return productRepository.findById(id).map(existingProduct -> {
+    public Optional<Product> updateProduct(Product productDetails) {
+        Optional<Product> existingProductOptional = productRepository.findById(productDetails.getId());
+        if (!existingProductOptional.isEmpty()) {
+            Product existingProduct = existingProductOptional.get();
             existingProduct.setName(productDetails.getName());
             existingProduct.setPrice(productDetails.getPrice());
-            return productRepository.save(existingProduct);
-        });
+            return Optional.of(productRepository.save(existingProduct));
+        }
+        else{
+            return Optional.empty();
+        }        
     }
 
     @Transactional
