@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
 
@@ -14,7 +15,8 @@ import jakarta.persistence.Table;
 public class Product {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "product_seq_gen")    
+    @SequenceGenerator(name = "product_seq_gen", sequenceName = "product_id_seq", allocationSize = 1)
     @Schema(description = "自動生成的商品ID")
     private Long id;
 
@@ -23,6 +25,15 @@ public class Product {
 
     @Schema(description = "商品價格")
     private Integer price;
+
+    // Constructors
+    public Product() {
+    }
+
+    public Product(String name, Integer price) {
+        this.name = name;
+        this.price = price;
+    }
 
     // Getters and Setters
     public Long getId() {
