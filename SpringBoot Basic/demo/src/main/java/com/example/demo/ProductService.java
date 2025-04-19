@@ -1,14 +1,10 @@
-package com.example.demo.service;
+package com.example.demo;
 
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.example.demo.Product_DTO;
-import com.example.demo.entity.Product; // Updated import path for Product
-import com.example.demo.repository.ProductRepository; // Updated import path for ProductRepository
 
 @Service
 public class ProductService {

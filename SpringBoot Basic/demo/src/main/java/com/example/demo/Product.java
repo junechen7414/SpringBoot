@@ -1,4 +1,4 @@
-package com.example.demo.entity;
+package com.example.demo;
 
 import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
 import jakarta.persistence.Entity;
