@@ -31,11 +31,11 @@ public class OrderInfo {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq_gen")
     @SequenceGenerator(name = "order_seq_gen", sequenceName = "order_id_seq", allocationSize = 1)
     @Column(name = "ID", columnDefinition = "NUMBER(10)")
-    @Schema(description = "從1開始自動生成的訂單ID", example = "1")
+    @Schema(description = "訂單編號", example = "1")
     private int id;
 
     @Column(name = "STATUS", columnDefinition = "NUMBER(4)")
-    @Schema(description = "訂單狀態", example = "1000")
+    @Schema(description = "訂單狀態", example = "1001")
     private int status;
 
     @Column(name = "TOTAL_AMOUNT", columnDefinition = "NUMBER(12,4)")
@@ -43,16 +43,16 @@ public class OrderInfo {
     private BigDecimal totalAmount;
 
     @Column(name = "CREATE_DATE", columnDefinition = "DATE")
-    @Schema(description = "訂單建立日期", example = "2025-01-01T10:30:00")
+    @Schema(description = "建立日期", example = "2025-01-01T10:30:00")
     private LocalDateTime createDate;
 
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    @Schema(description = "訂單更新日期", example = "2025-01-02T11:00:00")
+    @Schema(description = "修改日期", example = "2025-01-02T11:00:00")
     private LocalDateTime modifiedDate;
 
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載，按需載入 Account 資訊
     @JoinColumn(name = "ACCOUNT_ID", referencedColumnName = "ID")
-    @Schema(description = "所屬帳號")
+    @Schema(description = "使用者編號",example="1")
     private Account account; // 指向所屬的 Account 物件
 
     @OneToMany(mappedBy = "orderInfo", cascade = CascadeType.ALL, orphanRemoval = true)

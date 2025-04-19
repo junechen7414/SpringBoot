@@ -25,23 +25,23 @@ public class Account {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "account_seq_gen")
     @SequenceGenerator(name = "account_seq_gen", sequenceName = "account_id_seq", allocationSize = 1)
     @Column(name = "ID", columnDefinition = "NUMBER(10)")
-    @Schema(description = "從1開始自動生成的帳號ID", example = "1")
+    @Schema(description = "帳⼾編號", example = "1")
     private int id;
 
     @Column(name = "NAME", columnDefinition = "NVARCHAR2(50)")
-    @Schema(description = "帳號名稱", example = "使用者名稱")
+    @Schema(description = "帳戶名稱", example = "帳戶名稱")
     private String name;
 
     @Column(name = "STATUS", columnDefinition = "VARCHAR2(1)")
-    @Schema(description = "帳號狀態", example = "A")
+    @Schema(description = "啟用狀態", example = "Y")
     private String status;
 
     @Column(name = "CREATE_DATE", columnDefinition = "DATE")
-    @Schema(description = "帳號建立日期", example = "2025-01-01T10:30:00")
+    @Schema(description = "建立日期", example = "2025-01-01T10:30:00")
     private LocalDateTime createDate;
 
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    @Schema(description = "帳號更新日期", example = "2025-01-02T11:00:00")
+    @Schema(description = "修改日期", example = "2025-01-02T11:00:00")
     private LocalDateTime modifiedDate;
 
     // 加入與 OrderInfo 的一對多關係映射

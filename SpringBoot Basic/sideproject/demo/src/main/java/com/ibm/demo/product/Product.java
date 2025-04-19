@@ -19,13 +19,15 @@ import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema anno
 import main.java.com.ibm.demo.order_product_detail.OrderProductDetail;
 
 @Entity
-@Table(name = "PRODUCT")
+@Table(name = "PRODUCT",indexes = {
+    @Index(name = "pk_PRODUCT", columnList = "ID", unique = true) // 同@Id的效用
+})
 @Schema(description = "商品資訊")
 public class Product {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE,generator = "product_seq_gen") // 使用 Sequence 生成主鍵
     @SequenceGenerator(name = "product_seq_gen", sequenceName = "product_id_seq", allocationSize = 1) // 定義 Sequence
-    @Schema(description = "從1開始自動生成的商品ID", example = "1")
+    @Schema(description = "商品編號", example = "1")
     @Column(name = "ID", columnDefinition = "NUMBER(10)")
     private int id;
 
@@ -34,23 +36,23 @@ public class Product {
     private String name;
 
     @Column(name = "PRICE", columnDefinition = "NUMBER(12,4)")
-    @Schema(description = "商品價格", example = "100")
+    @Schema(description = "價格", example = "100")
     private BigDecimal price;
 
     @Column(name = "SALE_STATUS", columnDefinition = "NUMBER(4)")
-    @Schema(description = "商品狀態", example = "0000")
+    @Schema(description = "銷售狀態", example = "1001")
     private int saleStatus;
 
     @Column(name = "STOCK_QTY", columnDefinition = "NUMBER(10)")
-    @Schema(description = "商品庫存數量", example = "10")
+    @Schema(description = "庫存量", example = "10")
     private int stockQty;
 
     @Column(name = "CREATE_DATE", columnDefinition = "DATE")
-    @Schema(description = "商品建立日期", example = "2025-01-01")
+    @Schema(description = "建立日期", example = "2025-01-01")
     private LocalDateTime createDate;
 
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    @Schema(description = "商品更新日期", example = "2025-01-01")
+    @Schema(description = "更新日期", example = "2025-01-01")
     private LocalDateTime modifiedDate;
 
     // 加入與 OrderProductDetail 的一對多關係映射

@@ -27,7 +27,7 @@ public class OrderProductDetail {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_detail_seq_gen")
     @SequenceGenerator(name = "order_detail_seq_gen", sequenceName = "order_product_detail_id_seq", allocationSize = 1)
     @Column(name = "ID", columnDefinition = "NUMBER(10)")
-    @Schema(description = "從1開始自動生成的明細ID", example = "1")
+    @Schema(description = "訂單明細編號", example = "1")
     private int id;
 
     // @Column(name = "ORDER_ID", columnDefinition = "NUMBER(10)")
@@ -39,19 +39,19 @@ public class OrderProductDetail {
     // private int productId;
 
     @Column(name = "QUANTITY", columnDefinition = "NUMBER(10)")
-    @Schema(description = "購買數量", example = "5")
+    @Schema(description = "數量", example = "5")
     private int quantity;
 
     // 加入與 OrderInfo 的多對一關係映射
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
     @JoinColumn(name = "ORDER_ID", referencedColumnName = "ID") // 外鍵欄位 ORDER_ID 指向 OrderInfo 的 ID
-    @Schema(description = "所屬訂單")
+    @Schema(description = "訂單編號",example = "1")
     private OrderInfo orderInfo; // 指向所屬的 OrderInfo 物件
 
     // 加入與 Product 的多對一關係映射
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
     @JoinColumn(name = "PRODUCT_ID", referencedColumnName = "ID") // 外鍵欄位 PRODUCT_ID 指向 Product 的 ID
-    @Schema(description = "關聯商品")
+    @Schema(description = "商品編號",example="1")
     private Product product; // 指向關聯的 Product 物件
 
     // No-argument constructor
