@@ -1,0 +1,130 @@
+package main.java.com.ibm.demo.product;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects; // Import Objects for equals and hashCode
+
+import javax.persistence.CascadeType; // Import CascadeType
+import javax.persistence.Column; // Import Column
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.OneToMany; // Import OneToMany
+import javax.persistence.SequenceGenerator; // Import SequenceGenerator
+import javax.persistence.Table;
+
+import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
+import main.java.com.ibm.demo.order_product_detail.OrderProductDetail;
+
+@Entity
+@Table(name = "PRODUCT")
+@Schema(description = "商品資訊")
+public class Product {
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE,generator = "product_seq_gen") // 使用 Sequence 生成主鍵
+    @SequenceGenerator(name = "product_seq_gen", sequenceName = "product_id_seq", allocationSize = 1) // 定義 Sequence
+    @Schema(description = "從1開始自動生成的商品ID", example = "1")
+    @Column(name = "ID", columnDefinition = "NUMBER(10)")
+    private int id;
+
+    @Column(name = "NAME", columnDefinition = "NVARCHAR2(100)")
+    @Schema(description = "商品名稱", example = "商品名稱")
+    private String name;
+
+    @Column(name = "PRICE", columnDefinition = "NUMBER(12,4)")
+    @Schema(description = "商品價格", example = "100")
+    private BigDecimal price;
+
+    @Column(name = "SALE_STATUS", columnDefinition = "NUMBER(4)")
+    @Schema(description = "商品狀態", example = "0000")
+    private int saleStatus;
+
+    @Column(name = "STOCK_QTY", columnDefinition = "NUMBER(10)")
+    @Schema(description = "商品庫存數量", example = "10")
+    private int stockQty;
+
+    @Column(name = "CREATE_DATE", columnDefinition = "DATE")
+    @Schema(description = "商品建立日期", example = "2025-01-01")
+    private LocalDateTime createDate;
+
+    @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
+    @Schema(description = "商品更新日期", example = "2025-01-01")
+    private LocalDateTime modifiedDate;
+
+    // 加入與 OrderProductDetail 的一對多關係映射
+    // mappedBy = "product" 指的是在 OrderProductDetail Entity 中對應的屬性名稱
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderProductDetail> orderDetails; // 存放所有引用該商品的訂單明細
+
+    // No-argument constructor
+    public Product() {
+    }
+
+    // Getters and Setters
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public BigDecimal getPrice() {
+        return price;
+    }
+
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+    }
+
+    public int getSaleStatus() {
+        return saleStatus;
+    }
+
+    public void setSaleStatus(int saleStatus) {
+        this.saleStatus = saleStatus;
+    }
+
+    public int getStockQty() {
+        return stockQty;
+    }
+
+    public void setStockQty(int stockQty) {
+        this.stockQty = stockQty;
+    }
+
+    public LocalDateTime getCreateDate() {
+        return createDate;
+    }
+
+    public void setCreateDate(LocalDateTime createDate) {
+        this.createDate = createDate;
+    }
+
+    public LocalDateTime getModifiedDate() {
+        return modifiedDate;
+    }
+
+    public void setModifiedDate(LocalDateTime modifiedDate) {
+        this.modifiedDate = modifiedDate;
+    }
+
+    public List<OrderProductDetail> getOrderDetails() {
+        return orderDetails;
+    }
+
+    public void setOrderDetails(List<OrderProductDetail> orderDetails) {
+        this.orderDetails = orderDetails;
+    }
+
+}
