@@ -17,13 +17,13 @@ public class Product {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "product_seq_gen")    
     @SequenceGenerator(name = "product_seq_gen", sequenceName = "product_id_seq", allocationSize = 1)
-    @Schema(description = "自動生成的商品ID")
+    @Schema(description = "自動生成的商品ID", example = "0")
     private Long id;
 
-    @Schema(description = "商品名稱")
+    @Schema(description = "商品名稱", example = "Apple")
     private String name;
 
-    @Schema(description = "商品價格")
+    @Schema(description = "商品價格", example = "100")
     private Integer price;
 
     // Constructors
