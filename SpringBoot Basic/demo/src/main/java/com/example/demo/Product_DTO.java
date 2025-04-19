@@ -1,7 +1,12 @@
 package com.example.demo;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
+@Schema(description = "商品傳輸資料模型")
 public class Product_DTO {
+    @Schema(description = "商品名稱", example = "Bpple")
     private String name;
+    @Schema(description = "商品價格", example = "100")
     private Integer price;
 
     //constructor

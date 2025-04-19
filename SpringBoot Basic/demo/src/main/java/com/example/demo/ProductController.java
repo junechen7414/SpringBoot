@@ -1,7 +1,6 @@
 package com.example.demo;
 
 import java.util.List; // Import List
-import java.util.Optional; // Import Optional
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus; // Import HttpStatus
@@ -54,20 +53,16 @@ public ResponseEntity<List<Product>> getAllProducts() {
 
 // 根據ID讀取 (GET /api/getProduct/{id})
 @GetMapping("/getProduct/{id}")
-public ResponseEntity<Product> getProductById(@PathVariable Long id) {
-    Optional<Product> productOptional = productService.getProductById(id);
-    return productOptional
-            .map(product -> new ResponseEntity<>(product, HttpStatus.OK))
-            .orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+public ResponseEntity<Product_DTO> getProductById(@PathVariable Long id) {
+    Product_DTO product_dto = productService.getProductById(id);
+    return ResponseEntity.ok(product_dto);
 }
 
-// 更新 (PUT /api/updateProduct/{id})
+// 更新 (PUT /api/updateProduct)
 @PutMapping("/updateProduct")
-public ResponseEntity<Product> updateProduct(@RequestBody Product productDetails) {
-    Optional<Product> updatedProductOptional = productService.updateProduct(productDetails);
-    return updatedProductOptional
-            .map(product -> new ResponseEntity<>(product, HttpStatus.OK))
-            .orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+public ResponseEntity<Product_DTO> updateProduct(@RequestBody Product productDetails) {
+    Product_DTO updatedProduct_DTO = productService.updateProduct(productDetails);
+    return ResponseEntity.ok(updatedProduct_DTO);
 }
 
 // 刪除 (DELETE /api/deleteProduct/{id})

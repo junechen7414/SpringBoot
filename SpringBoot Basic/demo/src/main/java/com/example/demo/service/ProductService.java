@@ -1,7 +1,6 @@
 package com.example.demo.service;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,22 +28,24 @@ public class ProductService {
         return productRepository.findAll();
     }
 
-    public Optional<Product> getProductById(Long id) {
-        return productRepository.findById(id);
+    public Product_DTO getProductById(Long id) {
+        Product existingProduct = productRepository.findById(id)
+            .orElseThrow(() -> new NullPointerException("Product not found with id: " + id));        
+        Product_DTO product_dto = new Product_DTO(existingProduct.getName(), existingProduct.getPrice());
+        return product_dto;        
     }
 
     @Transactional
-    public Optional<Product> updateProduct(Product productDetails) {
-        Optional<Product> existingProductOptional = productRepository.findById(productDetails.getId());
-        if (!existingProductOptional.isEmpty()) {
-            Product existingProduct = existingProductOptional.get();
-            existingProduct.setName(productDetails.getName());
-            existingProduct.setPrice(productDetails.getPrice());
-            return Optional.of(productRepository.save(existingProduct));
-        }
-        else{
-            return Optional.empty();
-        }        
+    public Product_DTO updateProduct(Product productDetails) {
+        Long productId = productDetails.getId();
+        // Find product or throw exception if not found
+        Product existingProduct = productRepository.findById(productId)
+            .orElseThrow(() -> new NullPointerException("Product not found with id: " + productId));        
+        existingProduct.setName(productDetails.getName());
+        existingProduct.setPrice(productDetails.getPrice());
+        Product updatedProduct = productRepository.save(existingProduct);
+        Product_DTO product_dto = new Product_DTO(updatedProduct.getName(), updatedProduct.getPrice());
+        return product_dto;            
     }
 
     @Transactional
