@@ -1,22 +1,22 @@
-package main.java.com.ibm.demo.product;
+package com.ibm.demo.product;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects; // Import Objects for equals and hashCode
 
-import javax.persistence.CascadeType; // Import CascadeType
-import javax.persistence.Column; // Import Column
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.OneToMany; // Import OneToMany
-import javax.persistence.SequenceGenerator; // Import SequenceGenerator
-import javax.persistence.Table;
+import com.ibm.demo.order_product_detail.OrderProductDetail;
 
 import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
-import main.java.com.ibm.demo.order_product_detail.OrderProductDetail;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "PRODUCT",indexes = {

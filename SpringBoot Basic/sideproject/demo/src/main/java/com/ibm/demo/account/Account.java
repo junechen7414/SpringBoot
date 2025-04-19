@@ -1,20 +1,19 @@
-package main.java.com.ibm.demo.account;
+package com.ibm.demo.account;
 import java.time.LocalDateTime; // 使用 LocalDateTime 對應 DATE 型別
 import java.util.List;
-import java.util.Objects; // Import Objects for equals and hashCode
 
-import javax.persistence.CascadeType; // Import CascadeType
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.OneToMany; // Import OneToMany
-import javax.persistence.SequenceGenerator;
-import javax.persistence.Table;
-import main.java.com.ibm.demo.order_info.OrderInfo;
+import com.ibm.demo.order_info.OrderInfo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "ACCOUNT") // 指定對應的資料表名稱

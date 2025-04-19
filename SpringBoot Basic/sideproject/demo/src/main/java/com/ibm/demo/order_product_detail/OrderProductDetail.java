@@ -1,21 +1,18 @@
-package main.java.com.ibm.demo.order_product_detail;
-import java.util.Objects; // Import Objects for equals and hashCode
-
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.FetchType; // Import FetchType
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.JoinColumn; // Import JoinColumn
-import javax.persistence.ManyToOne; // Import ManyToOne
-import javax.persistence.SequenceGenerator;
-import javax.persistence.Table;
+package com.ibm.demo.order_product_detail;
+import com.ibm.demo.order_info.OrderInfo;
+import com.ibm.demo.product.Product;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-// Removed Lombok imports
-import main.java.com.ibm.demo.order_info.OrderInfo;
-import main.java.com.ibm.demo.product.Product;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
 
 // Removed Lombok annotations
 @Entity
