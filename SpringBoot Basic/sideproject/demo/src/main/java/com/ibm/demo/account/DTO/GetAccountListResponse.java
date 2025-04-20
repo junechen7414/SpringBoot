@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class AccountListResponseDTO {
+public class GetAccountListResponse {
     private int id;
     private String name;
     private String status;

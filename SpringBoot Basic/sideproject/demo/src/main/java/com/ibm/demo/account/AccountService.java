@@ -5,12 +5,12 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.ibm.demo.account.DTO.AccountDetailResponseDTO;
-import com.ibm.demo.account.DTO.AccountListResponseDTO;
-import com.ibm.demo.account.DTO.CreateAccountRequestDTO;
-import com.ibm.demo.account.DTO.CreateAccountResponseDTO;
-import com.ibm.demo.account.DTO.UpdateAccountRequestDTO;
-import com.ibm.demo.account.DTO.UpdateAccountResponseDTO;
+import com.ibm.demo.account.DTO.GetAccountDetailResponse;
+import com.ibm.demo.account.DTO.GetAccountListResponse;
+import com.ibm.demo.account.DTO.CreateAccountRequest;
+import com.ibm.demo.account.DTO.CreateAccountResponse;
+import com.ibm.demo.account.DTO.UpdateAccountRequest;
+import com.ibm.demo.account.DTO.UpdateAccountResponse;
 
 import jakarta.transaction.Transactional;
 
@@ -20,32 +20,32 @@ public class AccountService {
     private AccountRepository accountRepository;
 
     @Transactional
-    public CreateAccountResponseDTO createAccount(CreateAccountRequestDTO account_DTO) {
+    public CreateAccountResponse createAccount(CreateAccountRequest account_DTO) {
         Account newAccount = new Account(account_DTO.getName(), account_DTO.getStatus());        
         Account savedAccount = accountRepository.save(newAccount);
-        CreateAccountResponseDTO createAccountResponseDTO = new CreateAccountResponseDTO(savedAccount.getId(),savedAccount.getName(), savedAccount.getStatus(),savedAccount.getCreateDate());
+        CreateAccountResponse createAccountResponseDTO = new CreateAccountResponse(savedAccount.getId(),savedAccount.getName(), savedAccount.getStatus(),savedAccount.getCreateDate());
         return createAccountResponseDTO;
     }
 
-    public List<AccountListResponseDTO> getAccountList() {
+    public List<GetAccountListResponse> getAccountList() {
         return accountRepository.getAccountList();
     }
 
-    public AccountDetailResponseDTO getAccountDetail(int id){
+    public GetAccountDetailResponse getAccountDetail(int id){
         Account existingAccount = accountRepository.findById(id)
             .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
-        AccountDetailResponseDTO accountDetailResponseDTO = new AccountDetailResponseDTO(existingAccount.getName(), existingAccount.getStatus(),existingAccount.getCreateDate(),existingAccount.getModifiedDate());
+        GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(), existingAccount.getStatus(),existingAccount.getCreateDate(),existingAccount.getModifiedDate());
         return accountDetailResponseDTO;    
     }
 
     @Transactional
-    public UpdateAccountResponseDTO updateAccont(UpdateAccountRequestDTO updateAccountRequestDto){
+    public UpdateAccountResponse updateAccont(UpdateAccountRequest updateAccountRequestDto){
         Account existingAccount = accountRepository.findById(updateAccountRequestDto.getId())
         .orElseThrow(() -> new NullPointerException("Account not found with id: " + updateAccountRequestDto.getId()));
         existingAccount.setName(updateAccountRequestDto.getName());
         existingAccount.setStatus(updateAccountRequestDto.getStatus());
         Account updatedAccount = accountRepository.save(existingAccount);
-        UpdateAccountResponseDTO updatedAccountResponseDto = new UpdateAccountResponseDTO(updatedAccount.getId(),updatedAccount.getName(), updatedAccount.getStatus(),updatedAccount.getCreateDate(),updatedAccount.getModifiedDate());
+        UpdateAccountResponse updatedAccountResponseDto = new UpdateAccountResponse(updatedAccount.getId(),updatedAccount.getName(), updatedAccount.getStatus(),updatedAccount.getCreateDate(),updatedAccount.getModifiedDate());
         return updatedAccountResponseDto;
     }
 

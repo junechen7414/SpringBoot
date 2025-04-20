@@ -7,8 +7,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UpdateAccountRequestDTO {
-    private int id;
+public class CreateAccountRequest {
     private String name;
     private String status;
 }

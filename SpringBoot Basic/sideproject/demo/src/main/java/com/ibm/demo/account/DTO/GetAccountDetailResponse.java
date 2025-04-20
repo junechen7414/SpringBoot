@@ -1,6 +1,5 @@
-package com.ibm.demo.product.DTO;
+package com.ibm.demo.account.DTO;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import lombok.AllArgsConstructor;
@@ -10,12 +9,9 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProductDetailResponseDTO {
+public class GetAccountDetailResponse {
     private String name;
-    private BigDecimal price;
-    private int saleStatus;
-    private int stockQty;
+    private String status;
     LocalDateTime createDate;
     LocalDateTime modifiedDate;
-
 }

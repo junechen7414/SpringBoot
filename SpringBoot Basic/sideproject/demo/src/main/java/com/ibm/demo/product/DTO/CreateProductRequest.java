@@ -6,11 +6,11 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UpdateProductRequestDTO {
-    private int id;
+public class CreateProductRequest {
     private String name;
     private BigDecimal price;
     private int saleStatus;
