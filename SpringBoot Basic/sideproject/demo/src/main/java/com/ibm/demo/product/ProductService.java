@@ -5,6 +5,11 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.ibm.demo.product.DTO.CreateProductRequestDTO;
+import com.ibm.demo.product.DTO.ProductDetailResponseDTO;
+import com.ibm.demo.product.DTO.ProductListResponseDTO;
+import com.ibm.demo.product.DTO.UpdateProductDTO;
+
 import jakarta.transaction.Transactional;
 
 @Service

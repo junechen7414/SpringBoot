@@ -4,12 +4,17 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import com.ibm.demo.order_product_detail.OrderProductDetail;
 
 import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -17,7 +22,16 @@ import jakarta.persistence.Index;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.Temporal;
+import jakarta.persistence.TemporalType;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
 @Entity
 @Table(name = "PRODUCT",indexes = {
     @Index(name = "pk_PRODUCT", columnList = "ID", unique = true) // 同@Id的效用
@@ -47,10 +61,14 @@ public class Product {
     @Schema(description = "庫存量", example = "10")
     private int stockQty;
 
+    @CreatedDate // 標記為創建日期欄位
+    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
     @Column(name = "CREATE_DATE", columnDefinition = "DATE")
     @Schema(description = "建立日期", example = "2025-01-01")
     private LocalDateTime createDate;
 
+    @LastModifiedDate // 標記為更新日期欄位
+    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
     @Schema(description = "更新日期", example = "2025-01-01")
     private LocalDateTime modifiedDate;
@@ -60,73 +78,13 @@ public class Product {
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderProductDetail> orderDetails; // 存放所有引用該商品的訂單明細
 
-    // No-argument constructor
-    public Product() {
-    }
+    //constructors
 
-    // Getters and Setters
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
+    public Product(String name, BigDecimal price, int saleStatus, int stockQty) {
         this.name = name;
-    }
-
-    public BigDecimal getPrice() {
-        return price;
-    }
-
-    public void setPrice(BigDecimal price) {
         this.price = price;
-    }
-
-    public int getSaleStatus() {
-        return saleStatus;
-    }
-
-    public void setSaleStatus(int saleStatus) {
         this.saleStatus = saleStatus;
-    }
-
-    public int getStockQty() {
-        return stockQty;
-    }
-
-    public void setStockQty(int stockQty) {
         this.stockQty = stockQty;
-    }
-
-    public LocalDateTime getCreateDate() {
-        return createDate;
-    }
-
-    public void setCreateDate(LocalDateTime createDate) {
-        this.createDate = createDate;
-    }
-
-    public LocalDateTime getModifiedDate() {
-        return modifiedDate;
-    }
-
-    public void setModifiedDate(LocalDateTime modifiedDate) {
-        this.modifiedDate = modifiedDate;
-    }
-
-    public List<OrderProductDetail> getOrderDetails() {
-        return orderDetails;
-    }
-
-    public void setOrderDetails(List<OrderProductDetail> orderDetails) {
-        this.orderDetails = orderDetails;
     }
 
 }

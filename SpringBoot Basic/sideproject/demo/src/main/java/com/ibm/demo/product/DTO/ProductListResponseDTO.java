@@ -1,4 +1,4 @@
-package com.ibm.demo.product;
+package com.ibm.demo.product.DTO;
 
 import java.math.BigDecimal;
 
