@@ -2,19 +2,33 @@ package com.ibm.demo.account;
 import java.time.LocalDateTime; // 使用 LocalDateTime 對應 DATE 型別
 import java.util.List;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import com.ibm.demo.order_info.OrderInfo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.Temporal;
+import jakarta.persistence.TemporalType;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
 @Entity
 @Table(name = "ACCOUNT") // 指定對應的資料表名稱
 @Schema(description = "帳號資訊")
@@ -35,12 +49,14 @@ public class Account {
     @Schema(description = "啟用狀態", example = "Y")
     private String status;
 
+    @CreatedDate // 標記為創建日期欄位
+    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
     @Column(name = "CREATE_DATE", columnDefinition = "DATE")
-    @Schema(description = "建立日期", example = "2025-01-01T10:30:00")
     private LocalDateTime createDate;
 
+    @LastModifiedDate // 標記為更新日期欄位
+    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    @Schema(description = "修改日期", example = "2025-01-02T11:00:00")
     private LocalDateTime modifiedDate;
 
     // 加入與 OrderInfo 的一對多關係映射
@@ -48,59 +64,13 @@ public class Account {
     // cascade = CascadeType.ALL 表示對 Account 的操作（如刪除）會級聯影響關聯的 OrderInfo
     // orphanRemoval = true 移除關聯的 OrderInfo 當它不再被 Account 引用時
     @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderInfo> orders; // 存放該帳號下的所有訂單
+    private List<OrderInfo> orders; // 存放該帳號下的所有訂單    
 
-    // No-argument constructor
-    public Account() {
-    }
+    //constructors
 
-    // Getters and Setters
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
+    public Account(String name, String status){
         this.name = name;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public LocalDateTime getCreateDate() {
-        return createDate;
-    }
-
-    public void setCreateDate(LocalDateTime createDate) {
-        this.createDate = createDate;
-    }
-
-    public LocalDateTime getModifiedDate() {
-        return modifiedDate;
-    }
-
-    public void setModifiedDate(LocalDateTime modifiedDate) {
-        this.modifiedDate = modifiedDate;
-    }
-
-    public List<OrderInfo> getOrders() {
-        return orders;
-    }
-
-    public void setOrders(List<OrderInfo> orders) {
-        this.orders = orders;
+        this.status = status;        
     }
 
 }

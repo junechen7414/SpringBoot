@@ -1,6 +1,4 @@
-package com.ibm.demo.product.DTO;
-
-import java.math.BigDecimal;
+package com.ibm.demo.account.DTO;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,10 +7,8 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UpdateProductDTO {
+public class AccountListResponseDTO {
     private int id;
     private String name;
-    private BigDecimal price;
-    private int saleStatus;
-    private int stockQty;
+    private String status;
 }

@@ -64,13 +64,11 @@ public class Product {
     @CreatedDate // 標記為創建日期欄位
     @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
     @Column(name = "CREATE_DATE", columnDefinition = "DATE")
-    @Schema(description = "建立日期", example = "2025-01-01")
     private LocalDateTime createDate;
 
     @LastModifiedDate // 標記為更新日期欄位
     @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    @Schema(description = "更新日期", example = "2025-01-01")
     private LocalDateTime modifiedDate;
 
     // 加入與 OrderProductDetail 的一對多關係映射
