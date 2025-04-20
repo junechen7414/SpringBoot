@@ -1,4 +1,5 @@
 package com.ibm.demo.account;
+
 import java.time.LocalDateTime; // 使用 LocalDateTime 對應 DATE 型別
 import java.util.List;
 
@@ -37,21 +38,21 @@ public class Account {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "account_seq_gen")
     @SequenceGenerator(name = "account_seq_gen", sequenceName = "account_id_seq", allocationSize = 1)
-    @Column(name = "ID", columnDefinition = "NUMBER(10)")
+    @Column(name = "ID", columnDefinition = "NUMBER(10)", nullable = false)
     @Schema(description = "帳⼾編號", example = "1")
     private int id;
 
-    @Column(name = "NAME", columnDefinition = "NVARCHAR2(50)")
+    @Column(name = "NAME", columnDefinition = "NVARCHAR2(50)", nullable = false)
     @Schema(description = "帳戶名稱", example = "帳戶名稱")
     private String name;
 
-    @Column(name = "STATUS", columnDefinition = "VARCHAR2(1)")
+    @Column(name = "STATUS", columnDefinition = "VARCHAR2(1)", nullable = false)
     @Schema(description = "啟用狀態", example = "Y")
     private String status;
 
     @CreatedDate // 標記為創建日期欄位
     @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
-    @Column(name = "CREATE_DATE", columnDefinition = "DATE")
+    @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
     private LocalDateTime createDate;
 
     @LastModifiedDate // 標記為更新日期欄位
@@ -64,13 +65,13 @@ public class Account {
     // cascade = CascadeType.ALL 表示對 Account 的操作（如刪除）會級聯影響關聯的 OrderInfo
     // orphanRemoval = true 移除關聯的 OrderInfo 當它不再被 Account 引用時
     @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderInfo> orders; // 存放該帳號下的所有訂單    
+    private List<OrderInfo> orders; // 存放該帳號下的所有訂單
 
-    //constructors
+    // constructors
 
-    public Account(String name, String status){
+    public Account(String name, String status) {
         this.name = name;
-        this.status = status;        
+        this.status = status;
     }
 
 }

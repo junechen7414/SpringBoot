@@ -46,23 +46,23 @@ public class OrderInfo {
     @Column(name = "ID", columnDefinition = "NUMBER(10)")
     @Schema(description = "訂單編號", example = "1")
     private int id;
-    
+
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載，按需載入 Account 資訊
-    @JoinColumn(name = "ACCOUNT_ID", referencedColumnName = "ID")
-    @Schema(description = "使用者編號",example="1")
+    @JoinColumn(name = "ACCOUNT_ID", referencedColumnName = "ID", nullable = false)
+    @Schema(description = "使用者編號", example = "1")
     private Account account; // 指向所屬的 Account 物件
 
-    @Column(name = "STATUS", columnDefinition = "NUMBER(4)")
+    @Column(name = "STATUS", columnDefinition = "NUMBER(4)", nullable = false)
     @Schema(description = "訂單狀態", example = "1001")
     private int status;
 
-    @Column(name = "TOTAL_AMOUNT", columnDefinition = "NUMBER(12,4)")
+    @Column(name = "TOTAL_AMOUNT", columnDefinition = "NUMBER(12,4)", nullable = false)
     @Schema(description = "訂單總金額", example = "1234.56")
     private BigDecimal totalAmount;
 
     @CreatedDate // 標記為創建日期欄位
     @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
-    @Column(name = "CREATE_DATE", columnDefinition = "DATE")    
+    @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
     private LocalDateTime createDate;
 
     @LastModifiedDate // 標記為更新日期欄位

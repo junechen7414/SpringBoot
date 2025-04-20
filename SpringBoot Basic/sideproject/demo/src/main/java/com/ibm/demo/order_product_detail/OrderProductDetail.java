@@ -1,4 +1,5 @@
 package com.ibm.demo.order_product_detail;
+
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.ibm.demo.order_info.OrderInfo;
@@ -46,18 +47,17 @@ public class OrderProductDetail {
 
     // 加入與 OrderInfo 的多對一關係映射
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
-    @JoinColumn(name = "ORDER_ID", referencedColumnName = "ID") // 外鍵欄位 ORDER_ID 指向 OrderInfo 的 ID
-    @Schema(description = "訂單編號",example = "1")
+    @JoinColumn(name = "ORDER_ID", referencedColumnName = "ID", nullable = false) // 外鍵欄位 ORDER_ID 指向 OrderInfo 的 ID
+    @Schema(description = "訂單編號", example = "1")
     private OrderInfo orderInfo; // 指向所屬的 OrderInfo 物件
 
     // 加入與 Product 的多對一關係映射
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
-    @JoinColumn(name = "PRODUCT_ID", referencedColumnName = "ID") // 外鍵欄位 PRODUCT_ID 指向 Product 的 ID
-    @Schema(description = "商品編號",example="1")
+    @JoinColumn(name = "PRODUCT_ID", referencedColumnName = "ID", nullable = false) // 外鍵欄位 PRODUCT_ID 指向 Product 的 ID
+    @Schema(description = "商品編號", example = "1")
     private Product product; // 指向關聯的 Product 物件
 
-    
-    @Column(name = "QUANTITY", columnDefinition = "NUMBER(10)")
+    @Column(name = "QUANTITY", columnDefinition = "NUMBER(10)", nullable = false)
     @Schema(description = "數量", example = "5")
     private int quantity;
 }
