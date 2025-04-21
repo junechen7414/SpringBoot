@@ -7,7 +7,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.order_info.OrderInfo;
+import com.ibm.demo.order.Entity.OrderInfo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
@@ -51,12 +51,12 @@ public class Account {
     private String status;
 
     @CreatedDate // 標記為創建日期欄位
-    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
+    @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
     private LocalDateTime createDate;
 
     @LastModifiedDate // 標記為更新日期欄位
-    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
+    @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
     private LocalDateTime modifiedDate;
 

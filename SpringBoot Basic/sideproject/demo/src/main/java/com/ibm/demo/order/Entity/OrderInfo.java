@@ -1,4 +1,4 @@
-package com.ibm.demo.order_info;
+package com.ibm.demo.order.Entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -9,7 +9,6 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.ibm.demo.account.Account;
-import com.ibm.demo.order_product_detail.OrderProductDetail;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
@@ -61,16 +60,21 @@ public class OrderInfo {
     private BigDecimal totalAmount;
 
     @CreatedDate // 標記為創建日期欄位
-    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
+    @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
     private LocalDateTime createDate;
 
     @LastModifiedDate // 標記為更新日期欄位
-    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
+    @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
     private LocalDateTime modifiedDate;
 
     @OneToMany(mappedBy = "orderInfo", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderProductDetail> orderDetails; // 存放該訂單下的所有產品明細
+
+    // constructor
+    public OrderInfo(Account account) {
+        this.account = account;             
+    }
 
 }

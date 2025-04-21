@@ -8,7 +8,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.order_product_detail.OrderProductDetail;
+import com.ibm.demo.order.Entity.OrderProductDetail;
 
 import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
 import jakarta.persistence.CascadeType;
@@ -62,12 +62,12 @@ public class Product {
     private int stockQty;
 
     @CreatedDate // 標記為創建日期欄位
-    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
+    @Temporal(TemporalType.DATE) // 指定一個日期時間欄位在對應到資料庫時，應該使用的資料類型。
     @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
     private LocalDateTime createDate;
 
     @LastModifiedDate // 標記為更新日期欄位
-    @Temporal(TemporalType.TIMESTAMP) // 指定日期時間類型
+    @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
     private LocalDateTime modifiedDate;
 

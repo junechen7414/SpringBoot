@@ -1,8 +1,7 @@
-package com.ibm.demo.order_product_detail;
+package com.ibm.demo.order.Entity;
 
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.order_info.OrderInfo;
 import com.ibm.demo.product.Product;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -60,4 +59,12 @@ public class OrderProductDetail {
     @Column(name = "QUANTITY", columnDefinition = "NUMBER(10)", nullable = false)
     @Schema(description = "數量", example = "5")
     private int quantity;
+
+    // constructor
+    public OrderProductDetail(OrderInfo orderInfo, Product product, int quantity) {
+        this.orderInfo = orderInfo;
+        this.product = product;
+        this.quantity = quantity;
+
+    }
 }
