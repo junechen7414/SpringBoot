@@ -1,7 +1,7 @@
 package com.ibm.demo.product;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.data.annotation.CreatedDate;
@@ -64,12 +64,12 @@ public class Product {
     @CreatedDate // 標記為創建日期欄位
     @Temporal(TemporalType.DATE) // 指定一個日期時間欄位在對應到資料庫時，應該使用的資料類型。
     @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
-    private LocalDateTime createDate;
+    private LocalDate createDate;
 
     @LastModifiedDate // 標記為更新日期欄位
     @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    private LocalDateTime modifiedDate;
+    private LocalDate modifiedDate;
 
     // 加入與 OrderProductDetail 的一對多關係映射
     // mappedBy = "product" 指的是在 OrderProductDetail Entity 中對應的屬性名稱

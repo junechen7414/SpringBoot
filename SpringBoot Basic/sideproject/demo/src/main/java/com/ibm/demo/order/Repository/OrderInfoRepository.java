@@ -10,10 +10,10 @@ import com.ibm.demo.order.Entity.OrderInfo;
 
 public interface OrderInfoRepository extends JpaRepository<OrderInfo, Integer> {
     
-    @EntityGraph(attributePaths = {"orderDetails, orderDetails.product", "account"})
-    Optional<OrderInfo> findByIdWithOrderDetailsAndProductAndAccount(int id);
+    // @EntityGraph(attributePaths = {"orderDetails, orderDetails.product", "account"})
+    // Optional<OrderInfo> findByIdWithOrderDetailsAndProductAndAccount(int id);
 
-    @EntityGraph(attributePaths = {"orderDetails, orderDetails.product"})
-    Optional<OrderInfo> findByIdWithOrderDetailsAndProduct(int id);
+    // @EntityGraph(attributePaths = {"orderDetails, orderDetails.product"})
+    // Optional<OrderInfo> findByIdWithOrderDetailsAndProduct(int id);
 
 }

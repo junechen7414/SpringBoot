@@ -1,6 +1,6 @@
 package com.ibm.demo.account;
 
-import java.time.LocalDateTime; // 使用 LocalDateTime 對應 DATE 型別
+import java.time.LocalDate; // 使用 LocalDate 對應 DATE 型別
 import java.util.List;
 
 import org.springframework.data.annotation.CreatedDate;
@@ -53,12 +53,12 @@ public class Account {
     @CreatedDate // 標記為創建日期欄位
     @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
-    private LocalDateTime createDate;
+    private LocalDate createDate;
 
     @LastModifiedDate // 標記為更新日期欄位
     @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    private LocalDateTime modifiedDate;
+    private LocalDate modifiedDate;
 
     // 加入與 OrderInfo 的一對多關係映射
     // mappedBy = "account" 指的是在 OrderInfo Entity 中對應的屬性名稱

@@ -13,7 +13,7 @@ public interface AccountRepository extends JpaRepository<Account, Integer> {
     @Query("SELECT AccountListResponseDTO(a.id, a.name, a.status) FROM Account a")
     List<GetAccountListResponse> getAccountList();
 
-    @EntityGraph(attributePaths = { "orders" })
-    Optional<Account> findByIdWithOrders(int id);
+    // @EntityGraph(attributePaths = { "orders" })
+    // Optional<Account> findByIdWithOrders(int id);
 
 }

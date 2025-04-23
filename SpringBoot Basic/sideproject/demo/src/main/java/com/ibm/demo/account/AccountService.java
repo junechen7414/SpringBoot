@@ -32,7 +32,7 @@ public class AccountService {
     }
 
     public GetAccountDetailResponse getAccountDetail(int id){
-        Account existingAccount = accountRepository.findByIdWithOrders(id)
+        Account existingAccount = accountRepository.findById(id)
             .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
         GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(), existingAccount.getStatus(),existingAccount.getCreateDate(),existingAccount.getModifiedDate());
         return accountDetailResponseDTO;    
@@ -40,7 +40,7 @@ public class AccountService {
 
     @Transactional
     public UpdateAccountResponse updateAccont(UpdateAccountRequest updateAccountRequestDto){
-        Account existingAccount = accountRepository.findByIdWithOrders(updateAccountRequestDto.getId())
+        Account existingAccount = accountRepository.findById(updateAccountRequestDto.getId())
         .orElseThrow(() -> new NullPointerException("Account not found with id: " + updateAccountRequestDto.getId()));
         existingAccount.setName(updateAccountRequestDto.getName());
         existingAccount.setStatus(updateAccountRequestDto.getStatus());

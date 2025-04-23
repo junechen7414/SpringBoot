@@ -1,7 +1,7 @@
 package com.ibm.demo.order.DTO;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,5 +15,5 @@ public class CreateOrderResponse {
     private int accountId;
     private int status;
     private BigDecimal totalAmount;
-    private LocalDateTime createDate;
+    private LocalDate createDate;
 }

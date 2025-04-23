@@ -1,7 +1,7 @@
 package com.ibm.demo.product.DTO;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -16,6 +16,6 @@ public class UpdateProductResponse {
     private BigDecimal price;
     private int saleStatus;
     private int stockQty;
-    LocalDateTime createDate;
-    LocalDateTime modifiedDate;
+    LocalDate createDate;
+    LocalDate modifiedDate;
 }

@@ -1,6 +1,6 @@
 package com.ibm.demo.account.DTO;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,6 +13,6 @@ public class UpdateAccountResponse {
     private int id;
     private String name;
     private String status;
-    private LocalDateTime createDate;
-    private LocalDateTime modifiedDate;
+    private LocalDate createDate;
+    private LocalDate modifiedDate;
 }

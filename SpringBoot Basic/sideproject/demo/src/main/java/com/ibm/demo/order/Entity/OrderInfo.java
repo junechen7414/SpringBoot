@@ -1,7 +1,7 @@
 package com.ibm.demo.order.Entity;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.data.annotation.CreatedDate;
@@ -62,12 +62,12 @@ public class OrderInfo {
     @CreatedDate // 標記為創建日期欄位
     @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
-    private LocalDateTime createDate;
+    private LocalDate createDate;
 
     @LastModifiedDate // 標記為更新日期欄位
     @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    private LocalDateTime modifiedDate;
+    private LocalDate modifiedDate;
 
     @OneToMany(mappedBy = "orderInfo", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderDetail> orderDetails; // 存放該訂單下的所有產品明細

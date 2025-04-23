@@ -1,0 +1,64 @@
+package com.ibm.demo.product;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.ibm.demo.product.DTO.CreateProductRequest;
+import com.ibm.demo.product.DTO.CreateProductResponse;
+import com.ibm.demo.product.DTO.GetProductDetailResponse;
+import com.ibm.demo.product.DTO.GetProductListResponse;
+import com.ibm.demo.product.DTO.UpdateProductRequest;
+import com.ibm.demo.product.DTO.UpdateProductResponse;
+
+@RestController // Restful Controller
+@RequestMapping("/api/products") // 基礎路徑
+public class ProductController {
+    @Autowired
+    private ProductService productService;
+
+    // Create Product
+    @PostMapping
+    public ResponseEntity<CreateProductResponse> createProduct(@RequestBody CreateProductRequest createProductRequest) {
+        CreateProductResponse createProductResponse = productService.createProduct(createProductRequest);
+        return ResponseEntity.ok(createProductResponse);
+    }
+
+    // Read Product List
+    @GetMapping("/getList")
+    public ResponseEntity<List<GetProductListResponse>> getProductList() {
+        List<GetProductListResponse> productList = productService.getProductList();
+        return ResponseEntity.ok(productList);
+    }
+
+    // Read Product Detail
+    @GetMapping("/getDetail/{id}")
+    public ResponseEntity<GetProductDetailResponse> getProductDetail(@PathVariable int id) {
+        GetProductDetailResponse productDetail = productService.getProductDetail(id);
+        return ResponseEntity.ok(productDetail);
+    }
+
+    // Update Product
+    @PutMapping
+    public ResponseEntity<UpdateProductResponse> updateProduct(UpdateProductRequest updateProductRequest) {
+        UpdateProductResponse updateProductResponse = productService.updateProduct(updateProductRequest);
+        return ResponseEntity.ok(updateProductResponse);
+    }
+
+    // Delete Product
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteProduct(@PathVariable int id) {
+        productService.deleteProduct(id);
+        return ResponseEntity.ok().build();
+    }
+
+}
