@@ -54,7 +54,7 @@ public class OrderService {
         public CreateOrderResponse createOrder(CreateOrderRequest createOrderRequest) {
                 int accountId = createOrderRequest.getAccountId();
                 // 找到帳戶，找不到則拋出 RuntimeException，由 @Transactional 處理回滾
-                Account existingAccount = accountRepository.findByIdWithOrders(accountId)
+                Account existingAccount = accountRepository.findById(accountId)
                                 .orElseThrow(() -> new NullPointerException("Account not found with id:" + accountId));
                 logger.info("找到帳戶，ID: {}", accountId);
 
@@ -69,6 +69,9 @@ public class OrderService {
                 // 儲存 OrderInfo，如發生錯誤 (RuntimeException)，會由 @Transactional 處理回滾
                 OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
                 logger.info("已建立新的 OrderInfo，ID: {}", savedOrderInfo.getId());
+
+                List<Product> productsToUpdateStockQty = new ArrayList<>();
+                List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
 
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         int requestProductId = detailRequest.getProductId();
@@ -91,19 +94,27 @@ public class OrderService {
 
                         // 更新商品庫存，如發生錯誤 (RuntimeException)，由 @Transactional 處理回滾
                         existingProduct.setStockQty(newStockQuantity);
-                        productRepository.save(existingProduct); // Spring Data JPA save
-                        logger.info("已扣減商品 ID {} 庫存。新庫存: {}", requestProductId, newStockQuantity);
+                        productsToUpdateStockQty.add(existingProduct);
+                        
 
                         // 建立訂單明細，如發生錯誤 (RuntimeException)，由 @Transactional 處理回滾
                         OrderDetail newOrderDetail = new OrderDetail(savedOrderInfo, existingProduct,
                                         requestQuantity);
-                        orderDetailRepository.save(newOrderDetail);
-                        logger.info("已建立新的 OrderDetail，ID: {}", newOrderDetail.getId());
+                        orderDetailsToBeCreated.add(newOrderDetail);                        
 
+                        // 計算小計金額
                         BigDecimal subTotalAmount = productPrice.multiply(BigDecimal.valueOf(requestQuantity));
                         totalAmount = totalAmount.add(subTotalAmount);
                         logger.info("商品 ID {} 小計金額: {}", requestProductId, subTotalAmount);
                 }
+
+                // 批量更新商品庫存
+                productRepository.saveAll(productsToUpdateStockQty);
+                logger.info("批量更新商品庫存成功");
+
+                // 批量建立訂單明細
+                orderDetailRepository.saveAll(orderDetailsToBeCreated);
+                logger.info("批量建立訂單明細成功");
 
                 // 更新訂單總金額，如發生錯誤 (RuntimeException)，由 @Transactional 處理回滾
                 savedOrderInfo.setTotalAmount(totalAmount);
@@ -119,7 +130,7 @@ public class OrderService {
         }
 
         public List<GetOrderListResponse> getOrderList(int accountId) {
-                Account existingAccount = accountRepository.findByIdWithOrders(accountId)
+                Account existingAccount = accountRepository.findById(accountId)
                                 .orElseThrow(() -> new NullPointerException("Account not found with id: " + accountId));
                 List<OrderInfo> orderInfoList = existingAccount.getOrders();
                 List<GetOrderListResponse> getOrderListResponse = new ArrayList<>();
@@ -136,7 +147,7 @@ public class OrderService {
         }
 
         public GetOrderDetailResponse getOrderDetail(int orderId) {
-                OrderInfo existingOrderInfo = orderInfoRepository.findByIdWithOrderDetailsAndProductAndAccount(orderId)
+                OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
                                 .orElseThrow(() -> new NullPointerException("Order not found with id: " + orderId));
                 List<OrderDetail> orderDetails = existingOrderInfo.getOrderDetails();
                 GetOrderDetailResponse getOrderDetailResponse = new GetOrderDetailResponse();
@@ -166,7 +177,7 @@ public class OrderService {
         @Transactional
         public UpdateOrderResponse updateOrder(UpdateOrderRequest updateOrderRequest) {
                 int orderId = updateOrderRequest.getOrderId();
-                OrderInfo existingOrderInfo = orderInfoRepository.findByIdWithOrderDetailsAndProduct(orderId)
+                OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
                                 .orElseThrow(() -> new NullPointerException("Order not found with id: " + orderId));
                 logger.info("找到要更新的訂單，ID: {}", orderId);
 
@@ -215,6 +226,8 @@ public class OrderService {
                         itemsToAdd.add(updatedItemsMap.get(productId));
                 }
 
+                List<OrderDetail> orderDetailsToAdd = new ArrayList<>();
+                List<Product> productsToUpdateStockQty = new ArrayList<>();
                 // 新增 itemsToAdd 到訂單的明細中
                 for (UpdateOrderDetailRequest detailRequest : itemsToAdd) {
                         Product product = productRepository.findById(detailRequest.getProductId())
@@ -231,10 +244,10 @@ public class OrderService {
                         newDetail.setQuantity(detailRequest.getQuantity());
 
                         existingOrderInfo.addOrderDetail(newDetail); // 將新的明細加到訂單的明細列表中
-                        orderDetailRepository.save(newDetail);
+                        orderDetailsToAdd.add(newDetail);
 
                         product.setStockQty(product.getStockQty() - detailRequest.getQuantity());
-                        productRepository.save(product);
+                        productsToUpdateStockQty.add(product);
 
                         logger.info("訂單 {} 新增商品項目：產品ID {}, 數量 {}", orderId, detailRequest.getProductId(),
                                         detailRequest.getQuantity());
@@ -246,22 +259,21 @@ public class OrderService {
                         itemsToRemove.add(existingDetailsMap.get(productId));
                 }
 
+                List<OrderDetail> orderDetailsToRemove = new ArrayList<>();
                 // 從訂單的各明細中移除 itemsToRemove
                 for (OrderDetail detailToRemove : itemsToRemove) {
-                        Product product = productRepository.findById(detailToRemove.getProduct().getId())
-                                        .orElseThrow(() -> new NullPointerException(
-                                                        "Product not found with id: "
-                                                                        + detailToRemove.getProduct().getId()));
+                        Product product = detailToRemove.getProduct();
 
                         product.setStockQty(product.getStockQty() + detailToRemove.getQuantity());
-                        productRepository.save(product);
+                        productsToUpdateStockQty.add(product);
 
                         existingOrderInfo.removeOrderDetail(detailToRemove); // 將明細從訂單的明細列表中移除
-                        orderDetailRepository.delete(detailToRemove);
+                        orderDetailsToRemove.add(detailToRemove);
                         logger.info("訂單 {} 移除商品項目：產品ID {}, 數量 {}", orderId, product.getId(),
                                         detailToRemove.getQuantity());
                 }
 
+                List<OrderDetail> orderDetailsToUpdate = new ArrayList<>();
                 // 分類本來就在訂單明細中的產品是有更新or not
                 for (Integer productId : commonProductIds) {
                         OrderDetail existingDetail = existingDetailsMap.get(productId);
@@ -287,15 +299,33 @@ public class OrderService {
 
                                 // 更新商品庫存並儲存
                                 product.setStockQty(product.getStockQty() - quantityDifference);
-                                productRepository.save(product);
+                                productsToUpdateStockQty.add(product);
 
                                 // 更新訂單明細並儲存
                                 existingDetail.setQuantity(newQuantity);
-                                orderDetailRepository.save(existingDetail);
+                                orderDetailsToUpdate.add(existingDetail);
 
                                 logger.info("訂單 {} 商品項目產品ID {} 數量由 {} 更新為 {}，庫存更新完成",
                                                 orderId, productId, oldQuantity, newQuantity);
                         }
+                }
+
+                // --- 批次執行資料庫操作 ---
+                if (!productsToUpdateStockQty.isEmpty()) {
+                        productRepository.saveAll(productsToUpdateStockQty);
+                        logger.info("訂單 {} 批量更新 {} 個商品庫存成功", orderId, productsToUpdateStockQty.size());
+                }
+                if (!orderDetailsToAdd.isEmpty()) {
+                        orderDetailRepository.saveAll(orderDetailsToAdd);
+                        logger.info("訂單 {} 批量新增 {} 個訂單明細成功", orderId, orderDetailsToAdd.size());
+                }
+                 if (!orderDetailsToUpdate.isEmpty()) {
+                        orderDetailRepository.saveAll(orderDetailsToUpdate); // saveAll 也可用於更新
+                        logger.info("訂單 {} 批量更新 {} 個訂單明細成功", orderId, orderDetailsToUpdate.size());
+                }
+                if (!orderDetailsToRemove.isEmpty()) {
+                        orderDetailRepository.deleteAll(orderDetailsToRemove);
+                        logger.info("訂單 {} 批量刪除 {} 個訂單明細成功", orderId, orderDetailsToRemove.size());
                 }
 
                 // 重新計算訂單總金額
@@ -308,7 +338,6 @@ public class OrderService {
                 }
                 existingOrderInfo.setTotalAmount(totalAmount);
                 orderInfoRepository.save(existingOrderInfo);
-
 
                 UpdateOrderResponse response = new UpdateOrderResponse();
                 response.setOrderId(existingOrderInfo.getId());
@@ -330,6 +359,50 @@ public class OrderService {
 
         @Transactional
         public void deleteOrder(int orderId) {
+                // 1. 獲取訂單資訊，並一次性載入明細和產品 (使用 EntityGraph)
+                OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
+                                .orElseThrow(() -> new NullPointerException("Order not found with id" + orderId));
+
+                logger.info("找到要刪除的訂單，ID: {}", orderId);
+
+                List<OrderDetail> orderDetails = existingOrderInfo.getOrderDetails();
+                List<OrderDetail> itemsToRemove = new ArrayList<>(); // 用來收集要刪除的明細
+                List<Product> productsToUpdateStockQty = new ArrayList<>(); // 用來收集要更新庫存的產品
+
+                // 2. 遍歷明細，更新產品庫存 (在物件上操作)，並收集要刪除的明細和要更新的產品
+                for (OrderDetail orderDetail : orderDetails) {
+                        Product product = orderDetail.getProduct();
+
+                        // 在 Product 物件上修改庫存
+                        product.setStockQty(product.getStockQty() + orderDetail.getQuantity());
+
+                        // 將明細和修改過的產品加入待處理列表
+                        itemsToRemove.add(orderDetail);
+                        productsToUpdateStockQty.add(product);
+
+                        logger.info("處理明細：產品ID {}, 數量 {}，準備更新庫存並刪除明細", product.getId(), orderDetail.getQuantity());
+                }
+
+                // 3. 批量更新產品庫存
+                if (!productsToUpdateStockQty.isEmpty()) {
+                        // 使用 saveAll 批量儲存更新後的產品資訊
+                        productRepository.saveAll(productsToUpdateStockQty);
+                        logger.info("批量更新產品庫存成功");
+                }
+
+                // 4. 批量刪除訂單明細
+                if (!itemsToRemove.isEmpty()) {
+                        // 從訂單的關聯列表中移除明細 (可選，取決於您的 Entity 關聯設定)
+                        // existingOrderInfo.getOrderDetails().clear();
+
+                        // 使用 deleteAll 批量刪除訂單明細
+                        orderDetailRepository.deleteAll(itemsToRemove);
+                        logger.info("批量刪除訂單 {} 的明細成功", orderId);
+                }
+
+                // 5. 刪除訂單本身
+                orderInfoRepository.delete(existingOrderInfo);
+                logger.info("刪除訂單，ID: {}", orderId);
         }
 
 }
