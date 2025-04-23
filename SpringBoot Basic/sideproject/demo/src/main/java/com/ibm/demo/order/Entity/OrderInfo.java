@@ -70,11 +70,22 @@ public class OrderInfo {
     private LocalDateTime modifiedDate;
 
     @OneToMany(mappedBy = "orderInfo", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderProductDetail> orderDetails; // 存放該訂單下的所有產品明細
+    private List<OrderDetail> orderDetails; // 存放該訂單下的所有產品明細
 
     // constructor
     public OrderInfo(Account account) {
-        this.account = account;             
+        this.account = account;
+    }
+
+    // helper   
+    public void addOrderDetail(OrderDetail detail) {
+        orderDetails.add(detail);
+        detail.setOrderInfo(this); // 確保 OrderDetail 這邊的關聯也被設定
+    }
+
+    public void removeOrderDetail(OrderDetail detail) {
+        orderDetails.remove(detail);
+        detail.setOrderInfo(null); // 確保 OrderDetail 這邊的關聯被中斷
     }
 
 }

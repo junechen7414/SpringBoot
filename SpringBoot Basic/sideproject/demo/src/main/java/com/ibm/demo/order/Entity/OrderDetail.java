@@ -27,7 +27,7 @@ import lombok.NoArgsConstructor;
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ORDER_PRODUCT_DETAIL")
 @Schema(description = "訂單產品明細")
-public class OrderProductDetail {
+public class OrderDetail {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_detail_seq_gen")
@@ -61,7 +61,7 @@ public class OrderProductDetail {
     private int quantity;
 
     // constructor
-    public OrderProductDetail(OrderInfo orderInfo, Product product, int quantity) {
+    public OrderDetail(OrderInfo orderInfo, Product product, int quantity) {
         this.orderInfo = orderInfo;
         this.product = product;
         this.quantity = quantity;

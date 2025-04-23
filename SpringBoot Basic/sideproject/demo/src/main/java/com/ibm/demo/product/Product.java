@@ -8,7 +8,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.order.Entity.OrderProductDetail;
+import com.ibm.demo.order.Entity.OrderDetail;
 
 import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
 import jakarta.persistence.CascadeType;
@@ -74,7 +74,7 @@ public class Product {
     // 加入與 OrderProductDetail 的一對多關係映射
     // mappedBy = "product" 指的是在 OrderProductDetail Entity 中對應的屬性名稱
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderProductDetail> orderDetails; // 存放所有引用該商品的訂單明細
+    private List<OrderDetail> orderDetails; // 存放所有引用該商品的訂單明細
 
     // constructors
 
