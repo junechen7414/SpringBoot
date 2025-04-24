@@ -34,15 +34,15 @@ public class OrderDetail {
     @SequenceGenerator(name = "order_detail_seq_gen", sequenceName = "order_product_detail_id_seq", allocationSize = 1)
     @Column(name = "ID", columnDefinition = "NUMBER(10)")
     @Schema(description = "訂單明細編號", example = "1")
-    private int id;
+    private Integer id;
 
     // @Column(name = "ORDER_ID", columnDefinition = "NUMBER(10)")
     // @Schema(description = "關聯的訂單ID", example = "1")
-    // private int orderId;
+    // private Integer orderId;
 
     // @Column(name = "PRODUCT_ID", columnDefinition = "NUMBER(10)")
     // @Schema(description = "關聯的產品ID", example = "1")
-    // private int productId;
+    // private Integer productId;
 
     // 加入與 OrderInfo 的多對一關係映射
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
@@ -58,10 +58,10 @@ public class OrderDetail {
 
     @Column(name = "QUANTITY", columnDefinition = "NUMBER(10)", nullable = false)
     @Schema(description = "數量", example = "5")
-    private int quantity;
+    private Integer quantity;
 
     // constructor
-    public OrderDetail(OrderInfo orderInfo, Product product, int quantity) {
+    public OrderDetail(OrderInfo orderInfo, Product product, Integer quantity) {
         this.orderInfo = orderInfo;
         this.product = product;
         this.quantity = quantity;

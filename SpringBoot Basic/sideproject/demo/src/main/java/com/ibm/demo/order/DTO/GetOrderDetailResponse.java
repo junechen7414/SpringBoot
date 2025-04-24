@@ -12,8 +12,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GetOrderDetailResponse {
-    private int accountId;
-    private int orderStatus;
+    private Integer accountId;
+    private Integer orderStatus;
     private BigDecimal totalAmount;
     private LocalDate createDate;
     private LocalDate modifiedDate;

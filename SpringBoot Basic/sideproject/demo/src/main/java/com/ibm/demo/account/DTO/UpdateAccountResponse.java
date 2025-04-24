@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateAccountResponse {
-    private int id;
+    private Integer id;
     private String name;
     private String status;
     private LocalDate createDate;

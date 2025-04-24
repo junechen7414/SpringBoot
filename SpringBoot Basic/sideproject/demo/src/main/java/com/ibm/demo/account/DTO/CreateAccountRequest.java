@@ -15,6 +15,4 @@ public class CreateAccountRequest {
     @Size(max = 50, message = "50 characters max")
     private String name;
 
-    // @Size(max = 1, message = "1 characters max, either 'Y' or 'N'")
-    // private String status;
 }

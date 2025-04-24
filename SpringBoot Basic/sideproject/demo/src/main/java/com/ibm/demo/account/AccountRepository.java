@@ -14,6 +14,6 @@ public interface AccountRepository extends JpaRepository<Account, Integer> {
     List<GetAccountListResponse> getAccountList();
 
     // @EntityGraph(attributePaths = { "orders" })
-    // Optional<Account> findByIdWithOrders(int id);
+    // Optional<Account> findByIdWithOrders(Integer id);
 
 }

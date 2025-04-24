@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateOrderDetailRequest {
-    private int productId;
-    private int quantity;
+    private Integer productId;
+    private Integer quantity;
 
 }

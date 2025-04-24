@@ -2,28 +2,31 @@ package com.ibm.demo.account;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.ibm.demo.account.DTO.GetAccountDetailResponse;
-import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.CreateAccountResponse;
+import com.ibm.demo.account.DTO.GetAccountDetailResponse;
+import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.account.DTO.UpdateAccountResponse;
 
 import jakarta.transaction.Transactional;
 
 @Service
-public class AccountService {
-    @Autowired
-    private AccountRepository accountRepository;
+public class AccountService {    
+    private final AccountRepository accountRepository;
+
+    public AccountService(AccountRepository accountRepository) {
+        this.accountRepository = accountRepository;
+    }
 
     @Transactional
-    public CreateAccountResponse createAccount(CreateAccountRequest account_DTO) {
+    public CreateAccountResponse createAccount(CreateAccountRequest account_DTO) {        
         Account newAccount = new Account();
         newAccount.setName(account_DTO.getName());
         newAccount.setStatus("Y");
+        
         Account savedAccount = accountRepository.save(newAccount);
         CreateAccountResponse createAccountResponseDTO = new CreateAccountResponse(savedAccount.getId(),
                 savedAccount.getName(), savedAccount.getStatus(), savedAccount.getCreateDate());
@@ -34,7 +37,7 @@ public class AccountService {
         return accountRepository.getAccountList();
     }
 
-    public GetAccountDetailResponse getAccountDetail(int id) {
+    public GetAccountDetailResponse getAccountDetail(Integer id) {
         Account existingAccount = accountRepository.findById(id)
                 .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
         GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(),
@@ -57,7 +60,7 @@ public class AccountService {
     }
 
     @Transactional
-    public void deleteAccount(int id) {
+    public void deleteAccount(Integer id) {
         Account existingAccount = accountRepository.findById(id)
                 .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
         existingAccount.setStatus("N");

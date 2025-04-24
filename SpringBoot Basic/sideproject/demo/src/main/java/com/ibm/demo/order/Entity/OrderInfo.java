@@ -44,7 +44,7 @@ public class OrderInfo {
     @SequenceGenerator(name = "order_seq_gen", sequenceName = "order_id_seq", allocationSize = 1)
     @Column(name = "ID", columnDefinition = "NUMBER(10)")
     @Schema(description = "訂單編號", example = "1")
-    private int id;
+    private Integer id;
 
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載，按需載入 Account 資訊
     @JoinColumn(name = "ACCOUNT_ID", referencedColumnName = "ID", nullable = false)
@@ -53,7 +53,7 @@ public class OrderInfo {
 
     @Column(name = "STATUS", columnDefinition = "NUMBER(4)", nullable = false)
     @Schema(description = "訂單狀態", example = "1001")
-    private int status;
+    private Integer status;
 
     @Column(name = "TOTAL_AMOUNT", columnDefinition = "NUMBER(12,4)", nullable = false)
     @Schema(description = "訂單總金額", example = "1234.56")

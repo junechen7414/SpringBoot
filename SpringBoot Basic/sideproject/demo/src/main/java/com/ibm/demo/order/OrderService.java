@@ -13,7 +13,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.Account;
+// import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.account.AccountRepository;
+// import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.CreateOrderResponse;
@@ -40,25 +42,36 @@ public class OrderService {
         private AccountRepository accountRepository;
         private OrderDetailRepository orderDetailRepository;
         private ProductRepository productRepository;
+        // private final AccountClient accountClient;
 
         public OrderService(OrderInfoRepository orderInfoRepository, AccountRepository accountRepository,
                         OrderDetailRepository orderDetailRepository,
-                        ProductRepository productRepository) {
+                        ProductRepository productRepository
+        // AccountClient accountClient
+        ) {
                 this.orderInfoRepository = orderInfoRepository;
                 this.accountRepository = accountRepository;
                 this.orderDetailRepository = orderDetailRepository;
                 this.productRepository = productRepository;
+                // this.accountClient = accountClient;
         }
 
         @Transactional
         public CreateOrderResponse createOrder(CreateOrderRequest createOrderRequest) {
-                int accountId = createOrderRequest.getAccountId();
+                Integer accountId = createOrderRequest.getAccountId();
                 // 找到帳戶，找不到則拋出 RuntimeException，由 @Transactional 處理回滾
+                // GetAccountDetailResponse accountDetailResponse =
+                // accountClient.getAccountDetail(accountId);
+                // if (accountDetailResponse == null) {
+                // throw new NullPointerException("Account not found with id:" + accountId);
+                // }
+                // if (accountDetailResponse.getStatus().equals("N")) {
+                // throw new IllegalArgumentException("Account " + accountId + " is inactive");
+                // }
                 Account existingAccount = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new NullPointerException("Account not found with id:" + accountId));
-                if (existingAccount.getStatus().equals("N")) {
-                        throw new IllegalArgumentException("Account " + accountId + " is inactive");
-                }
+                                .orElseThrow(() -> new NullPointerException(
+                                                "Account not found with id:" + accountId));
+
                 logger.info("找到啟用中帳戶，ID: {}", accountId);
 
                 OrderInfo newOrderInfo = new OrderInfo();
@@ -79,8 +92,8 @@ public class OrderService {
                 List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
 
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
-                        int requestProductId = detailRequest.getProductId();
-                        int requestQuantity = detailRequest.getQuantity();
+                        Integer requestProductId = detailRequest.getProductId();
+                        Integer requestQuantity = detailRequest.getQuantity();
                         logger.info("處理商品 ID: {}，數量: {}", requestProductId, requestQuantity);
 
                         // 找到商品，找不到則拋出 RuntimeException，由 @Transactional 處理回滾
@@ -93,7 +106,7 @@ public class OrderService {
                         logger.info("找到商品，ID: {}", requestProductId);
 
                         BigDecimal productPrice = existingProduct.getPrice();
-                        int newStockQuantity = existingProduct.getStockQty() - requestQuantity;
+                        Integer newStockQuantity = existingProduct.getStockQty() - requestQuantity;
 
                         // 檢查庫存，不足則拋出 RuntimeException，由 @Transactional 處理回滾
                         if (newStockQuantity < 0) {
@@ -136,10 +149,21 @@ public class OrderService {
                 return response;
         }
 
-        public List<GetOrderListResponse> getOrderList(int accountId) {
-                Account existingAccount = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new NullPointerException("Account not found with id: " + accountId));
-                List<OrderInfo> orderInfoList = existingAccount.getOrders();
+        public List<GetOrderListResponse> getOrderList(Integer accountId) {
+                // GetAccountDetailResponse accountDetailResponse =
+                // accountClient.getAccountDetail(accountId);
+                // if (accountDetailResponse == null) {
+                // throw new NullPointerException("Account not found with id: " + accountId);
+                // }
+                // if (accountDetailResponse.getStatus().equals("N")) {
+                // throw new IllegalArgumentException("Account " + accountId + " is inactive");
+                // }
+                if (!accountRepository.existsById(accountId)) {
+                        throw new NullPointerException("Account not found with id:" + accountId);
+                }
+                logger.info("找到啟用中帳戶，ID: {}", accountId);
+
+                List<OrderInfo> orderInfoList = orderInfoRepository.findByAccountId(accountId);
                 List<GetOrderListResponse> getOrderListResponse = new ArrayList<>();
                 for (OrderInfo orderInfo : orderInfoList) {
                         GetOrderListResponse response = new GetOrderListResponse();
@@ -153,7 +177,7 @@ public class OrderService {
                 return getOrderListResponse;
         }
 
-        public GetOrderDetailResponse getOrderDetail(int orderId) {
+        public GetOrderDetailResponse getOrderDetail(Integer orderId) {
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
                                 .orElseThrow(() -> new NullPointerException("Order not found with id: " + orderId));
                 List<OrderDetail> orderDetails = existingOrderInfo.getOrderDetails();
@@ -183,12 +207,12 @@ public class OrderService {
 
         @Transactional
         public UpdateOrderResponse updateOrder(UpdateOrderRequest updateOrderRequest) {
-                int orderId = updateOrderRequest.getOrderId();
+                Integer orderId = updateOrderRequest.getOrderId();
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
                                 .orElseThrow(() -> new NullPointerException("Order not found with id: " + orderId));
                 logger.info("找到要更新的訂單，ID: {}", orderId);
 
-                int orderStatus = existingOrderInfo.getStatus();
+                Integer orderStatus = existingOrderInfo.getStatus();
                 if (orderStatus != 1001) {
                         throw new IllegalArgumentException("訂單狀態不允許更新商品項目，目前狀態: " + orderStatus);
                 }
@@ -285,11 +309,12 @@ public class OrderService {
                 for (Integer productId : commonProductIds) {
                         OrderDetail existingDetail = existingDetailsMap.get(productId);
                         UpdateOrderDetailRequest updatedRequest = updatedItemsMap.get(productId);
-                        int oldQuantity = existingDetail.getQuantity();
-                        int newQuantity = updatedRequest.getQuantity();
+                        Integer oldQuantity = existingDetail.getQuantity();
+                        Integer newQuantity = updatedRequest.getQuantity();
                         // 只有數量有變動的明細才需要更新，沒變動就不更新
                         if (oldQuantity != newQuantity) {
-                                int quantityDifference = updatedRequest.getQuantity() - existingDetail.getQuantity();
+                                Integer quantityDifference = updatedRequest.getQuantity()
+                                                - existingDetail.getQuantity();
                                 existingDetail.setQuantity(updatedRequest.getQuantity());
 
                                 logger.info("訂單 {} 商品項目產品ID {} 數量從 {} 更新為 {}",
@@ -340,7 +365,7 @@ public class OrderService {
                 // totalAmount = existingOrderInfo.calculateTotalAmount();
                 for (OrderDetail detail : existingOrderInfo.getOrderDetails()) {
                         BigDecimal productPrice = detail.getProduct().getPrice();
-                        int quantity = detail.getQuantity();
+                        Integer quantity = detail.getQuantity();
                         totalAmount = totalAmount.add(productPrice.multiply(BigDecimal.valueOf(quantity)));
                 }
                 existingOrderInfo.setTotalAmount(totalAmount);
@@ -365,7 +390,7 @@ public class OrderService {
         }
 
         @Transactional
-        public void deleteOrder(int orderId) {
+        public void deleteOrder(Integer orderId) {
                 // 1. 獲取訂單資訊，並一次性載入明細和產品 (使用 EntityGraph)
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
                                 .orElseThrow(() -> new NullPointerException("Order not found with id" + orderId));

@@ -17,7 +17,7 @@ public class UpdateAccountRequest {
     @NotNull(message = "Id is required")
     @Positive(message = "Id must be a positive number")
     @Digits(integer = 10,fraction = 0)
-    private int id;
+    private Integer id;
 
     @NotBlank(message = "Name is required")
     @Size(max = 50, message = "50 characters max")

@@ -19,7 +19,7 @@ public class UpdateProductRequest {
     @NotNull(message = "Id is required")
     @Positive(message = "Id must be positive")
     @Digits(integer = 10, fraction = 0)
-    private int id;
+    private Integer id;
 
     @NotBlank(message = "Name is required")
     @Size(max = 100, message = "100 characters max")
@@ -31,10 +31,10 @@ public class UpdateProductRequest {
     private BigDecimal price;
 
     @NotNull(message = "Sale Status is required")
-    @Digits(integer = 4, fraction = 0)    
-    private int saleStatus;
+    @Digits(integer = 4, fraction = 0)
+    private Integer saleStatus;
 
     @NotNull(message = "Stock Qty is required")
     @Digits(integer = 10, fraction = 0)
-    private int stockQty;
+    private Integer stockQty;
 }

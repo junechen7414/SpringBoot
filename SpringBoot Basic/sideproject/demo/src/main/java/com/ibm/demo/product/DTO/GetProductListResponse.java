@@ -10,10 +10,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GetProductListResponse {
-    private int id;
+    private Integer id;
     private String name;
     private BigDecimal price;
-    private int saleStatus;
-    private int stockQty;
+    private Integer saleStatus;
+    private Integer stockQty;
     
 }

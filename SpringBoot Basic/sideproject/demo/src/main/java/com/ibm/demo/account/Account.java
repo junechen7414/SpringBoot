@@ -40,7 +40,7 @@ public class Account {
     @SequenceGenerator(name = "account_seq_gen", sequenceName = "account_id_seq", allocationSize = 1)
     @Column(name = "ID", columnDefinition = "NUMBER(10)", nullable = false)
     @Schema(description = "帳⼾編號", example = "1")
-    private int id;
+    private Integer id;
 
     @Column(name = "NAME", columnDefinition = "NVARCHAR2(50)", nullable = false)
     @Schema(description = "帳戶名稱", example = "帳戶名稱")

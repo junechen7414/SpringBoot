@@ -2,7 +2,6 @@ package com.ibm.demo.product;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.product.DTO.CreateProductRequest;
@@ -16,9 +15,11 @@ import jakarta.transaction.Transactional;
 
 @Service
 public class ProductService {
-
-    @Autowired
     private ProductRepository productRepository;
+
+    public ProductService(ProductRepository productRepository) {
+        this.productRepository = productRepository;
+    }
 
     @Transactional
     public CreateProductResponse createProduct(CreateProductRequest product_DTO) {
@@ -39,7 +40,7 @@ public class ProductService {
         return productRepository.getProductList();
     }
 
-    public GetProductDetailResponse getProductDetail(int id) {
+    public GetProductDetailResponse getProductDetail(Integer id) {
         Product existingProduct = productRepository.findById(id)
                 .orElseThrow(() -> new NullPointerException("Product not found with id: " + id));
         GetProductDetailResponse product_dto = new GetProductDetailResponse(existingProduct.getName(),
@@ -65,7 +66,7 @@ public class ProductService {
     }
 
     @Transactional
-    public void deleteProduct(int id) {
+    public void deleteProduct(Integer id) {
         Product existingProduct = productRepository.findById(id)
                 .orElseThrow(() -> new NullPointerException("Product not found with id: " + id));
         existingProduct.setSaleStatus(1002);

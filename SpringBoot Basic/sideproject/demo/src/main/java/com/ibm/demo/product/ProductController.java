@@ -2,7 +2,6 @@ package com.ibm.demo.product;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,9 +23,14 @@ import jakarta.validation.Valid;
 
 @RestController // Restful Controller
 @RequestMapping("/api/products") // 基礎路徑
-public class ProductController {
-    @Autowired
-    private ProductService productService;
+public class ProductController {    
+    private final ProductService productService;
+
+    public ProductController(ProductService productService) {
+        this.productService = productService;
+    }
+
+    
 
     // Create Product
     @PostMapping
@@ -44,7 +48,7 @@ public class ProductController {
 
     // Read Product Detail
     @GetMapping("/getDetail/{id}")
-    public ResponseEntity<GetProductDetailResponse> getProductDetail(@PathVariable int id) {
+    public ResponseEntity<GetProductDetailResponse> getProductDetail(@PathVariable Integer id) {
         GetProductDetailResponse productDetail = productService.getProductDetail(id);
         return ResponseEntity.ok(productDetail);
     }
@@ -58,7 +62,7 @@ public class ProductController {
 
     // Delete Product
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteProduct(@PathVariable int id) {
+    public ResponseEntity<Void> deleteProduct(@PathVariable Integer id) {
         productService.deleteProduct(id);
         return ResponseEntity.ok().build();
     }

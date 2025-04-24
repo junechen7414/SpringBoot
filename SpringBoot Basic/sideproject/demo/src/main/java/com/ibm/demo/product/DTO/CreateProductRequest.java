@@ -27,5 +27,5 @@ public class CreateProductRequest {
     @NotNull(message = "Stock Qty is required")
     @Digits(integer = 10, fraction = 0)
     @Positive(message = "Stock Qty must be positive")
-    private int stockQty;
+    private Integer stockQty;
 }

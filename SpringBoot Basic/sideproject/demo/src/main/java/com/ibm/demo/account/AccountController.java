@@ -2,10 +2,10 @@ package com.ibm.demo.account;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,12 +24,15 @@ import jakarta.validation.Valid;
 @RestController // Restful Controller
 @RequestMapping("/api/accounts") // 基礎路徑
 public class AccountController {
-    @Autowired
-    private AccountService accountService;
+    private final AccountService accountService;
+
+    public AccountController(AccountService accountService) {
+        this.accountService = accountService;
+    }
 
     // Create Account
     @PostMapping
-    public ResponseEntity<CreateAccountResponse> createAccount(@Valid @RequestBody CreateAccountRequest createAccountRequest) {
+    public ResponseEntity<CreateAccountResponse> createAccount(@RequestBody @Valid CreateAccountRequest createAccountRequest) {
         CreateAccountResponse createAccountResponse = accountService.createAccount(createAccountRequest);
         return ResponseEntity.ok(createAccountResponse);
     }
@@ -43,7 +46,7 @@ public class AccountController {
 
     // Read Account Detail
     @GetMapping("/getDetail/{id}")
-    public ResponseEntity<GetAccountDetailResponse> getAccountDetail(int id) {
+    public ResponseEntity<GetAccountDetailResponse> getAccountDetail(@PathVariable Integer id) {
         GetAccountDetailResponse accountDetail = accountService.getAccountDetail(id);
         return ResponseEntity.ok(accountDetail);
     }
@@ -57,7 +60,7 @@ public class AccountController {
 
     // Delete Account
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteAccount(int id) {
+    public ResponseEntity<Void> deleteAccount(@PathVariable Integer id) {
         accountService.deleteAccount(id);
         return ResponseEntity.ok().build();
     }

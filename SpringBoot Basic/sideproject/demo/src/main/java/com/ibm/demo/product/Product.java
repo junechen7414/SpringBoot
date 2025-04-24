@@ -44,7 +44,7 @@ public class Product {
     @SequenceGenerator(name = "product_seq_gen", sequenceName = "product_id_seq", allocationSize = 1) // 定義 Sequence
     @Schema(description = "商品編號", example = "1")
     @Column(name = "ID", columnDefinition = "NUMBER(10)")
-    private int id;
+    private Integer id;
 
     @Column(name = "NAME", columnDefinition = "NVARCHAR2(100)", nullable = false)
     @Schema(description = "商品名稱", example = "商品名稱")
@@ -56,11 +56,11 @@ public class Product {
 
     @Column(name = "SALE_STATUS", columnDefinition = "NUMBER(4)", nullable = false)
     @Schema(description = "銷售狀態", example = "1001")
-    private int saleStatus;
+    private Integer saleStatus;
 
     @Column(name = "STOCK_QTY", columnDefinition = "NUMBER(10)", nullable = false)
     @Schema(description = "庫存量", example = "10")
-    private int stockQty;
+    private Integer stockQty;
 
     @CreatedDate // 標記為創建日期欄位
     @Temporal(TemporalType.DATE) // 指定一個日期時間欄位在對應到資料庫時，應該使用的資料類型。
@@ -79,7 +79,7 @@ public class Product {
 
     // constructors
 
-    public Product(String name, BigDecimal price, int saleStatus, int stockQty) {
+    public Product(String name, BigDecimal price, Integer saleStatus, Integer stockQty) {
         this.name = name;
         this.price = price;
         this.saleStatus = saleStatus;

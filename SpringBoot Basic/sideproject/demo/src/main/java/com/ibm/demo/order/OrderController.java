@@ -2,7 +2,6 @@ package com.ibm.demo.order;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,9 +23,12 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/orders") // 基礎路徑
-public class OrderController {
-    @Autowired
-    private OrderService orderService;
+public class OrderController {    
+    private final OrderService orderService;
+
+    public OrderController(OrderService orderService) {
+        this.orderService = orderService;
+    }
 
     // Create Order
     @PostMapping
@@ -37,14 +39,14 @@ public class OrderController {
 
     // Read Order List
     @GetMapping("/getList/{accountId}")
-    public ResponseEntity<List<GetOrderListResponse>> getOrderList(@PathVariable int accountId) {
+    public ResponseEntity<List<GetOrderListResponse>> getOrderList(@PathVariable Integer accountId) {
         List<GetOrderListResponse> getOrderListResponse = orderService.getOrderList(accountId);
         return ResponseEntity.ok(getOrderListResponse);
     }
 
     // Read Order Detail
     @GetMapping("/getDetail/{orderId}")
-    public ResponseEntity<GetOrderDetailResponse> getOrderDetail(@PathVariable int orderId) {
+    public ResponseEntity<GetOrderDetailResponse> getOrderDetail(@PathVariable Integer orderId) {
         GetOrderDetailResponse getOrderDetailResponse = orderService.getOrderDetail(orderId);
         return ResponseEntity.ok(getOrderDetailResponse);
     }
@@ -58,7 +60,7 @@ public class OrderController {
 
     // Delete Order
     @DeleteMapping("/{orderId}")
-    public ResponseEntity<Void> deleteOrder(@PathVariable int orderId) {
+    public ResponseEntity<Void> deleteOrder(@PathVariable Integer orderId) {
         orderService.deleteOrder(orderId);
         return ResponseEntity.noContent().build();
     }

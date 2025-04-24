@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 public class GetProductDetailResponse {
     private String name;
     private BigDecimal price;
-    private int saleStatus;
-    private int stockQty;
+    private Integer saleStatus;
+    private Integer stockQty;
     LocalDate createDate;
     LocalDate modifiedDate;
 

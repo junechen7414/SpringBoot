@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateOrderResponse {
-    private int orderId;
+    private Integer orderId;
     private BigDecimal totalAmount;
     private LocalDate modifiedDate;
     private List<UpdateOrderDetailResponse> items;

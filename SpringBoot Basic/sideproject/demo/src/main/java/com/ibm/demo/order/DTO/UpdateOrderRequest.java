@@ -10,6 +10,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateOrderRequest {
-    private int orderId;
+    private Integer orderId;
     private List<UpdateOrderDetailRequest> items;
 }
