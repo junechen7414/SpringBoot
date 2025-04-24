@@ -12,9 +12,9 @@ import lombok.NoArgsConstructor;
 public class CreateAccountRequest {
 
     @NotBlank(message = "Name is required")
-    @Size(max = 50, message = "100 characters max")
+    @Size(max = 50, message = "50 characters max")
     private String name;
 
-    @Size(max = 1, message = "1 characters max, either 'Y' or 'N'")
-    private String status;
+    // @Size(max = 1, message = "1 characters max, either 'Y' or 'N'")
+    // private String status;
 }

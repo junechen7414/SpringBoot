@@ -51,7 +51,7 @@ public class AccountController {
     // Update Account
     @PutMapping
     public ResponseEntity<UpdateAccountResponse> updateAccount(UpdateAccountRequest updateAccountRequest) {
-        UpdateAccountResponse updateAccountResponse = accountService.updateAccont(updateAccountRequest);
+        UpdateAccountResponse updateAccountResponse = accountService.updateAccount(updateAccountRequest);
         return ResponseEntity.ok(updateAccountResponse);
     }
 

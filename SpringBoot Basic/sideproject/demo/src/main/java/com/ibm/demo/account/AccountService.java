@@ -21,9 +21,12 @@ public class AccountService {
 
     @Transactional
     public CreateAccountResponse createAccount(CreateAccountRequest account_DTO) {
-        Account newAccount = new Account(account_DTO.getName(), account_DTO.getStatus());        
+        Account newAccount = new Account();
+        newAccount.setName(account_DTO.getName());
+        newAccount.setStatus("Y");
         Account savedAccount = accountRepository.save(newAccount);
-        CreateAccountResponse createAccountResponseDTO = new CreateAccountResponse(savedAccount.getId(),savedAccount.getName(), savedAccount.getStatus(),savedAccount.getCreateDate());
+        CreateAccountResponse createAccountResponseDTO = new CreateAccountResponse(savedAccount.getId(),
+                savedAccount.getName(), savedAccount.getStatus(), savedAccount.getCreateDate());
         return createAccountResponseDTO;
     }
 
@@ -31,30 +34,33 @@ public class AccountService {
         return accountRepository.getAccountList();
     }
 
-    public GetAccountDetailResponse getAccountDetail(int id){
+    public GetAccountDetailResponse getAccountDetail(int id) {
         Account existingAccount = accountRepository.findById(id)
-            .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
-        GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(), existingAccount.getStatus(),existingAccount.getCreateDate(),existingAccount.getModifiedDate());
-        return accountDetailResponseDTO;    
+                .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
+        GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(),
+                existingAccount.getStatus(), existingAccount.getCreateDate(), existingAccount.getModifiedDate());
+        return accountDetailResponseDTO;
     }
 
     @Transactional
-    public UpdateAccountResponse updateAccont(UpdateAccountRequest updateAccountRequestDto){
+    public UpdateAccountResponse updateAccount(UpdateAccountRequest updateAccountRequestDto) {
         Account existingAccount = accountRepository.findById(updateAccountRequestDto.getId())
-        .orElseThrow(() -> new NullPointerException("Account not found with id: " + updateAccountRequestDto.getId()));
+                .orElseThrow(() -> new NullPointerException(
+                        "Account not found with id: " + updateAccountRequestDto.getId()));
         existingAccount.setName(updateAccountRequestDto.getName());
         existingAccount.setStatus(updateAccountRequestDto.getStatus());
         Account updatedAccount = accountRepository.save(existingAccount);
-        UpdateAccountResponse updatedAccountResponseDto = new UpdateAccountResponse(updatedAccount.getId(),updatedAccount.getName(), updatedAccount.getStatus(),updatedAccount.getCreateDate(),updatedAccount.getModifiedDate());
+        UpdateAccountResponse updatedAccountResponseDto = new UpdateAccountResponse(updatedAccount.getId(),
+                updatedAccount.getName(), updatedAccount.getStatus(), updatedAccount.getCreateDate(),
+                updatedAccount.getModifiedDate());
         return updatedAccountResponseDto;
     }
 
     @Transactional
-    public void deleteAccount(int id){
-        if (accountRepository.existsById(id)) {
-            accountRepository.deleteById(id);
-        }else{
-            throw new NullPointerException("Account not found with id: " + id);
-        }
+    public void deleteAccount(int id) {
+        Account existingAccount = accountRepository.findById(id)
+                .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
+        existingAccount.setStatus("N");
+        accountRepository.save(existingAccount);
     }
 }

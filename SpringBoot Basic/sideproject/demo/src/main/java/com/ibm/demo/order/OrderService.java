@@ -56,7 +56,10 @@ public class OrderService {
                 // 找到帳戶，找不到則拋出 RuntimeException，由 @Transactional 處理回滾
                 Account existingAccount = accountRepository.findById(accountId)
                                 .orElseThrow(() -> new NullPointerException("Account not found with id:" + accountId));
-                logger.info("找到帳戶，ID: {}", accountId);
+                if (existingAccount.getStatus().equals("N")) {
+                        throw new IllegalArgumentException("Account " + accountId + " is inactive");
+                }
+                logger.info("找到啟用中帳戶，ID: {}", accountId);
 
                 OrderInfo newOrderInfo = new OrderInfo();
                 newOrderInfo.setAccount(existingAccount);
@@ -84,6 +87,9 @@ public class OrderService {
                         Product existingProduct = productRepository.findById(requestProductId)
                                         .orElseThrow(() -> new NullPointerException(
                                                         "Product not found with id:" + requestProductId));
+                        if (existingProduct.getSaleStatus() == 1002) {
+                                throw new IllegalArgumentException("商品id: " + requestProductId + "已下架");
+                        }
                         logger.info("找到商品，ID: {}", requestProductId);
 
                         BigDecimal productPrice = existingProduct.getPrice();
@@ -97,12 +103,11 @@ public class OrderService {
                         // 更新商品庫存，如發生錯誤 (RuntimeException)，由 @Transactional 處理回滾
                         existingProduct.setStockQty(newStockQuantity);
                         productsToUpdateStockQty.add(existingProduct);
-                        
 
                         // 建立訂單明細，如發生錯誤 (RuntimeException)，由 @Transactional 處理回滾
                         OrderDetail newOrderDetail = new OrderDetail(savedOrderInfo, existingProduct,
                                         requestQuantity);
-                        orderDetailsToBeCreated.add(newOrderDetail);                        
+                        orderDetailsToBeCreated.add(newOrderDetail);
 
                         // 計算小計金額
                         BigDecimal subTotalAmount = productPrice.multiply(BigDecimal.valueOf(requestQuantity));
@@ -321,7 +326,7 @@ public class OrderService {
                         orderDetailRepository.saveAll(orderDetailsToAdd);
                         logger.info("訂單 {} 批量新增 {} 個訂單明細成功", orderId, orderDetailsToAdd.size());
                 }
-                 if (!orderDetailsToUpdate.isEmpty()) {
+                if (!orderDetailsToUpdate.isEmpty()) {
                         orderDetailRepository.saveAll(orderDetailsToUpdate); // saveAll 也可用於更新
                         logger.info("訂單 {} 批量更新 {} 個訂單明細成功", orderId, orderDetailsToUpdate.size());
                 }
@@ -367,43 +372,46 @@ public class OrderService {
 
                 logger.info("找到要刪除的訂單，ID: {}", orderId);
 
-                List<OrderDetail> orderDetails = existingOrderInfo.getOrderDetails();
-                List<OrderDetail> itemsToRemove = new ArrayList<>(); // 用來收集要刪除的明細
-                List<Product> productsToUpdateStockQty = new ArrayList<>(); // 用來收集要更新庫存的產品
+                existingOrderInfo.setStatus(1003);
+                orderInfoRepository.save(existingOrderInfo);
+                // List<OrderDetail> orderDetails = existingOrderInfo.getOrderDetails();
+                // List<OrderDetail> itemsToRemove = new ArrayList<>(); // 用來收集要刪除的明細
+                // List<Product> productsToUpdateStockQty = new ArrayList<>(); // 用來收集要更新庫存的產品
 
-                // 2. 遍歷明細，更新產品庫存 (在物件上操作)，並收集要刪除的明細和要更新的產品
-                for (OrderDetail orderDetail : orderDetails) {
-                        Product product = orderDetail.getProduct();
+                // // 2. 遍歷明細，更新產品庫存 (在物件上操作)，並收集要刪除的明細和要更新的產品
+                // for (OrderDetail orderDetail : orderDetails) {
+                // Product product = orderDetail.getProduct();
 
-                        // 在 Product 物件上修改庫存
-                        product.setStockQty(product.getStockQty() + orderDetail.getQuantity());
+                // // 在 Product 物件上修改庫存
+                // product.setStockQty(product.getStockQty() + orderDetail.getQuantity());
 
-                        // 將明細和修改過的產品加入待處理列表
-                        itemsToRemove.add(orderDetail);
-                        productsToUpdateStockQty.add(product);
+                // // 將明細和修改過的產品加入待處理列表
+                // itemsToRemove.add(orderDetail);
+                // productsToUpdateStockQty.add(product);
 
-                        logger.info("處理明細：產品ID {}, 數量 {}，準備更新庫存並刪除明細", product.getId(), orderDetail.getQuantity());
-                }
+                // logger.info("處理明細：產品ID {}, 數量 {}，準備更新庫存並刪除明細", product.getId(),
+                // orderDetail.getQuantity());
+                // }
 
-                // 3. 批量更新產品庫存
-                if (!productsToUpdateStockQty.isEmpty()) {
-                        // 使用 saveAll 批量儲存更新後的產品資訊
-                        productRepository.saveAll(productsToUpdateStockQty);
-                        logger.info("批量更新產品庫存成功");
-                }
+                // // 3. 批量更新產品庫存
+                // if (!productsToUpdateStockQty.isEmpty()) {
+                // // 使用 saveAll 批量儲存更新後的產品資訊
+                // productRepository.saveAll(productsToUpdateStockQty);
+                // logger.info("批量更新產品庫存成功");
+                // }
 
-                // 4. 批量刪除訂單明細
-                if (!itemsToRemove.isEmpty()) {
-                        // 從訂單的關聯列表中移除明細 (可選，取決於您的 Entity 關聯設定)
-                        // existingOrderInfo.getOrderDetails().clear();
+                // // 4. 批量刪除訂單明細
+                // if (!itemsToRemove.isEmpty()) {
+                // // 從訂單的關聯列表中移除明細 (可選，取決於您的 Entity 關聯設定)
+                // // existingOrderInfo.getOrderDetails().clear();
 
-                        // 使用 deleteAll 批量刪除訂單明細
-                        orderDetailRepository.deleteAll(itemsToRemove);
-                        logger.info("批量刪除訂單 {} 的明細成功", orderId);
-                }
+                // // 使用 deleteAll 批量刪除訂單明細
+                // orderDetailRepository.deleteAll(itemsToRemove);
+                // logger.info("批量刪除訂單 {} 的明細成功", orderId);
+                // }
 
-                // 5. 刪除訂單本身
-                orderInfoRepository.delete(existingOrderInfo);
+                // // 5. 刪除訂單本身
+                // orderInfoRepository.delete(existingOrderInfo);
                 logger.info("刪除訂單，ID: {}", orderId);
         }
 

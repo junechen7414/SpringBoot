@@ -24,8 +24,6 @@ public class CreateProductRequest {
     @Positive(message = "Price must be positive")
     private BigDecimal price;
 
-    private int saleStatus;
-
     @NotNull(message = "Stock Qty is required")
     @Digits(integer = 10, fraction = 0)
     @Positive(message = "Stock Qty must be positive")

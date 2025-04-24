@@ -19,7 +19,7 @@ public class CreateOrderRequest {
     @Digits(integer = 10, fraction = 0, message = "10 characters max")
     @Positive(message = "Account ID must be positive")
     private int accountId;
-    private int status;
+    
     @Valid
     private List<CreateOrderDetailRequest> orderDetails;
 
