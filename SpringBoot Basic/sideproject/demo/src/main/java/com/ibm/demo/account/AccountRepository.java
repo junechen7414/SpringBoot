@@ -10,7 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 
 public interface AccountRepository extends JpaRepository<Account, Integer> {
-    @Query("SELECT AccountListResponseDTO(a.id, a.name, a.status) FROM Account a")
+    @Query("SELECT new com.ibm.demo.account.DTO.GetAccountListResponse(a.id, a.name, a.status) FROM Account a")
     List<GetAccountListResponse> getAccountList();
 
     // @EntityGraph(attributePaths = { "orders" })

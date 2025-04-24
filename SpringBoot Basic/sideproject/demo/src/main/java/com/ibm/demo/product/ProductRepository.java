@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 
 public interface ProductRepository extends JpaRepository<Product, Integer> {
-    @Query("SELECT ProductListResponseDTO(p.id, p.name, p.price, p.saleStatus, p.stockQty) FROM Product p")
+    @Query("SELECT new com.ibm.demo.product.DTO.GetProductListResponse(p.id, p.name, p.price, p.saleStatus, p.stockQty) FROM Product p")
     List<GetProductListResponse> getProductList();
     
 }

@@ -20,6 +20,8 @@ import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 import com.ibm.demo.product.DTO.UpdateProductResponse;
 
+import jakarta.validation.Valid;
+
 @RestController // Restful Controller
 @RequestMapping("/api/products") // 基礎路徑
 public class ProductController {
@@ -28,7 +30,7 @@ public class ProductController {
 
     // Create Product
     @PostMapping
-    public ResponseEntity<CreateProductResponse> createProduct(@RequestBody CreateProductRequest createProductRequest) {
+    public ResponseEntity<CreateProductResponse> createProduct(@Valid @RequestBody CreateProductRequest createProductRequest) {
         CreateProductResponse createProductResponse = productService.createProduct(createProductRequest);
         return ResponseEntity.ok(createProductResponse);
     }

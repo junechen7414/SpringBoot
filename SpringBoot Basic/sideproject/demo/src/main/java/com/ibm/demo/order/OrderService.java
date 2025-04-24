@@ -58,7 +58,9 @@ public class OrderService {
                                 .orElseThrow(() -> new NullPointerException("Account not found with id:" + accountId));
                 logger.info("找到帳戶，ID: {}", accountId);
 
-                OrderInfo newOrderInfo = new OrderInfo(existingAccount);
+                OrderInfo newOrderInfo = new OrderInfo();
+                newOrderInfo.setAccount(existingAccount);
+
                 // total amount 預設值給 0
                 BigDecimal totalAmount = BigDecimal.ZERO;
                 newOrderInfo.setTotalAmount(totalAmount);

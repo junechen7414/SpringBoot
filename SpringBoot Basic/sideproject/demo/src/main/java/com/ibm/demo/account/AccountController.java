@@ -19,6 +19,8 @@ import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.account.DTO.UpdateAccountResponse;
 
+import jakarta.validation.Valid;
+
 @RestController // Restful Controller
 @RequestMapping("/api/accounts") // 基礎路徑
 public class AccountController {
@@ -27,7 +29,7 @@ public class AccountController {
 
     // Create Account
     @PostMapping
-    public ResponseEntity<CreateAccountResponse> createAccount(@RequestBody CreateAccountRequest createAccountRequest) {
+    public ResponseEntity<CreateAccountResponse> createAccount(@Valid @RequestBody CreateAccountRequest createAccountRequest) {
         CreateAccountResponse createAccountResponse = accountService.createAccount(createAccountRequest);
         return ResponseEntity.ok(createAccountResponse);
     }

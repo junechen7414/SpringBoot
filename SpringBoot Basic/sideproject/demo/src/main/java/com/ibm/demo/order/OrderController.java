@@ -20,6 +20,8 @@ import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.DTO.UpdateOrderResponse;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/api/orders") // 基礎路徑
 public class OrderController {
@@ -28,7 +30,7 @@ public class OrderController {
 
     // Create Order
     @PostMapping
-    public ResponseEntity<CreateOrderResponse> createOrder(@RequestBody CreateOrderRequest createOrderRequest) {
+    public ResponseEntity<CreateOrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest createOrderRequest) {
         CreateOrderResponse createOrderResponse = orderService.createOrder(createOrderRequest);
         return ResponseEntity.ok(createOrderResponse);
     }

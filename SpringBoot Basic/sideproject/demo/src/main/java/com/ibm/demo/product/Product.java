@@ -33,9 +33,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
 @Entity
-@Table(name = "PRODUCT", indexes = {
-        @Index(name = "pk_PRODUCT", columnList = "ID", unique = true) // 同@Id的效用
-})
+// @Table(name = "PRODUCT", indexes = {
+//         @Index(name = "pk_PRODUCT", columnList = "ID", unique = true) // 同@Id的效用
+// })
+@Table(name = "PRODUCT")
 @Schema(description = "商品資訊")
 public class Product {
     @Id
