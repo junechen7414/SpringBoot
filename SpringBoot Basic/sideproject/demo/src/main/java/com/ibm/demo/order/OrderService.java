@@ -13,9 +13,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.Account;
-// import com.ibm.demo.account.AccountClient;
+import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.account.AccountRepository;
-// import com.ibm.demo.account.DTO.GetAccountDetailResponse;
+import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.CreateOrderResponse;
@@ -42,44 +42,43 @@ public class OrderService {
         private AccountRepository accountRepository;
         private OrderDetailRepository orderDetailRepository;
         private ProductRepository productRepository;
-        // private final AccountClient accountClient;
+        private final AccountClient accountClient;
 
         public OrderService(OrderInfoRepository orderInfoRepository, AccountRepository accountRepository,
                         OrderDetailRepository orderDetailRepository,
                         ProductRepository productRepository
-        // AccountClient accountClient
+        ,AccountClient accountClient
         ) {
                 this.orderInfoRepository = orderInfoRepository;
                 this.accountRepository = accountRepository;
                 this.orderDetailRepository = orderDetailRepository;
                 this.productRepository = productRepository;
-                // this.accountClient = accountClient;
+                this.accountClient = accountClient;
         }
 
         @Transactional
         public CreateOrderResponse createOrder(CreateOrderRequest createOrderRequest) {
                 Integer accountId = createOrderRequest.getAccountId();
                 // 找到帳戶，找不到則拋出 RuntimeException，由 @Transactional 處理回滾
-                // GetAccountDetailResponse accountDetailResponse =
-                // accountClient.getAccountDetail(accountId);
-                // if (accountDetailResponse == null) {
-                // throw new NullPointerException("Account not found with id:" + accountId);
-                // }
-                // if (accountDetailResponse.getStatus().equals("N")) {
-                // throw new IllegalArgumentException("Account " + accountId + " is inactive");
-                // }
-                Account existingAccount = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new NullPointerException(
-                                                "Account not found with id:" + accountId));
+                GetAccountDetailResponse accountDetailResponse =
+                accountClient.getAccountDetail(accountId);
+                if (accountDetailResponse == null) {
+                throw new NullPointerException("Account not found with id:" + accountId);
+                }
+                if (accountDetailResponse.getStatus().equals("N")) {
+                throw new IllegalArgumentException("Account " + accountId + " is inactive");
+                }
+                // Account existingAccount = accountRepository.findById(accountId)
+                //                 .orElseThrow(() -> new NullPointerException(
+                //                                 "Account not found with id:" + accountId));
 
                 logger.info("找到啟用中帳戶，ID: {}", accountId);
+                Account account = new Account();
+                account.setId(accountId);
 
                 OrderInfo newOrderInfo = new OrderInfo();
-                newOrderInfo.setAccount(existingAccount);
-
-                // total amount 預設值給 0
-                BigDecimal totalAmount = BigDecimal.ZERO;
-                newOrderInfo.setTotalAmount(totalAmount);
+                // newOrderInfo.setAccount(existingAccount);
+                newOrderInfo.setAccount(account);                              
 
                 // status 預設值為 1001
                 newOrderInfo.setStatus(1001);
@@ -89,7 +88,8 @@ public class OrderService {
                 logger.info("已建立新的 OrderInfo，ID: {}", savedOrderInfo.getId());
 
                 List<Product> productsToUpdateStockQty = new ArrayList<>();
-                List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
+                List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();                
+                BigDecimal totalAmount = BigDecimal.ZERO;  
 
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         Integer requestProductId = detailRequest.getProductId();
@@ -112,14 +112,13 @@ public class OrderService {
                         if (newStockQuantity < 0) {
                                 throw new IllegalArgumentException("商品" + requestProductId + "庫存不足");
                         }
-
-                        // 更新商品庫存，如發生錯誤 (RuntimeException)，由 @Transactional 處理回滾
+                        // 設定商品更新後的庫存並加入準備批量更新的List
                         existingProduct.setStockQty(newStockQuantity);
                         productsToUpdateStockQty.add(existingProduct);
 
-                        // 建立訂單明細，如發生錯誤 (RuntimeException)，由 @Transactional 處理回滾
+                        // 建立訂單明細，並加入準備批量更新的List
                         OrderDetail newOrderDetail = new OrderDetail(savedOrderInfo, existingProduct,
-                                        requestQuantity);
+                                        requestQuantity,productPrice);
                         orderDetailsToBeCreated.add(newOrderDetail);
 
                         // 計算小計金額
@@ -134,42 +133,39 @@ public class OrderService {
 
                 // 批量建立訂單明細
                 orderDetailRepository.saveAll(orderDetailsToBeCreated);
-                logger.info("批量建立訂單明細成功");
-
-                // 更新訂單總金額，如發生錯誤 (RuntimeException)，由 @Transactional 處理回滾
-                savedOrderInfo.setTotalAmount(totalAmount);
-                orderInfoRepository.save(savedOrderInfo);
-                logger.info("已更新 Order ID {} 的總金額為 {}", savedOrderInfo.getId(), totalAmount);
+                logger.info("批量建立訂單明細成功");               
 
                 // 設定返回結果
                 CreateOrderResponse response = new CreateOrderResponse(savedOrderInfo.getId(), accountId,
-                                savedOrderInfo.getStatus(), savedOrderInfo.getTotalAmount(),
+                                savedOrderInfo.getStatus(), totalAmount,
                                 savedOrderInfo.getCreateDate());
 
                 return response;
         }
 
         public List<GetOrderListResponse> getOrderList(Integer accountId) {
-                // GetAccountDetailResponse accountDetailResponse =
-                // accountClient.getAccountDetail(accountId);
-                // if (accountDetailResponse == null) {
-                // throw new NullPointerException("Account not found with id: " + accountId);
-                // }
-                // if (accountDetailResponse.getStatus().equals("N")) {
-                // throw new IllegalArgumentException("Account " + accountId + " is inactive");
-                // }
-                if (!accountRepository.existsById(accountId)) {
-                        throw new NullPointerException("Account not found with id:" + accountId);
+                GetAccountDetailResponse accountDetailResponse =
+                accountClient.getAccountDetail(accountId);
+                if (accountDetailResponse == null) {
+                throw new NullPointerException("Account not found with id: " + accountId);
                 }
+                if (accountDetailResponse.getStatus().equals("N")) {
+                throw new IllegalArgumentException("Account " + accountId + " is inactive");
+                }
+                // if (!accountRepository.existsById(accountId)) {
+                //         throw new NullPointerException("Account not found with id:" + accountId);
+                // }
                 logger.info("找到啟用中帳戶，ID: {}", accountId);
 
                 List<OrderInfo> orderInfoList = orderInfoRepository.findByAccountId(accountId);
                 List<GetOrderListResponse> getOrderListResponse = new ArrayList<>();
+                BigDecimal totalAmount = BigDecimal.ZERO;
                 for (OrderInfo orderInfo : orderInfoList) {
+                        totalAmount = orderInfo.calculateTotalAmount();
                         GetOrderListResponse response = new GetOrderListResponse();
                         response.setOrderId(orderInfo.getId());
                         response.setStatus(orderInfo.getStatus());
-                        response.setTotalAmount(orderInfo.getTotalAmount());
+                        response.setTotalAmount(totalAmount);
                         response.setCreateDate(orderInfo.getCreateDate());
                         getOrderListResponse.add(response);
                 }
@@ -184,7 +180,7 @@ public class OrderService {
                 GetOrderDetailResponse getOrderDetailResponse = new GetOrderDetailResponse();
                 getOrderDetailResponse.setAccountId(existingOrderInfo.getAccount().getId());
                 getOrderDetailResponse.setOrderStatus(existingOrderInfo.getStatus());
-                getOrderDetailResponse.setTotalAmount(existingOrderInfo.getTotalAmount());
+                getOrderDetailResponse.setTotalAmount(existingOrderInfo.calculateTotalAmount());                
                 getOrderDetailResponse.setCreateDate(existingOrderInfo.getCreateDate());
                 getOrderDetailResponse.setModifiedDate(existingOrderInfo.getModifiedDate());
 
@@ -196,7 +192,7 @@ public class OrderService {
                         itemDTO.setProductId(singleProduct.getId());
                         itemDTO.setProductName(singleProduct.getName());
                         itemDTO.setQuantity(orderDetail.getQuantity());
-                        itemDTO.setProductPrice(singleProduct.getPrice());
+                        itemDTO.setProductPrice(orderDetail.getPrice());
                         itemDTOs.add(itemDTO);
                 }
 
@@ -367,13 +363,11 @@ public class OrderService {
                         BigDecimal productPrice = detail.getProduct().getPrice();
                         Integer quantity = detail.getQuantity();
                         totalAmount = totalAmount.add(productPrice.multiply(BigDecimal.valueOf(quantity)));
-                }
-                existingOrderInfo.setTotalAmount(totalAmount);
-                orderInfoRepository.save(existingOrderInfo);
+                }                
 
                 UpdateOrderResponse response = new UpdateOrderResponse();
                 response.setOrderId(existingOrderInfo.getId());
-                response.setTotalAmount(existingOrderInfo.getTotalAmount());
+                response.setTotalAmount(totalAmount);
                 List<UpdateOrderDetailResponse> itemsResponse = new ArrayList<>();
 
                 for (OrderDetail detail : existingOrderInfo.getOrderDetails()) {

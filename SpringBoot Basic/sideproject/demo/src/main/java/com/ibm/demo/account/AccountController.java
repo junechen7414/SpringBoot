@@ -32,7 +32,7 @@ public class AccountController {
 
     // Create Account
     @PostMapping
-    public ResponseEntity<CreateAccountResponse> createAccount(@RequestBody @Valid CreateAccountRequest createAccountRequest) {
+    public ResponseEntity<CreateAccountResponse> createAccount(@Valid @RequestBody CreateAccountRequest createAccountRequest) {
         CreateAccountResponse createAccountResponse = accountService.createAccount(createAccountRequest);
         return ResponseEntity.ok(createAccountResponse);
     }

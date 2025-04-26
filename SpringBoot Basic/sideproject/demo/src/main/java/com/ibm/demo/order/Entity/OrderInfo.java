@@ -55,9 +55,9 @@ public class OrderInfo {
     @Schema(description = "訂單狀態", example = "1001")
     private Integer status;
 
-    @Column(name = "TOTAL_AMOUNT", columnDefinition = "NUMBER(12,4)", nullable = false)
-    @Schema(description = "訂單總金額", example = "1234.56")
-    private BigDecimal totalAmount;
+    // @Column(name = "TOTAL_AMOUNT", columnDefinition = "NUMBER(12,4)", nullable = false)
+    // @Schema(description = "訂單總金額", example = "1234.56")
+    // private BigDecimal totalAmount;
 
     @CreatedDate // 標記為創建日期欄位
     @Temporal(TemporalType.DATE) // 指定日期時間類型
@@ -86,6 +86,16 @@ public class OrderInfo {
     public void removeOrderDetail(OrderDetail detail) {
         orderDetails.remove(detail);
         detail.setOrderInfo(null); // 確保 OrderDetail 這邊的關聯被中斷
+    }
+
+    public BigDecimal calculateTotalAmount() {
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (OrderDetail orderDetail : this.getOrderDetails()) {
+            BigDecimal productPrice = orderDetail.getPrice();
+            Integer quantity = orderDetail.getQuantity();
+            totalAmount = totalAmount.add(productPrice.multiply(BigDecimal.valueOf(quantity)));
+        }
+        return totalAmount;
     }
 
 }

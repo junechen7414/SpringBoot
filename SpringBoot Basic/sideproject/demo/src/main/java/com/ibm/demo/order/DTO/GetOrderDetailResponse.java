@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 public class GetOrderDetailResponse {
     private Integer accountId;
     private Integer orderStatus;
-    private BigDecimal totalAmount;
+    private BigDecimal totalAmount;    
     private LocalDate createDate;
     private LocalDate modifiedDate;
     private List<OrderItemDTO> items;
