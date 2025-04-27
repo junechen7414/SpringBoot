@@ -17,6 +17,7 @@ import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.account.AccountRepository;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
+import com.ibm.demo.order.DTO.CreateOrderDetailResponse;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.CreateOrderResponse;
 import com.ibm.demo.order.DTO.GetOrderDetailResponse;
@@ -88,13 +89,14 @@ public class OrderService {
                 logger.info("已建立新的 OrderInfo，ID: {}", savedOrderInfo.getId());
 
                 List<Product> productsToUpdateStockQty = new ArrayList<>();
-                List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();                
+                List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
+                List<CreateOrderDetailResponse> orderDetailResponses = new ArrayList<>();
                 BigDecimal totalAmount = BigDecimal.ZERO;  
 
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         Integer requestProductId = detailRequest.getProductId();
                         Integer requestQuantity = detailRequest.getQuantity();
-                        logger.info("處理商品 ID: {}，數量: {}", requestProductId, requestQuantity);
+                        logger.info("購買商品 ID: {}，數量: {}", requestProductId, requestQuantity);
 
                         // 找到商品，找不到則拋出 RuntimeException，由 @Transactional 處理回滾
                         Product existingProduct = productRepository.findById(requestProductId)
@@ -121,10 +123,15 @@ public class OrderService {
                                         requestQuantity,productPrice);
                         orderDetailsToBeCreated.add(newOrderDetail);
 
+                        // 準備回傳值List
+                        CreateOrderDetailResponse detailResponse = new CreateOrderDetailResponse(requestProductId,requestQuantity,productPrice);
+                        orderDetailResponses.add(detailResponse);
+                        
+
                         // 計算小計金額
                         BigDecimal subTotalAmount = productPrice.multiply(BigDecimal.valueOf(requestQuantity));
                         totalAmount = totalAmount.add(subTotalAmount);
-                        logger.info("商品 ID {} 小計金額: {}", requestProductId, subTotalAmount);
+                        logger.info("購買商品 ID {} 小計金額: {}", requestProductId, subTotalAmount);
                 }
 
                 // 批量更新商品庫存
@@ -138,7 +145,7 @@ public class OrderService {
                 // 設定返回結果
                 CreateOrderResponse response = new CreateOrderResponse(savedOrderInfo.getId(), accountId,
                                 savedOrderInfo.getStatus(), totalAmount,
-                                savedOrderInfo.getCreateDate());
+                                savedOrderInfo.getCreateDate(),orderDetailResponses);
 
                 return response;
         }
