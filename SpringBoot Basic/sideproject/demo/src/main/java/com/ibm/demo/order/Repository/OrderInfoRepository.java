@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import com.ibm.demo.order.Entity.OrderInfo;
 
 public interface OrderInfoRepository extends JpaRepository<OrderInfo, Integer> {
-    @Query("SELECT o FROM OrderInfo o WHERE o.account.id = :accountId")
+    @Query("SELECT o FROM OrderInfo o WHERE o.accountId = :accountId")
     List<OrderInfo> findByAccountId(@Param("accountId") Integer accountId);
 
     // @EntityGraph(attributePaths = {"orderDetails, orderDetails.product",

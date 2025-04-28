@@ -41,7 +41,9 @@ public class AccountService {
         Account existingAccount = accountRepository.findById(id)
                 .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
         GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(),
-                existingAccount.getStatus(), existingAccount.getCreateDate(), existingAccount.getModifiedDate());
+                existingAccount.getStatus(), existingAccount.getCreateDate()
+                // , existingAccount.getModifiedDate()
+                );
         return accountDetailResponseDTO;
     }
 
@@ -65,5 +67,12 @@ public class AccountService {
                 .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
         existingAccount.setStatus("N");
         accountRepository.save(existingAccount);
+    }
+
+    public void validateActiveAccount(Integer accountId) {
+        Account account = accountRepository.findById(accountId).orElseThrow(()-> new NullPointerException("Account not found with id: " + accountId));
+        if ("N".equals(account.getStatus())) {
+            throw new IllegalArgumentException("Account " + accountId + " is inactive");
+        }
     }
 }

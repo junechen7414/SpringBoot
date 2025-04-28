@@ -78,4 +78,20 @@ public class ProductController {
         return ResponseEntity.ok().build();
     }
 
+    // Validate Product
+    @PostMapping("/validate")
+    public void validateProducts(@RequestBody Set<Integer> productIds) {
+        productService.validateProducts(productIds);
+    }
+
+    /**
+     * 批量更新商品庫存
+     *
+     * @param stockUpdates Map<商品ID, 新庫存數量>
+     */
+    @PutMapping("/stockQuantity/batch")
+    public void updateProductsStock(@RequestBody Map<Integer, Integer> stockUpdates) {
+        productService.updateProductsStock(stockUpdates);
+    }
+    
 }

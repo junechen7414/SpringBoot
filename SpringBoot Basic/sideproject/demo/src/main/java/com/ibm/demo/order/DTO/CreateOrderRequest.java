@@ -4,7 +4,6 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
@@ -20,7 +19,7 @@ public class CreateOrderRequest {
     @Digits(integer = 10, fraction = 0, message = "10 characters max")
     @Positive(message = "Account ID must be positive")
     private Integer accountId;
-    
+
     @Valid
     private List<CreateOrderDetailRequest> orderDetails;
 

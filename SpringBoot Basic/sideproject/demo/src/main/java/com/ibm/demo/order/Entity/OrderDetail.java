@@ -4,8 +4,6 @@ import java.math.BigDecimal;
 
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.product.Product;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -53,10 +51,13 @@ public class OrderDetail {
     private OrderInfo orderInfo; // 指向所屬的 OrderInfo 物件
 
     // 加入與 Product 的多對一關係映射
-    @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
-    @JoinColumn(name = "PRODUCT_ID", referencedColumnName = "ID", nullable = false) // 外鍵欄位 PRODUCT_ID 指向 Product 的 ID
+    // @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
+    // @JoinColumn(name = "PRODUCT_ID", referencedColumnName = "ID", nullable =
+    // false) // 外鍵欄位 PRODUCT_ID 指向 Product 的 ID
+    // private Product product; // 指向關聯的 Product 物件
     @Schema(description = "商品編號", example = "1")
-    private Product product; // 指向關聯的 Product 物件
+    @Column(name = "PRODUCT_ID", columnDefinition = "NUMBER(10)", nullable = false)
+    private Integer productId;
 
     @Column(name = "QUANTITY", columnDefinition = "NUMBER(10)", nullable = false)
     @Schema(description = "數量", example = "5")
@@ -66,10 +67,11 @@ public class OrderDetail {
     @Schema(description = "商品價格", example = "1234.56")
     private BigDecimal price;
 
-    // constructor
-    public OrderDetail(OrderInfo orderInfo, Product product, Integer quantity,BigDecimal price) {
+    // constructor    
+
+    public OrderDetail(OrderInfo orderInfo, Integer productId, Integer quantity, BigDecimal price) {
         this.orderInfo = orderInfo;
-        this.product = product;
+        this.productId = productId;
         this.quantity = quantity;
         this.price = price;
     }

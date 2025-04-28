@@ -2,24 +2,18 @@ package com.ibm.demo.product;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.order.Entity.OrderDetail;
-
 import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
@@ -71,11 +65,6 @@ public class Product {
     @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
     private LocalDate modifiedDate;
-
-    // 加入與 OrderProductDetail 的一對多關係映射
-    // mappedBy = "product" 指的是在 OrderProductDetail Entity 中對應的屬性名稱
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderDetail> orderDetails; // 存放所有引用該商品的訂單明細
 
     // constructors
 

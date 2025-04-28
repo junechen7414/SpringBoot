@@ -6,8 +6,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 
-import reactor.core.publisher.Mono;
-
 @Component
 public class AccountClient {
     private final WebClient webClient;
@@ -24,4 +22,11 @@ public class AccountClient {
                 .block();
     }
 
+    public void validateActiveAccount(Integer accountId) {
+        webClient.get()
+                .uri("/validate/{accountId}", accountId)
+                .retrieve()
+                .bodyToMono(Void.class)
+                .block();
+    }
 }

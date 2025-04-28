@@ -1,9 +1,7 @@
 package com.ibm.demo.account;
 
 import java.util.List;
-import java.util.Optional;
 
-import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -13,7 +11,5 @@ public interface AccountRepository extends JpaRepository<Account, Integer> {
     @Query("SELECT new com.ibm.demo.account.DTO.GetAccountListResponse(a.id, a.name, a.status) FROM Account a")
     List<GetAccountListResponse> getAccountList();
 
-    // @EntityGraph(attributePaths = { "orders" })
-    // Optional<Account> findByIdWithOrders(Integer id);
 
 }

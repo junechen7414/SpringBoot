@@ -13,5 +13,5 @@ public class GetAccountDetailResponse {
     private String name;
     private String status;
     LocalDate createDate;
-    LocalDate modifiedDate;
+    // LocalDate modifiedDate;
 }

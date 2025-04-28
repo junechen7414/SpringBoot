@@ -34,4 +34,20 @@ public class ProductClient {
                 .bodyToMono(mapType) // Convert the response body to a Mono<Map<Integer, GetProductDetailResponse>>
                 .block(); // Block until the response is received (synchronous call)       
     }
+
+    /**
+     * 批量更新商品庫存
+     *
+     * @param stockUpdates Map<商品ID, 新庫存數量>
+     */
+    public void updateProductsStock(Map<Integer, Integer> stockUpdates) {
+        webClient.put()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/stockQuantity/batch")
+                        .build())
+                .bodyValue(stockUpdates)
+                .retrieve()
+                .toBodilessEntity()
+                .block();
+    }
 }

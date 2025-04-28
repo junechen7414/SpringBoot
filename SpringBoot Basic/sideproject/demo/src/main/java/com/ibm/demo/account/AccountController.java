@@ -21,6 +21,7 @@ import com.ibm.demo.account.DTO.UpdateAccountResponse;
 
 import jakarta.validation.Valid;
 
+
 @RestController // Restful Controller
 @RequestMapping("/api/accounts") // 基礎路徑
 public class AccountController {
@@ -64,5 +65,12 @@ public class AccountController {
         accountService.deleteAccount(id);
         return ResponseEntity.ok().build();
     }
+
+    // Validate Account
+    @GetMapping("/validate/{accountId}")
+    public void validateActiveAccount(@PathVariable Integer accountId) {
+        accountService.validateActiveAccount(accountId);
+    }
+    
 
 }

@@ -1,23 +1,18 @@
 package com.ibm.demo.account;
 
 import java.time.LocalDate; // 使用 LocalDate 對應 DATE 型別
-import java.util.List;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.order.Entity.OrderInfo;
-
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
@@ -59,13 +54,6 @@ public class Account {
     @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
     private LocalDate modifiedDate;
-
-    // 加入與 OrderInfo 的一對多關係映射
-    // mappedBy = "account" 指的是在 OrderInfo Entity 中對應的屬性名稱
-    // cascade = CascadeType.ALL 表示對 Account 的操作（如刪除）會級聯影響關聯的 OrderInfo
-    // orphanRemoval = true 移除關聯的 OrderInfo 當它不再被 Account 引用時
-    @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderInfo> orders; // 存放該帳號下的所有訂單
 
     // constructors
 
