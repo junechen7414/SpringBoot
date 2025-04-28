@@ -1,6 +1,8 @@
 package com.ibm.demo.product;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,6 +22,8 @@ import com.ibm.demo.product.DTO.UpdateProductRequest;
 import com.ibm.demo.product.DTO.UpdateProductResponse;
 
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestParam;
+
 
 @RestController // Restful Controller
 @RequestMapping("/api/products") // 基礎路徑
@@ -52,6 +56,13 @@ public class ProductController {
         GetProductDetailResponse productDetail = productService.getProductDetail(id);
         return ResponseEntity.ok(productDetail);
     }
+
+    @GetMapping("/getDetails")
+    public ResponseEntity<Map<Integer, GetProductDetailResponse>> getProductDetails(@RequestParam("ids") Set<Integer> ids) {
+        Map<Integer, GetProductDetailResponse> productDetailsMap = productService.getProductDetails(ids);
+        return ResponseEntity.ok(productDetailsMap);
+    }
+    
 
     // Update Product
     @PutMapping

@@ -47,9 +47,7 @@ public class OrderService {
 
         public OrderService(OrderInfoRepository orderInfoRepository, AccountRepository accountRepository,
                         OrderDetailRepository orderDetailRepository,
-                        ProductRepository productRepository
-        ,AccountClient accountClient
-        ) {
+                        ProductRepository productRepository, AccountClient accountClient) {
                 this.orderInfoRepository = orderInfoRepository;
                 this.accountRepository = accountRepository;
                 this.orderDetailRepository = orderDetailRepository;
@@ -61,25 +59,17 @@ public class OrderService {
         public CreateOrderResponse createOrder(CreateOrderRequest createOrderRequest) {
                 Integer accountId = createOrderRequest.getAccountId();
                 // 找到帳戶，找不到則拋出 RuntimeException，由 @Transactional 處理回滾
-                GetAccountDetailResponse accountDetailResponse =
-                accountClient.getAccountDetail(accountId);
-                if (accountDetailResponse == null) {
-                throw new NullPointerException("Account not found with id:" + accountId);
-                }
-                if (accountDetailResponse.getStatus().equals("N")) {
-                throw new IllegalArgumentException("Account " + accountId + " is inactive");
-                }
+                validateActiveAccount(accountId);
                 // Account existingAccount = accountRepository.findById(accountId)
-                //                 .orElseThrow(() -> new NullPointerException(
-                //                                 "Account not found with id:" + accountId));
+                // .orElseThrow(() -> new NullPointerException(
+                // "Account not found with id:" + accountId));
 
-                logger.info("找到啟用中帳戶，ID: {}", accountId);
                 Account account = new Account();
                 account.setId(accountId);
 
                 OrderInfo newOrderInfo = new OrderInfo();
                 // newOrderInfo.setAccount(existingAccount);
-                newOrderInfo.setAccount(account);                              
+                newOrderInfo.setAccount(account);
 
                 // status 預設值為 1001
                 newOrderInfo.setStatus(1001);
@@ -91,7 +81,7 @@ public class OrderService {
                 List<Product> productsToUpdateStockQty = new ArrayList<>();
                 List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
                 List<CreateOrderDetailResponse> orderDetailResponses = new ArrayList<>();
-                BigDecimal totalAmount = BigDecimal.ZERO;  
+                BigDecimal totalAmount = BigDecimal.ZERO;
 
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         Integer requestProductId = detailRequest.getProductId();
@@ -103,7 +93,7 @@ public class OrderService {
                                         .orElseThrow(() -> new NullPointerException(
                                                         "Product not found with id:" + requestProductId));
                         if (existingProduct.getSaleStatus() == 1002) {
-                                throw new IllegalArgumentException("商品id: " + requestProductId + "已下架");
+                                throw new IllegalArgumentException("商品id: " + requestProductId + "不可銷售");
                         }
                         logger.info("找到商品，ID: {}", requestProductId);
 
@@ -120,13 +110,13 @@ public class OrderService {
 
                         // 建立訂單明細，並加入準備批量更新的List
                         OrderDetail newOrderDetail = new OrderDetail(savedOrderInfo, existingProduct,
-                                        requestQuantity,productPrice);
+                                        requestQuantity, productPrice);
                         orderDetailsToBeCreated.add(newOrderDetail);
 
                         // 準備回傳值List
-                        CreateOrderDetailResponse detailResponse = new CreateOrderDetailResponse(requestProductId,requestQuantity,productPrice);
+                        CreateOrderDetailResponse detailResponse = new CreateOrderDetailResponse(requestProductId,
+                                        requestQuantity, productPrice);
                         orderDetailResponses.add(detailResponse);
-                        
 
                         // 計算小計金額
                         BigDecimal subTotalAmount = productPrice.multiply(BigDecimal.valueOf(requestQuantity));
@@ -140,27 +130,20 @@ public class OrderService {
 
                 // 批量建立訂單明細
                 orderDetailRepository.saveAll(orderDetailsToBeCreated);
-                logger.info("批量建立訂單明細成功");               
+                logger.info("批量建立訂單明細成功");
 
                 // 設定返回結果
                 CreateOrderResponse response = new CreateOrderResponse(savedOrderInfo.getId(), accountId,
                                 savedOrderInfo.getStatus(), totalAmount,
-                                savedOrderInfo.getCreateDate(),orderDetailResponses);
+                                savedOrderInfo.getCreateDate(), orderDetailResponses);
 
                 return response;
         }
 
         public List<GetOrderListResponse> getOrderList(Integer accountId) {
-                GetAccountDetailResponse accountDetailResponse =
-                accountClient.getAccountDetail(accountId);
-                if (accountDetailResponse == null) {
-                throw new NullPointerException("Account not found with id: " + accountId);
-                }
-                if (accountDetailResponse.getStatus().equals("N")) {
-                throw new IllegalArgumentException("Account " + accountId + " is inactive");
-                }
+                validateActiveAccount(accountId);
                 // if (!accountRepository.existsById(accountId)) {
-                //         throw new NullPointerException("Account not found with id:" + accountId);
+                // throw new NullPointerException("Account not found with id:" + accountId);
                 // }
                 logger.info("找到啟用中帳戶，ID: {}", accountId);
 
@@ -187,7 +170,7 @@ public class OrderService {
                 GetOrderDetailResponse getOrderDetailResponse = new GetOrderDetailResponse();
                 getOrderDetailResponse.setAccountId(existingOrderInfo.getAccount().getId());
                 getOrderDetailResponse.setOrderStatus(existingOrderInfo.getStatus());
-                getOrderDetailResponse.setTotalAmount(existingOrderInfo.calculateTotalAmount());                
+                getOrderDetailResponse.setTotalAmount(existingOrderInfo.calculateTotalAmount());
                 getOrderDetailResponse.setCreateDate(existingOrderInfo.getCreateDate());
                 getOrderDetailResponse.setModifiedDate(existingOrderInfo.getModifiedDate());
 
@@ -370,7 +353,7 @@ public class OrderService {
                         BigDecimal productPrice = detail.getProduct().getPrice();
                         Integer quantity = detail.getQuantity();
                         totalAmount = totalAmount.add(productPrice.multiply(BigDecimal.valueOf(quantity)));
-                }                
+                }
 
                 UpdateOrderResponse response = new UpdateOrderResponse();
                 response.setOrderId(existingOrderInfo.getId());
@@ -441,4 +424,16 @@ public class OrderService {
                 logger.info("刪除訂單，ID: {}", orderId);
         }
 
+        // functions to share
+        private void validateActiveAccount(Integer accountId) {
+                GetAccountDetailResponse accountDetailResponse = accountClient.getAccountDetail(accountId);
+                if (accountDetailResponse == null) {
+                        throw new NullPointerException("Account not found with id: " + accountId);
+                }
+                if ("N".equals(accountDetailResponse.getStatus())) {
+                        throw new IllegalArgumentException("Account " + accountId + " is inactive");
+                }
+                logger.info("找到啟用中帳戶，ID: {}", accountId);
+                return ;
+        }
 }

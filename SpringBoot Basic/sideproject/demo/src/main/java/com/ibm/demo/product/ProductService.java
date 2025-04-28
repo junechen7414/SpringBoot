@@ -1,6 +1,9 @@
 package com.ibm.demo.product;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
@@ -43,10 +46,31 @@ public class ProductService {
     public GetProductDetailResponse getProductDetail(Integer id) {
         Product existingProduct = productRepository.findById(id)
                 .orElseThrow(() -> new NullPointerException("Product not found with id: " + id));
-        GetProductDetailResponse product_dto = new GetProductDetailResponse(existingProduct.getName(),
-                existingProduct.getPrice(), existingProduct.getSaleStatus(), existingProduct.getStockQty(),
-                existingProduct.getCreateDate(), existingProduct.getModifiedDate());
+        GetProductDetailResponse product_dto = mapProductToDetailResponse(existingProduct);
         return product_dto;
+    }
+
+    public Map<Integer,GetProductDetailResponse> getProductDetails(Set<Integer> ids){
+        List<Product> products = productRepository.findAllById(ids);
+        Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
+
+        for(Product product : products){
+            // Convert the product entity to its DTO representation
+            GetProductDetailResponse detailResponse = mapProductToDetailResponse(product);
+            // Add the product ID and its DTO to the map
+            productDetailsMap.put(product.getId(), detailResponse);
+        }
+
+        // Optional: Check if all requested IDs were found (depends on requirements)
+        // if (productDetailsMap.size() != ids.size()) {
+        //     Set<Integer> foundIds = productDetailsMap.keySet();
+        //     Set<Integer> missingIds = new HashSet<>(ids);
+        //     missingIds.removeAll(foundIds);
+        //     logger.warn("Could not find product details for IDs: {}", missingIds);
+        //     // Decide if you need to throw an exception or just return the found ones
+        // }
+
+        return productDetailsMap;
     }
 
     @Transactional
@@ -71,5 +95,16 @@ public class ProductService {
                 .orElseThrow(() -> new NullPointerException("Product not found with id: " + id));
         existingProduct.setSaleStatus(1002);
         productRepository.save(existingProduct);
+    }
+
+    // Helper method to map Product entity to GetProductDetailResponse DTO
+    private GetProductDetailResponse mapProductToDetailResponse(Product product) {
+        return new GetProductDetailResponse(
+                product.getName(),
+                product.getPrice(),
+                product.getSaleStatus(),
+                product.getStockQty(),
+                product.getCreateDate(),
+                product.getModifiedDate());
     }
 }
