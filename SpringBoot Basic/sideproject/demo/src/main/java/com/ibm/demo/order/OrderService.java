@@ -32,7 +32,9 @@ import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.Product;
+import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.ProductRepository;
+import com.ibm.demo.product.DTO.GetProductDetailResponse;
 
 import jakarta.transaction.Transactional;
 
@@ -44,15 +46,17 @@ public class OrderService {
         private OrderDetailRepository orderDetailRepository;
         private ProductRepository productRepository;
         private final AccountClient accountClient;
+        private final ProductClient productClient;
 
         public OrderService(OrderInfoRepository orderInfoRepository, AccountRepository accountRepository,
                         OrderDetailRepository orderDetailRepository,
-                        ProductRepository productRepository, AccountClient accountClient) {
+                        ProductRepository productRepository, AccountClient accountClient, ProductClient productClient) {
                 this.orderInfoRepository = orderInfoRepository;
                 this.accountRepository = accountRepository;
                 this.orderDetailRepository = orderDetailRepository;
                 this.productRepository = productRepository;
                 this.accountClient = accountClient;
+                this.productClient = productClient;
         }
 
         @Transactional
@@ -78,6 +82,16 @@ public class OrderService {
                 OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
                 logger.info("已建立新的 OrderInfo，ID: {}", savedOrderInfo.getId());
 
+                // 收集Request中所有商品ID
+                Set<Integer> productIds = new HashSet<>();
+                for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
+                        productIds.add(detailRequest.getProductId());
+                }
+
+                // 使用 ProductClient 一次獲取所有商品的詳細資訊
+                Map<Integer, GetProductDetailResponse> productDetailsMap = productClient.getProductDetails(productIds);
+                logger.info("從 Product Service 獲取 {} 個商品的詳細資訊", productDetailsMap.size());
+
                 List<Product> productsToUpdateStockQty = new ArrayList<>();
                 List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
                 List<CreateOrderDetailResponse> orderDetailResponses = new ArrayList<>();
@@ -88,6 +102,8 @@ public class OrderService {
                         Integer requestQuantity = detailRequest.getQuantity();
                         logger.info("購買商品 ID: {}，數量: {}", requestProductId, requestQuantity);
 
+                        GetProductDetailResponse productDetail = productDetailsMap.get(requestProductId);
+                        
                         // 找到商品，找不到則拋出 RuntimeException，由 @Transactional 處理回滾
                         Product existingProduct = productRepository.findById(requestProductId)
                                         .orElseThrow(() -> new NullPointerException(
@@ -434,6 +450,6 @@ public class OrderService {
                         throw new IllegalArgumentException("Account " + accountId + " is inactive");
                 }
                 logger.info("找到啟用中帳戶，ID: {}", accountId);
-                return ;
+                return;
         }
 }

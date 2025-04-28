@@ -1,6 +1,7 @@
 package com.ibm.demo.product;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,7 +52,22 @@ public class ProductService {
     }
 
     public Map<Integer,GetProductDetailResponse> getProductDetails(Set<Integer> ids){
+        if(ids == null || ids.isEmpty()){
+            return new HashMap<>();
+        }
+        
         List<Product> products = productRepository.findAllById(ids);
+
+        if(products.size()!=ids.size()){
+            Set<Integer> foundIdSet = new HashSet<>();
+            for(Product product : products){
+                foundIdSet.add(product.getId());
+            }
+            Set<Integer> missingIds = new HashSet<>(ids);
+            missingIds.removeAll(foundIdSet);
+            throw new NullPointerException("Products not found with ids: " + missingIds);
+        }
+
         Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
 
         for(Product product : products){
@@ -59,16 +75,7 @@ public class ProductService {
             GetProductDetailResponse detailResponse = mapProductToDetailResponse(product);
             // Add the product ID and its DTO to the map
             productDetailsMap.put(product.getId(), detailResponse);
-        }
-
-        // Optional: Check if all requested IDs were found (depends on requirements)
-        // if (productDetailsMap.size() != ids.size()) {
-        //     Set<Integer> foundIds = productDetailsMap.keySet();
-        //     Set<Integer> missingIds = new HashSet<>(ids);
-        //     missingIds.removeAll(foundIds);
-        //     logger.warn("Could not find product details for IDs: {}", missingIds);
-        //     // Decide if you need to throw an exception or just return the found ones
-        // }
+        }        
 
         return productDetailsMap;
     }

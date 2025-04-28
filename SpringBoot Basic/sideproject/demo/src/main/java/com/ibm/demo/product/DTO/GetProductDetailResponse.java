@@ -17,5 +17,4 @@ public class GetProductDetailResponse {
     private Integer stockQty;
     LocalDate createDate;
     LocalDate modifiedDate;
-
 }
