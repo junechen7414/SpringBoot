@@ -55,28 +55,21 @@ public class OrderService {
         @Transactional
         public CreateOrderResponse createOrder(CreateOrderRequest createOrderRequest) {
                 Integer accountId = createOrderRequest.getAccountId();
-                // 找到帳戶，找不到則拋出 RuntimeException，由 @Transactional 處理回滾
                 validateActiveAccount(accountId);
 
                 OrderInfo newOrderInfo = new OrderInfo();
                 newOrderInfo.setAccountId(accountId);
-
-                // status 預設值為 1001
                 newOrderInfo.setStatus(1001);
-
-                // 儲存 OrderInfo，如發生錯誤 (RuntimeException)，會由 @Transactional 處理回滾
                 OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
-                logger.info("已建立新的 OrderInfo，ID: {}", savedOrderInfo.getId());
 
-                // 收集Request中所有商品ID
+                // 收集商品ID
                 Set<Integer> productIds = new HashSet<>();
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         productIds.add(detailRequest.getProductId());
                 }
 
-                // 使用 ProductClient 一次獲取所有商品的詳細資訊
-                Map<Integer, GetProductDetailResponse> productDetailsMap = productClient.getProductDetails(productIds);
-                logger.info("從 Product Service 獲取 {} 個商品的詳細資訊", productDetailsMap.size());
+                // 使用共用方法獲取商品資訊
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIds);
 
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
                 List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
@@ -86,68 +79,56 @@ public class OrderService {
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         Integer requestProductId = detailRequest.getProductId();
                         Integer requestQuantity = detailRequest.getQuantity();
-                        logger.info("購買商品 ID: {}，數量: {}", requestProductId, requestQuantity);
-
                         GetProductDetailResponse productDetail = productDetailsMap.get(requestProductId);
 
-                        BigDecimal productPrice = productDetail.getPrice();
-                        Integer newStockQuantity = productDetail.getStockQty() - requestQuantity;
+                        // 使用共用方法計算庫存變更
+                        Map<Integer, Integer> itemStockUpdate = calculateStockChanges(
+                                        requestProductId,
+                                        requestQuantity,
+                                        productDetail,
+                                        true);
+                        stockUpdates.putAll(itemStockUpdate);
 
-                        // 檢查庫存，不足則拋出 RuntimeException，由 @Transactional 處理回滾
-                        if (newStockQuantity < 0) {
-                                throw new IllegalArgumentException("商品" + requestProductId + "庫存不足");
-                        }
-
-                        // 設定商品更新後的庫存並加入準備批量更新的List
-                        stockUpdates.put(requestProductId, newStockQuantity);
-
-                        // 建立訂單明細，並加入準備批量更新的List
+                        // 建立訂單明細
                         OrderDetail newOrderDetail = new OrderDetail(savedOrderInfo, requestProductId,
-                                        requestQuantity, productPrice);
+                                        requestQuantity);
                         orderDetailsToBeCreated.add(newOrderDetail);
 
-                        // 準備回傳值List
-                        CreateOrderDetailResponse detailResponse = new CreateOrderDetailResponse(requestProductId,
-                                        requestQuantity, productPrice);
+                        // 準備回應
+                        CreateOrderDetailResponse detailResponse = new CreateOrderDetailResponse(
+                                        requestProductId, requestQuantity, productDetail.getPrice());
                         orderDetailResponses.add(detailResponse);
 
-                        // 計算小計金額
-                        BigDecimal subTotalAmount = productPrice.multiply(BigDecimal.valueOf(requestQuantity));
+                        // 計算總金額
+                        BigDecimal subTotalAmount = productDetail.getPrice()
+                                        .multiply(BigDecimal.valueOf(requestQuantity));
                         totalAmount = totalAmount.add(subTotalAmount);
-                        logger.info("購買商品 ID {} 小計金額: {}", requestProductId, subTotalAmount);
                 }
 
-                // 批量更新商品庫存
-                productClient.updateProductsStock(stockUpdates);
-                logger.info("批量更新商品庫存成功");
+                // 使用共用方法更新庫存
+                batchUpdateProductStock(stockUpdates);
 
                 // 批量建立訂單明細
                 orderDetailRepository.saveAll(orderDetailsToBeCreated);
-                logger.info("批量建立訂單明細成功");
 
-                // 設定返回結果
-                CreateOrderResponse response = new CreateOrderResponse(savedOrderInfo.getId(), accountId,
+                return new CreateOrderResponse(savedOrderInfo.getId(), accountId,
                                 savedOrderInfo.getStatus(), totalAmount,
                                 savedOrderInfo.getCreateDate(), orderDetailResponses);
-
-                return response;
         }
 
         public List<GetOrderListResponse> getOrderList(Integer accountId) {
                 validateActiveAccount(accountId);
-
                 logger.info("找到啟用中帳戶，ID: {}", accountId);
 
                 List<OrderInfo> orderInfoList = orderInfoRepository.findByAccountId(accountId);
                 List<GetOrderListResponse> getOrderListResponse = new ArrayList<>();
-                BigDecimal totalAmount = BigDecimal.ZERO;
+
                 for (OrderInfo orderInfo : orderInfoList) {
-                        totalAmount = orderInfo.calculateTotalAmount();
+                        BigDecimal totalAmount = calculateOrderTotalAmount(orderInfo); // 使用新方法計算總金額
                         GetOrderListResponse response = new GetOrderListResponse();
                         response.setOrderId(orderInfo.getId());
                         response.setStatus(orderInfo.getStatus());
                         response.setTotalAmount(totalAmount);
-
                         getOrderListResponse.add(response);
                 }
 
@@ -175,7 +156,7 @@ public class OrderService {
                 GetOrderDetailResponse response = new GetOrderDetailResponse();
                 response.setAccountId(existingOrderInfo.getAccountId());
                 response.setOrderStatus(existingOrderInfo.getStatus());
-                response.setTotalAmount(existingOrderInfo.calculateTotalAmount());
+                response.setTotalAmount(calculateOrderTotalAmount(existingOrderInfo));
 
                 // 6. 建立訂單項目列表
                 List<OrderItemDTO> itemDTOs = new ArrayList<>();
@@ -187,7 +168,7 @@ public class OrderService {
                         itemDTO.setProductId(productId);
                         itemDTO.setProductName(productDetail.getName());
                         itemDTO.setQuantity(orderDetail.getQuantity());
-                        itemDTO.setProductPrice(orderDetail.getPrice());
+                        itemDTO.setProductPrice(productDetail.getPrice());
                         itemDTOs.add(itemDTO);
                 }
 
@@ -242,8 +223,7 @@ public class OrderService {
                 productIdsToQuery.addAll(commonProductIds);
 
                 // 6. 批量獲取商品資訊
-                Map<Integer, GetProductDetailResponse> productDetailsMap = productClient
-                                .getProductDetails(productIdsToQuery);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIdsToQuery);
 
                 // 7. 準備庫存更新資訊
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
@@ -254,23 +234,14 @@ public class OrderService {
                         UpdateOrderDetailRequest newItem = updatedItemsMap.get(productId);
                         GetProductDetailResponse productDetail = productDetailsMap.get(productId);
 
-                        // 檢查庫存
-                        Integer newQuantity = newItem.getQuantity();
-                        Integer currentStock = productDetail.getStockQty();
-                        if (currentStock < newQuantity) {
-                                throw new IllegalArgumentException("商品" + productId + "庫存不足");
-                        }
+                        // 計算庫存變更
+                        Map<Integer, Integer> itemStockUpdate = calculateStockChanges(
+                                        productId,
+                                        newItem.getQuantity(),
+                                        productDetail,
+                                        true);
 
-                        // 建立新的訂單明細
-                        OrderDetail newDetail = new OrderDetail();
-                        newDetail.setOrderInfo(existingOrderInfo);
-                        newDetail.setProductId(productId);
-                        newDetail.setQuantity(newQuantity);
-                        newDetail.setPrice(productDetail.getPrice());
-                        orderDetailsToAdd.add(newDetail);
-
-                        // 計算新庫存
-                        stockUpdates.put(productId, currentStock - newQuantity);
+                        stockUpdates.putAll(itemStockUpdate);
                 }
 
                 // 9. 處理移除項目
@@ -366,7 +337,8 @@ public class OrderService {
                 for (OrderDetail detail : updatedDetails) {
                         Integer productId = detail.getProductId();
                         Integer quantity = detail.getQuantity();
-                        BigDecimal price = detail.getPrice();
+                        GetProductDetailResponse productDetail = productDetailsMap.get(productId);
+                        BigDecimal price = productDetail.getPrice(); // 改用商品服務的即時價格
 
                         // 計算總金額
                         totalAmount = totalAmount.add(price.multiply(BigDecimal.valueOf(quantity)));
@@ -393,16 +365,41 @@ public class OrderService {
 
         @Transactional
         public void deleteOrder(Integer orderId) {
-                // 1. 獲取訂單資訊，並一次性載入明細和產品 (使用 EntityGraph)
+                // 1. 獲取訂單資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new NullPointerException("Order not found with id" + orderId));
+                                .orElseThrow(() -> new NullPointerException("Order not found with id: " + orderId));
 
                 logger.info("找到要刪除的訂單，ID: {}", orderId);
 
+                // 2. 驗證訂單狀態
+                validateOrderStatus(existingOrderInfo);
+
+                // 3. 收集所有商品ID並取得商品資訊
+                Set<Integer> productIds = collectProductIdsFromOrderDetails(existingOrderInfo.getOrderDetails());
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIds);
+
+                // 4. 計算需要歸還的庫存
+                Map<Integer, Integer> stockUpdates = new HashMap<>();
+                for (OrderDetail detail : existingOrderInfo.getOrderDetails()) {
+                        Integer productId = detail.getProductId();
+                        Integer quantityToRestore = detail.getQuantity();
+                        GetProductDetailResponse productDetail = productDetailsMap.get(productId);
+
+                        Integer currentStock = productDetail.getStockQty();
+                        Integer newStock = currentStock + quantityToRestore;
+                        stockUpdates.put(productId, newStock);
+
+                        logger.info("訂單取消歸還庫存：商品ID {}，歸還數量 {}", productId, quantityToRestore);
+                }
+
+                // 5. 批量更新商品庫存
+                batchUpdateProductStock(stockUpdates);
+
+                // 6. 更新訂單狀態為已刪除(1003)
                 existingOrderInfo.setStatus(1003);
                 orderInfoRepository.save(existingOrderInfo);
 
-                logger.info("刪除訂單，ID: {}", orderId);
+                logger.info("訂單已刪除，ID: {}", orderId);
         }
 
         // functions to share
@@ -416,5 +413,66 @@ public class OrderService {
                 if (orderStatus != 1001) {
                         throw new IllegalArgumentException("訂單狀態不允許更新商品項目，目前狀態: " + orderStatus);
                 }
+        }
+
+        private Map<Integer, GetProductDetailResponse> batchGetProductDetails(Set<Integer> productIds) {
+                if (productIds.isEmpty()) {
+                        return new HashMap<>();
+                }
+                Map<Integer, GetProductDetailResponse> productDetailsMap = productClient.getProductDetails(productIds);
+                logger.info("從 Product Service 獲取 {} 個商品的詳細資訊", productDetailsMap.size());
+                return productDetailsMap;
+        }
+
+        private void batchUpdateProductStock(Map<Integer, Integer> stockUpdates) {
+                if (!stockUpdates.isEmpty()) {
+                        productClient.updateProductsStock(stockUpdates);
+                        logger.info("批量更新商品庫存成功");
+                }
+        }
+
+        private Set<Integer> collectProductIdsFromOrderDetails(List<OrderDetail> orderDetails) {
+                Set<Integer> productIds = new HashSet<>();
+                for (OrderDetail detail : orderDetails) {
+                        productIds.add(detail.getProductId());
+                }
+                return productIds;
+        }
+
+        private Map<Integer, Integer> calculateStockChanges(
+                        Integer productId,
+                        Integer requestQuantity,
+                        GetProductDetailResponse productDetail,
+                        boolean isDecrease) {
+
+                Map<Integer, Integer> stockUpdates = new HashMap<>();
+                Integer currentStock = productDetail.getStockQty();
+                Integer newStock;
+
+                if (isDecrease) {
+                        newStock = currentStock - requestQuantity;
+                        if (newStock < 0) {
+                                throw new IllegalArgumentException("商品" + productId + "庫存不足");
+                        }
+                } else {
+                        newStock = currentStock + requestQuantity;
+                }
+
+                stockUpdates.put(productId, newStock);
+                return stockUpdates;
+        }
+
+        private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo) {
+                List<OrderDetail> orderDetails = orderInfo.getOrderDetails();
+                Set<Integer> productIds = collectProductIdsFromOrderDetails(orderDetails);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIds);
+
+                BigDecimal totalAmount = BigDecimal.ZERO;
+                for (OrderDetail detail : orderDetails) {
+                        GetProductDetailResponse productDetail = productDetailsMap.get(detail.getProductId());
+                        totalAmount = totalAmount.add(
+                                        productDetail.getPrice().multiply(BigDecimal.valueOf(detail.getQuantity())));
+                }
+                return totalAmount;
         }
 }

@@ -30,9 +30,9 @@ public class ProductClient {
                         // Add each ID as a separate 'ids' query parameter
                         .queryParam("ids", ids)
                         .build())
-                .retrieve() // Retrieve the response body                
+                .retrieve() // Retrieve the response body
                 .bodyToMono(mapType) // Convert the response body to a Mono<Map<Integer, GetProductDetailResponse>>
-                .block(); // Block until the response is received (synchronous call)       
+                .block(); // Block until the response is received (synchronous call)
     }
 
     /**

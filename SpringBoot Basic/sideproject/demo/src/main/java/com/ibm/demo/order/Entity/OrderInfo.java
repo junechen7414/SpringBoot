@@ -1,6 +1,5 @@
 package com.ibm.demo.order.Entity;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -71,16 +70,6 @@ public class OrderInfo {
     public void removeOrderDetail(OrderDetail detail) {
         orderDetails.remove(detail);
         detail.setOrderInfo(null); // 確保 OrderDetail 這邊的關聯被中斷
-    }
-
-    public BigDecimal calculateTotalAmount() {
-        BigDecimal totalAmount = BigDecimal.ZERO;
-        for (OrderDetail orderDetail : this.orderDetails) {
-            BigDecimal productPrice = orderDetail.getPrice();
-            Integer quantity = orderDetail.getQuantity();
-            totalAmount = totalAmount.add(productPrice.multiply(BigDecimal.valueOf(quantity)));
-        }
-        return totalAmount;
     }
 
 }

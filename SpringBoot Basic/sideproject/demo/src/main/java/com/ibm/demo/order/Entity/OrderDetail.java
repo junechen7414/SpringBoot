@@ -1,7 +1,5 @@
 package com.ibm.demo.order.Entity;
 
-import java.math.BigDecimal;
-
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -63,16 +61,12 @@ public class OrderDetail {
     @Schema(description = "數量", example = "5")
     private Integer quantity;
 
-    @Column(name = "PRICE", columnDefinition = "NUMBER(12,4)", nullable = false)
-    @Schema(description = "商品價格", example = "1234.56")
-    private BigDecimal price;
+    // constructor
 
-    // constructor    
-
-    public OrderDetail(OrderInfo orderInfo, Integer productId, Integer quantity, BigDecimal price) {
+    public OrderDetail(OrderInfo orderInfo, Integer productId, Integer quantity) {
         this.orderInfo = orderInfo;
         this.productId = productId;
         this.quantity = quantity;
-        this.price = price;
+
     }
 }
