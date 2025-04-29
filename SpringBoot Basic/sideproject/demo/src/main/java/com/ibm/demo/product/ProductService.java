@@ -85,9 +85,13 @@ public class ProductService {
      * @throws IllegalArgumentException 若有商品不可銷售
      */
     public Map<Integer, GetProductDetailResponse> getProductDetails(Set<Integer> ids) {
+        // 驗證傳入的商品ID不為null或空集合
         validateProductIds(ids);
+        // 使用多個ID查詢多個商品實體，若有對應不上的ID會拋出例外
         List<Product> products = findProductsByIds(ids);
+        // 驗證找出的所有商品狀態皆為可銷售
         validateProductsAreSellable(products);
+        // 將商品映射到以商品ID為key的DTO Map
         return mapProductsToDetailResponses(products);
     }
 

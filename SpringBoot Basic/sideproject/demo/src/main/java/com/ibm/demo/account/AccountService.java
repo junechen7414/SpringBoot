@@ -41,7 +41,8 @@ public class AccountService {
         Account existingAccount = accountRepository.findById(id)
                 .orElseThrow(() -> new NullPointerException("Account not found with id: " + id));
         GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(),
-                existingAccount.getStatus(), existingAccount.getCreateDate()
+                existingAccount.getStatus()
+                // , existingAccount.getCreateDate()
                 // , existingAccount.getModifiedDate()
                 );
         return accountDetailResponseDTO;

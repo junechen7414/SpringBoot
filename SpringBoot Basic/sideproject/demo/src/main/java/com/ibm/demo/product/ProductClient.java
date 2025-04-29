@@ -43,7 +43,7 @@ public class ProductClient {
     public void updateProductsStock(Map<Integer, Integer> stockUpdates) {
         webClient.put()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/stockQuantity/batch")
+                        .path("/batchUpdateStockQuantity")
                         .build())
                 .bodyValue(stockUpdates)
                 .retrieve()

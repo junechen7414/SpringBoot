@@ -53,40 +53,48 @@ public class OrderService {
 
         @Transactional
         public CreateOrderResponse createOrder(CreateOrderRequest createOrderRequest) {
+                // 驗證帳戶存在且狀態非不啟用
                 Integer accountId = createOrderRequest.getAccountId();
                 validateActiveAccount(accountId);
+                logger.info("找到啟用中帳戶，ID: {}", accountId);
 
+                // 宣告新訂單並初始化
                 OrderInfo newOrderInfo = new OrderInfo();
                 newOrderInfo.setAccountId(accountId);
                 newOrderInfo.setStatus(1001);
+
+                // 儲存訂單
                 OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
 
-                // 收集商品ID
+                // 收集Request所有商品ID
                 Set<Integer> productIds = new HashSet<>();
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         productIds.add(detailRequest.getProductId());
                 }
 
-                // 使用共用方法獲取商品資訊
+                // 使用收集到的商品ID呼叫Product的端點獲取商品資訊，該端點驗證傳入是否null或空集合，
+                // 若不是再使用該ID集合查詢，若有找不到的ID即拋出例外，若全找到的話驗證狀態是否皆為可銷售
                 Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIds);
 
+                // 宣告並初始化要用到的變數
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
                 List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
                 List<CreateOrderDetailResponse> orderDetailResponses = new ArrayList<>();
                 BigDecimal totalAmount = BigDecimal.ZERO;
 
+                // 遍歷訂單明細
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         Integer requestProductId = detailRequest.getProductId();
                         Integer requestQuantity = detailRequest.getQuantity();
                         GetProductDetailResponse productDetail = productDetailsMap.get(requestProductId);
 
                         // 使用共用方法計算庫存變更
-                        Map<Integer, Integer> itemStockUpdate = calculateStockChanges(
+                        Integer newStock = calculateNewStock(
                                         requestProductId,
-                                        requestQuantity,
-                                        productDetail,
-                                        true);
-                        stockUpdates.putAll(itemStockUpdate);
+                                        productDetail.getStockQty(),
+                                        0, // oldQuantity for new item is 0
+                                        requestQuantity); // newQuantity is the requested quantity
+                        stockUpdates.put(requestProductId, newStock);
 
                         // 建立訂單明細
                         OrderDetail newOrderDetail = new OrderDetail(savedOrderInfo, requestProductId,
@@ -149,7 +157,7 @@ public class OrderService {
                 }
 
                 // 4. 批量獲取商品資訊
-                Map<Integer, GetProductDetailResponse> productDetailsMap = productClient.getProductDetails(productIds);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIds);
 
                 // 5. 建立回應DTO
                 GetOrderDetailResponse response = new GetOrderDetailResponse();
@@ -220,6 +228,7 @@ public class OrderService {
                 Set<Integer> productIdsToQuery = new HashSet<>();
                 productIdsToQuery.addAll(newProductIds);
                 productIdsToQuery.addAll(commonProductIds);
+                productIdsToQuery.addAll(removedProductIds);
 
                 // 6. 批量獲取商品資訊
                 Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIdsToQuery);
@@ -232,34 +241,43 @@ public class OrderService {
                 for (Integer productId : newProductIds) {
                         UpdateOrderDetailRequest newItem = updatedItemsMap.get(productId);
                         GetProductDetailResponse productDetail = productDetailsMap.get(productId);
+                        Integer currentStock = productDetail.getStockQty();
+                        Integer quantityToAdd = newItem.getQuantity();
 
-                        // 計算庫存變更
-                        Map<Integer, Integer> itemStockUpdate = calculateStockChanges(
+                        // 計算新庫存 (oldQuantity 為 0)
+                        Integer newStock = calculateNewStock(
                                         productId,
-                                        newItem.getQuantity(),
-                                        productDetail,
-                                        true);
+                                        currentStock,
+                                        0, // oldQuantity for new item is 0
+                                        quantityToAdd);
+                        stockUpdates.put(productId, newStock);
 
-                        stockUpdates.putAll(itemStockUpdate);
+                        // 建立新的 OrderDetail 實體
+                        OrderDetail newDetail = new OrderDetail(existingOrderInfo, productId, quantityToAdd);
+                        orderDetailsToAdd.add(newDetail);
+
+                        logger.info("訂單 {} 新增商品項目：產品ID {}, 數量 {}",
+                                        orderId, productId, quantityToAdd);
                 }
 
                 // 9. 處理移除項目
                 List<OrderDetail> orderDetailsToRemove = new ArrayList<>();
                 for (Integer productId : removedProductIds) {
                         OrderDetail detailToRemove = existingDetailsMap.get(productId);
-
-                        // 獲取原始數量，用於歸還庫存
-                        Integer quantityToRestore = detailToRemove.getQuantity();
-                        GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-
-                        // 計算歸還後的庫存
+                        GetProductDetailResponse productDetail = productDetailsMap.get(productId); // 需要確保
+                                                                                                   // productDetailsMap
+                                                                                                   // 包含被移除商品的資訊
                         Integer currentStock = productDetail.getStockQty();
-                        Integer newStock = currentStock + quantityToRestore;
+                        Integer quantityToRestore = detailToRemove.getQuantity();
 
-                        // 更新庫存變更集合
+                        // 計算新庫存 (newQuantity 為 0)
+                        Integer newStock = calculateNewStock(
+                                        productId,
+                                        currentStock,
+                                        quantityToRestore, // oldQuantity is the quantity being removed
+                                        0); // newQuantity is 0
                         stockUpdates.put(productId, newStock);
 
-                        // 加入待刪除列表
                         orderDetailsToRemove.add(detailToRemove);
 
                         logger.info("訂單 {} 移除商品項目：產品ID {}, 數量 {}",
@@ -274,22 +292,18 @@ public class OrderService {
                         Integer oldQuantity = existingDetail.getQuantity();
                         Integer newQuantity = updatedRequest.getQuantity();
 
-                        // 只處理數量有變動的項目
                         if (!oldQuantity.equals(newQuantity)) {
                                 GetProductDetailResponse productDetail = productDetailsMap.get(productId);
                                 Integer currentStock = productDetail.getStockQty();
-                                Integer quantityDifference = newQuantity - oldQuantity;
-
-                                // 檢查庫存是否足夠
-                                if (currentStock < quantityDifference) {
-                                        throw new IllegalArgumentException("商品" + productId + "庫存不足");
-                                }
 
                                 // 計算新庫存
-                                Integer newStock = currentStock - quantityDifference;
+                                Integer newStock = calculateNewStock(
+                                                productId,
+                                                currentStock,
+                                                oldQuantity,
+                                                newQuantity);
                                 stockUpdates.put(productId, newStock);
 
-                                // 更新訂單明細
                                 existingDetail.setQuantity(newQuantity);
                                 orderDetailsToUpdate.add(existingDetail);
 
@@ -299,10 +313,7 @@ public class OrderService {
                 }
 
                 // 11. 執行批量更新
-                if (!stockUpdates.isEmpty()) {
-                        productClient.updateProductsStock(stockUpdates);
-                        logger.info("批量更新商品庫存成功");
-                }
+                batchUpdateProductStock(stockUpdates);
 
                 if (!orderDetailsToAdd.isEmpty()) {
                         orderDetailRepository.saveAll(orderDetailsToAdd);
@@ -383,9 +394,14 @@ public class OrderService {
                         Integer productId = detail.getProductId();
                         Integer quantityToRestore = detail.getQuantity();
                         GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-
                         Integer currentStock = productDetail.getStockQty();
-                        Integer newStock = currentStock + quantityToRestore;
+
+                        // 計算新庫存 (newQuantity 為 0)
+                        Integer newStock = calculateNewStock(
+                                        productId,
+                                        currentStock,
+                                        quantityToRestore, // oldQuantity is the quantity being restored
+                                        0); // newQuantity is 0
                         stockUpdates.put(productId, newStock);
 
                         logger.info("訂單取消歸還庫存：商品ID {}，歸還數量 {}", productId, quantityToRestore);
@@ -404,7 +420,6 @@ public class OrderService {
         // functions to share
         private void validateActiveAccount(Integer accountId) {
                 accountClient.validateActiveAccount(accountId);
-                logger.info("找到啟用中帳戶，ID: {}", accountId);
         }
 
         private void validateOrderStatus(OrderInfo orderInfo) {
@@ -438,27 +453,60 @@ public class OrderService {
                 return productIds;
         }
 
-        private Map<Integer, Integer> calculateStockChanges(
-                        Integer productId,
-                        Integer requestQuantity,
-                        GetProductDetailResponse productDetail,
-                        boolean isDecrease) {
-
-                Map<Integer, Integer> stockUpdates = new HashMap<>();
-                Integer currentStock = productDetail.getStockQty();
-                Integer newStock;
-
-                if (isDecrease) {
-                        newStock = currentStock - requestQuantity;
-                        if (newStock < 0) {
-                                throw new IllegalArgumentException("商品" + productId + "庫存不足");
-                        }
-                } else {
-                        newStock = currentStock + requestQuantity;
+        /**
+         * 計算單一商品基於舊數量和新數量變更後的新庫存。
+         * 這個方法封裝了庫存增減的邏輯和驗證。
+         *
+         * @param productId    商品 ID
+         * @param currentStock 該商品目前的庫存 (從 Product Service 獲取)
+         * @param originalQuantity  訂單中該商品的原始數量 (新增時為 0, 刪除時為原數量)
+         * @param requestQuantity  訂單中該商品要求的數量 (刪除時為 0)
+         * @return 計算後的新庫存數量
+         * @throws IllegalArgumentException 如果請求數量為負數，或導致庫存變為負數
+         */
+        private Integer calculateNewStock(Integer productId, Integer currentStock, Integer originalQuantity,
+                        Integer requestQuantity) {
+                // 基本驗證
+                if (productId == null || currentStock == null || originalQuantity == null || requestQuantity == null) {
+                        throw new IllegalArgumentException(
+                                        "Product ID, current stock, old quantity, and new quantity cannot be null.");
+                }
+                if (originalQuantity < 0 || requestQuantity < 0) {
+                        throw new IllegalArgumentException(
+                                        "Order quantities cannot be negative for product ID: " + productId);
+                }
+                if (currentStock < 0) {
+                        // 理論上 currentStock 不應為負，但加上just in case
+                        logger.warn("Current stock is negative for product ID: {}. Stock: {}", productId, currentStock);
+                        // 或者根據業務規則拋出例外
+                        // throw new IllegalStateException("Current stock cannot be negative for product
+                        // ID: " + productId);
                 }
 
-                stockUpdates.put(productId, newStock);
-                return stockUpdates;
+                // 計算庫存的淨變化量 (從庫存中"拿出"多少)
+                // netChange > 0 表示庫存減少 (拿出更多)
+                // netChange < 0 表示庫存增加 (放回一些)
+                int netChange = requestQuantity - originalQuantity;
+
+                // 計算變更後的新庫存
+                int newQuantity = currentStock - netChange;
+
+                // 驗證：新庫存不能小於 0
+                if (newQuantity < 0) {
+                        logger.error("Stock insufficient for product ID: {}. Current: {}, Old Qty: {}, New Qty: {}, Required Change: {}, Potential New Stock: {}",
+                                        productId, currentStock, originalQuantity, requestQuantity, netChange,
+                                        newQuantity);
+                        // 拋出更詳細的錯誤訊息
+                        throw new IllegalArgumentException(String.format(
+                                        "商品 %d 庫存不足。目前庫存: %d, 訂單原數量: %d, 訂單新數量: %d。需要額外 %d 個，但庫存不足。",
+                                        productId, currentStock, originalQuantity, requestQuantity, netChange));
+                }
+
+                logger.debug("Calculated stock for product ID: {}. Current: {}, Old Qty: {}, New Qty: {}, Net Change Required: {}, New Stock: {}",
+                                productId, currentStock, originalQuantity, requestQuantity, netChange,
+                                newQuantity);
+
+                return newQuantity;
         }
 
         private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo) {
