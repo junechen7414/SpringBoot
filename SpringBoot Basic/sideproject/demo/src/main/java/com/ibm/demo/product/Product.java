@@ -3,17 +3,14 @@ package com.ibm.demo.product;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
@@ -25,10 +22,9 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
 @Entity
 // @Table(name = "PRODUCT", indexes = {
-//         @Index(name = "pk_PRODUCT", columnList = "ID", unique = true) // 同@Id的效用
+// @Index(name = "pk_PRODUCT", columnList = "ID", unique = true) // 同@Id的效用
 // })
 @Table(name = "PRODUCT")
 @Schema(description = "商品資訊")
@@ -56,15 +52,24 @@ public class Product {
     @Schema(description = "庫存量", example = "10")
     private Integer stockQty;
 
-    @CreatedDate // 標記為創建日期欄位
     @Temporal(TemporalType.DATE) // 指定一個日期時間欄位在對應到資料庫時，應該使用的資料類型。
     @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
     private LocalDate createDate;
 
-    @LastModifiedDate // 標記為更新日期欄位
     @Temporal(TemporalType.DATE) // 指定日期時間類型
     @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
     private LocalDate modifiedDate;
+
+    @PrePersist // 在實體被持久化（新增）之前觸發
+    public void prePersist() {
+        this.createDate = LocalDate.now();
+        this.modifiedDate = null; // 新增時不設置修改日期
+    }
+
+    @PreUpdate // 在實體被更新（修改）之前觸發
+    public void preUpdate() {
+        this.modifiedDate = LocalDate.now(); // 僅在更新時設置修改日期
+    }
 
     // constructors
 

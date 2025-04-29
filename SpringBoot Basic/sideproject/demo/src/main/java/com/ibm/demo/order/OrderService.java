@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
-import com.ibm.demo.account.AccountRepository;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderDetailResponse;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
@@ -30,7 +29,6 @@ import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
-import com.ibm.demo.product.ProductRepository;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 
 import jakarta.transaction.Transactional;
@@ -43,9 +41,10 @@ public class OrderService {
         private final AccountClient accountClient;
         private final ProductClient productClient;
 
-        public OrderService(OrderInfoRepository orderInfoRepository, AccountRepository accountRepository,
+        public OrderService(OrderInfoRepository orderInfoRepository,
                         OrderDetailRepository orderDetailRepository,
-                        ProductRepository productRepository, AccountClient accountClient, ProductClient productClient) {
+                        AccountClient accountClient,
+                        ProductClient productClient) {
                 this.orderInfoRepository = orderInfoRepository;
                 this.orderDetailRepository = orderDetailRepository;
                 this.accountClient = accountClient;
