@@ -20,6 +20,8 @@ import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.account.DTO.UpdateAccountResponse;
 
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestParam;
+
 
 
 @RestController // Restful Controller
@@ -69,8 +71,14 @@ public class AccountController {
     // Validate Account
     @GetMapping("/validate/{accountId}")
     public void validateActiveAccount(@PathVariable Integer accountId) {
-        accountService.validateActiveAccount(accountId);
+        accountService.validateAccountActive(accountId);
     }
+
+    @GetMapping("/exist/{accountId}")
+    public void getMethodName(@PathVariable Integer accountId) {
+        accountService.validateAccountExist(accountId);
+    }
+    
     
 
 }

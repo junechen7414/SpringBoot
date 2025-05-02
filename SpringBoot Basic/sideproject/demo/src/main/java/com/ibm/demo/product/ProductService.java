@@ -8,6 +8,8 @@ import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
+import com.ibm.demo.exception.ResourceNotFoundException;
+import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.CreateProductResponse;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
@@ -19,7 +21,7 @@ import jakarta.transaction.Transactional;
 
 @Service
 public class ProductService {
-    private ProductRepository productRepository;
+    private final ProductRepository productRepository;    
 
     /**
      * 建構子，注入 ProductRepository。
@@ -27,7 +29,7 @@ public class ProductService {
      * @param productRepository 商品資料庫存取介面
      */
     public ProductService(ProductRepository productRepository) {
-        this.productRepository = productRepository;
+        this.productRepository = productRepository;        
     }
 
     /**
@@ -81,7 +83,7 @@ public class ProductService {
      * @param ids 商品 ID 集合
      * @return 以商品 ID 為鍵，商品詳細資訊 DTO 為值的 Map
      * @throws IllegalArgumentException 若商品 ID 集合為空或 null
-     * @throws NullPointerException 若有商品 ID 找不到對應的商品
+     * @throws NullPointerException     若有商品 ID 找不到對應的商品
      * @throws IllegalArgumentException 若有商品不可銷售
      */
     public Map<Integer, GetProductDetailResponse> getProductDetails(Set<Integer> ids) {
@@ -104,15 +106,17 @@ public class ProductService {
      */
     @Transactional
     public UpdateProductResponse updateProduct(UpdateProductRequest updateProductRequestDto) {
-        Product existingProduct = findProductById(updateProductRequestDto.getId());
+        // 1. 取得商品實體並驗證帳戶是否存在否則拋出例外
+        Integer productId = updateProductRequestDto.getId();
+        Product existingProduct = findProductById(productId);        
+        // 2. 更新商品屬性
         existingProduct.setName(updateProductRequestDto.getName());
         existingProduct.setPrice(updateProductRequestDto.getPrice());
         existingProduct.setSaleStatus(updateProductRequestDto.getSaleStatus());
         existingProduct.setStockQty(updateProductRequestDto.getStockQty());
-        Product updatedProduct = productRepository.save(existingProduct);
-        return new UpdateProductResponse(updatedProduct.getId(),
-                updatedProduct.getName(), updatedProduct.getPrice(), updatedProduct.getSaleStatus(),
-                updatedProduct.getStockQty(), updatedProduct.getCreateDate(), updatedProduct.getModifiedDate());
+        // 3. 儲存商品資料
+        Product updatedProduct = productRepository.save(existingProduct);        
+        return mapProductToUpdateResponse(updatedProduct);
     }
 
     /**
@@ -133,22 +137,22 @@ public class ProductService {
      * 批量更新商品庫存。
      * 
      * @param stockUpdates Map<商品ID, 新庫存數量>
-     * @throws IllegalArgumentException 若更新資料為空
-     * @throws NullPointerException 若有商品不存在
+     * @throws InvalidRequestException 若更新資料為空
+     * @throws NullPointerException     若有商品不存在
      */
     @Transactional
     public void updateProductsStock(Map<Integer, Integer> stockUpdates) {
         if (stockUpdates == null || stockUpdates.isEmpty()) {
-            throw new IllegalArgumentException("Stock updates cannot be null or empty");
+            throw new InvalidRequestException("Stock updates cannot be null or empty");
         }
 
         List<Product> products = findProductsByIds(stockUpdates.keySet());
-        
+
         for (Product product : products) {
             Integer newStock = stockUpdates.get(product.getId());
             product.setStockQty(newStock);
         }
-        
+
         productRepository.saveAll(products);
     }
 
@@ -163,9 +167,40 @@ public class ProductService {
                 product.getName(),
                 product.getPrice(),
                 product.getSaleStatus(),
-                product.getStockQty()
-        );
+                product.getStockQty());
     }
+
+    /**
+     * 將單一 Product 實體映射到 UpdateProductResponse DTO。
+     *
+     * @param product 商品實體
+     * @return 商品更新回應 DTO
+     */
+    private UpdateProductResponse mapProductToUpdateResponse(Product product) {
+        return new UpdateProductResponse(
+                product.getId(),
+                product.getName(),
+                product.getPrice(),
+                product.getSaleStatus(),
+                product.getStockQty(),
+                product.getCreateDate(),
+                product.getModifiedDate());
+    }
+
+    /**
+     * 使用 UpdateProductRequest DTO 的資料更新 Product 實體的屬性。
+     *
+     * @param product 要更新的商品實體
+     * @param request 包含更新資料的請求 DTO
+     */
+    // private void updateProductEntity(Product product, UpdateProductRequest
+    // request) {
+    // product.setName(request.getName());
+    // product.setPrice(request.getPrice());
+    // product.setSaleStatus(request.getSaleStatus());
+    // product.setStockQty(request.getStockQty());
+    // // JPA 會自動處理 modifiedDate 的更新 (如果 @LastModifiedDate 有設定)
+    // }
 
     /**
      * 驗證一組商品 ID 是否有效且可銷售。
@@ -175,7 +210,7 @@ public class ProductService {
      *
      * @param productIds 商品 ID 集合
      * @throws IllegalArgumentException 若商品 ID 集合為空或 null
-     * @throws NullPointerException 若有商品 ID 找不到對應的商品
+     * @throws NullPointerException     若有商品 ID 找不到對應的商品
      * @throws IllegalArgumentException 若有商品不可銷售
      */
     public void validateProducts(Set<Integer> productIds) {
@@ -188,11 +223,11 @@ public class ProductService {
      * 驗證單一商品是否可銷售。
      *
      * @param product 商品實體
-     * @throws IllegalArgumentException 若商品不可銷售 (銷售狀態為 1002)
+     * @throws InvalidRequestException 若商品不可銷售 (銷售狀態為 1002)
      */
     public void validateProductIsSellable(Product product) {
         if (product.getSaleStatus() == 1002) {
-            throw new IllegalArgumentException("商品id: " + product.getId() + "不可銷售");
+            throw new InvalidRequestException("商品id: " + product.getId() + " 不可銷售");
         }
     }
 
@@ -200,11 +235,15 @@ public class ProductService {
      * 驗證商品列表中的所有商品是否都可銷售。
      *
      * @param products 商品實體列表
-     * @throws IllegalArgumentException 若列表中有任何商品不可銷售
+     * @throws InvalidRequestException 若列表中有任何商品不可銷售
      */
     public void validateProductsAreSellable(List<Product> products) {
         for (Product product : products) {
-            validateProductIsSellable(product);
+            try {
+                validateProductIsSellable(product);
+            } catch (IllegalArgumentException e) {
+                throw new InvalidRequestException(e.getMessage(), e);
+            }
         }
     }
 
@@ -213,8 +252,7 @@ public class ProductService {
      *
      * @param productIds 商品 ID 集合
      * @return 包含查詢到的商品實體的列表
-     * @throws IllegalArgumentException 若商品 ID 集合為空或 null
-     * @throws NullPointerException 若有商品 ID 找不到對應的商品，並列出缺失的 ID
+     * @throws InvalidRequestException 若有商品 ID 找不到對應的商品，並列出缺失的 ID
      */
     public List<Product> findProductsByIds(Set<Integer> productIds) {
         validateProductIds(productIds);
@@ -227,7 +265,7 @@ public class ProductService {
             }
             Set<Integer> missingIds = new HashSet<>(productIds);
             missingIds.removeAll(foundIdSet);
-            throw new NullPointerException("Products not found with ids: " + missingIds);
+            throw new InvalidRequestException("Products not found with ids: " + missingIds);
         }
         return products;
     }
@@ -236,11 +274,11 @@ public class ProductService {
      * 驗證商品 ID 集合是否為空或 null。
      *
      * @param productIds 商品 ID 集合
-     * @throws IllegalArgumentException 若商品 ID 集合為空或 null
+     * @throws InvalidRequestException 若商品 ID 集合為空或 null
      */
-    private void validateProductIds(Set<Integer> productIds) {
+    public void validateProductIds(Set<Integer> productIds) {
         if (productIds == null || productIds.isEmpty()) {
-            throw new IllegalArgumentException("Product IDs cannot be null or empty");
+            throw new InvalidRequestException("Product IDs cannot be null or empty");
         }
     }
 
@@ -261,7 +299,7 @@ public class ProductService {
     }
 
     /**
-     * 根據 ID 查找單一商品實體。
+     * 根據 ID 查找單一商品實體。若商品不存在拋出例外
      *
      * @param productId 商品 ID
      * @return 找到的商品實體
@@ -269,6 +307,6 @@ public class ProductService {
      */
     public Product findProductById(Integer productId) {
         return productRepository.findById(productId)
-                .orElseThrow(() -> new NullPointerException("Product not found with id: " + productId));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
     }
 }

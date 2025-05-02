@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
+import com.ibm.demo.exception.InvalidRequestException;
+import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderDetailResponse;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
@@ -131,7 +133,7 @@ public class OrderService {
                 List<GetOrderListResponse> getOrderListResponse = new ArrayList<>();
 
                 for (OrderInfo orderInfo : orderInfoList) {
-                        BigDecimal totalAmount = calculateOrderTotalAmount(orderInfo); // 使用新方法計算總金額
+                        BigDecimal totalAmount = calculateOrderTotalAmount(orderInfo); // 使用共用方法計算總金額
                         GetOrderListResponse response = new GetOrderListResponse();
                         response.setOrderId(orderInfo.getId());
                         response.setStatus(orderInfo.getStatus());
@@ -145,7 +147,7 @@ public class OrderService {
         public GetOrderDetailResponse getOrderDetails(Integer orderId) {
                 // 1. 獲取訂單基本資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new NullPointerException("Order not found with id: " + orderId));
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
                 // 2. 獲取訂單明細
                 List<OrderDetail> orderDetails = existingOrderInfo.getOrderDetails();
@@ -188,9 +190,11 @@ public class OrderService {
                 // 1. 驗證訂單存在和狀態
                 Integer orderId = updateOrderRequest.getOrderId();
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new NullPointerException("Order not found with id: " + orderId));
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-                validateOrderStatus(existingOrderInfo);
+                if (existingOrderInfo.getStatus() != 1001) {
+                        throw new InvalidRequestException("訂單狀態不允許更新商品項目，目前狀態: " + existingOrderInfo.getStatus());
+                }
                 logger.info("找到要更新的訂單，ID: {}", orderId);
 
                 // 2. 建立現有明細的 Map
@@ -377,12 +381,14 @@ public class OrderService {
         public void deleteOrder(Integer orderId) {
                 // 1. 獲取訂單資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new NullPointerException("Order not found with id: " + orderId));
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
                 logger.info("找到要刪除的訂單，ID: {}", orderId);
 
                 // 2. 驗證訂單狀態
-                validateOrderStatus(existingOrderInfo);
+                if (existingOrderInfo.getStatus() != 1001) {
+                        throw new InvalidRequestException("訂單狀態不允許刪除，目前狀態: " + existingOrderInfo.getStatus());
+                }
 
                 // 3. 收集所有商品ID並取得商品資訊
                 Set<Integer> productIds = collectProductIdsFromOrderDetails(existingOrderInfo.getOrderDetails());
@@ -457,9 +463,9 @@ public class OrderService {
          * 計算單一商品基於舊數量和新數量變更後的新庫存。
          * 這個方法封裝了庫存增減的邏輯和驗證。
          *
-         * @param productId    商品 ID
-         * @param currentStock 該商品目前的庫存 (從 Product Service 獲取)
-         * @param originalQuantity  訂單中該商品的原始數量 (新增時為 0, 刪除時為原數量)
+         * @param productId        商品 ID
+         * @param currentStock     該商品目前的庫存 (從 Product Service 獲取)
+         * @param originalQuantity 訂單中該商品的原始數量 (新增時為 0, 刪除時為原數量)
          * @param requestQuantity  訂單中該商品要求的數量 (刪除時為 0)
          * @return 計算後的新庫存數量
          * @throws IllegalArgumentException 如果請求數量為負數，或導致庫存變為負數
@@ -522,4 +528,17 @@ public class OrderService {
                 }
                 return totalAmount;
         }
+
+        public void validateAccountExist(Integer accountId) {
+                accountClient.validateAccountExist(accountId);
+        }        
+
+        // 驗證帳戶ID有無關聯的訂單
+        public boolean AccountIdIsInOrder(Integer accountId){
+                if(!orderInfoRepository.findByAccountId(accountId).isEmpty()){
+                        return true;
+                }
+                return false;
+        }
+        
 }

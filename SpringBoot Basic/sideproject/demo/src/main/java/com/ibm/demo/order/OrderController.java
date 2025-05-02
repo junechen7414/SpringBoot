@@ -64,4 +64,11 @@ public class OrderController {
         orderService.deleteOrder(orderId);
         return ResponseEntity.noContent().build();
     }
+
+    // 帳戶ID是否存在任何訂單中
+    @GetMapping("/AccountIdIsInOrder/{accountId}")
+    public ResponseEntity<Boolean> AccountIdIsInOrder(@PathVariable Integer accountId) {
+        boolean isExist = orderService.AccountIdIsInOrder(accountId);
+        return ResponseEntity.ok(isExist);
+    }
 }

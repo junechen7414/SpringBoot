@@ -29,4 +29,12 @@ public class AccountClient {
                 .bodyToMono(Void.class)
                 .block();
     }
+
+    public void validateAccountExist(Integer accountId){
+        webClient.get()
+                .uri("/exist/{accountId}", accountId)
+                .retrieve()
+                .bodyToMono(Void.class)
+                .block();
+    }
 }
