@@ -1,7 +1,8 @@
 package com.ibm.demo.product;
 
 import com.ibm.demo.exception.InvalidRequestException;
-import com.ibm.demo.exception.ResourceNotFoundException;
+import com.ibm.demo.exception.NotFound.ResourceNotFoundException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

@@ -10,8 +10,8 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import com.ibm.demo.exception.ApiErrorResponse;
-import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.ValidationException;
+import com.ibm.demo.exception.NotFound.ResourceNotFoundException;
 import com.ibm.demo.exception.InvalidRequestException;
 
 @ControllerAdvice

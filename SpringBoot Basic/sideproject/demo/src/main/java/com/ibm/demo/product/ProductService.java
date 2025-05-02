@@ -9,7 +9,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.exception.InvalidRequestException;
-import com.ibm.demo.exception.ProductNotFoundException;
+import com.ibm.demo.exception.NotFound.ProductNotFoundException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.CreateProductResponse;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
@@ -265,7 +265,7 @@ public class ProductService {
             }
             Set<Integer> missingIds = new HashSet<>(productIds);
             missingIds.removeAll(foundIdSet);
-            throw new InvalidRequestException("Products not found with ids: " + missingIds);
+            throw new ProductNotFoundException("Products not found with ids: " + missingIds);
         }
         return products;
     }

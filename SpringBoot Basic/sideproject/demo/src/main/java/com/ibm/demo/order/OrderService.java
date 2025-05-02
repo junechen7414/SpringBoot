@@ -14,8 +14,7 @@ import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.exception.InvalidRequestException;
-import com.ibm.demo.exception.OrderNotFoundException;
-import com.ibm.demo.exception.ResourceNotFoundException;
+import com.ibm.demo.exception.NotFound.OrderNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderDetailResponse;
 import com.ibm.demo.order.DTO.CreateOrderRequest;

@@ -10,8 +10,8 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.account.DTO.UpdateAccountResponse;
-import com.ibm.demo.exception.AccountNotFoundException;
 import com.ibm.demo.exception.InvalidRequestException; // 引入 InvalidRequestException
+import com.ibm.demo.exception.NotFound.AccountNotFoundException;
 import com.ibm.demo.order.OrderClient;
 
 import jakarta.transaction.Transactional;
