@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.exception.InvalidRequestException;
+import com.ibm.demo.exception.OrderNotFoundException;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderDetailResponse;
@@ -147,7 +148,7 @@ public class OrderService {
         public GetOrderDetailResponse getOrderDetails(Integer orderId) {
                 // 1. 獲取訂單基本資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + orderId));
 
                 // 2. 獲取訂單明細
                 List<OrderDetail> orderDetails = existingOrderInfo.getOrderDetails();
@@ -190,7 +191,7 @@ public class OrderService {
                 // 1. 驗證訂單存在和狀態
                 Integer orderId = updateOrderRequest.getOrderId();
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + orderId));
 
                 if (existingOrderInfo.getStatus() != 1001) {
                         throw new InvalidRequestException("訂單狀態不允許更新商品項目，目前狀態: " + existingOrderInfo.getStatus());
@@ -381,7 +382,7 @@ public class OrderService {
         public void deleteOrder(Integer orderId) {
                 // 1. 獲取訂單資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + orderId));
 
                 logger.info("找到要刪除的訂單，ID: {}", orderId);
 

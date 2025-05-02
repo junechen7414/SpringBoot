@@ -10,9 +10,9 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.account.DTO.UpdateAccountResponse;
-import com.ibm.demo.order.OrderClient;
-import com.ibm.demo.exception.ResourceNotFoundException; // 引入 ResourceNotFoundException
+import com.ibm.demo.exception.AccountNotFoundException;
 import com.ibm.demo.exception.InvalidRequestException; // 引入 InvalidRequestException
+import com.ibm.demo.order.OrderClient;
 
 import jakarta.transaction.Transactional;
 
@@ -44,7 +44,7 @@ public class AccountService {
 
     public GetAccountDetailResponse getAccountDetail(Integer id) {
         Account existingAccount = accountRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + id));
+                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + id));
         GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(),
                 existingAccount.getStatus()
         // , existingAccount.getCreateDate()
@@ -58,7 +58,7 @@ public class AccountService {
         // 1. 取得帳戶實體並驗證帳戶是否存在否則拋出例外
         Integer accountId = updateAccountRequestDto.getId();
         Account existingAccount = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ResourceNotFoundException(
+                .orElseThrow(() -> new AccountNotFoundException(
                         "Account not found with id: " + updateAccountRequestDto.getId()));
         // 2. 宣告和初始化帳戶更新前後的狀態
         String originalStatus = existingAccount.getStatus();
@@ -88,7 +88,7 @@ public class AccountService {
     @Transactional
     public void deleteAccount(Integer accountId) {
         Account existingAccount = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + accountId));
+                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
         if (orderClient.accountIdIsInOrder(accountId)) {
             throw new InvalidRequestException("Account with id: " + accountId + " has associated orders and cannot be deleted.");
         }
@@ -98,13 +98,13 @@ public class AccountService {
 
     public void validateAccountExist(Integer accountId) {
         if (!accountRepository.existsById(accountId)) {
-            throw new ResourceNotFoundException("Account not found with id: " + accountId);
+            throw new AccountNotFoundException("Account not found with id: " + accountId);
         }
     }
 
     public void validateAccountActive(Integer accountId) {
         Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + accountId));
+                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
         if ("N".equals(account.getStatus())) {
             throw new InvalidRequestException("Account " + accountId + " is inactive");
         }

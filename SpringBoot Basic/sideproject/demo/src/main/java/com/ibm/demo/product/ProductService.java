@@ -8,8 +8,8 @@ import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
-import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.InvalidRequestException;
+import com.ibm.demo.exception.ProductNotFoundException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.CreateProductResponse;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
@@ -307,6 +307,6 @@ public class ProductService {
      */
     public Product findProductById(Integer productId) {
         return productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
+                .orElseThrow(() -> new ProductNotFoundException("Product not found with id: " + productId));
     }
 }

@@ -26,9 +26,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 LocalDateTime.now(),
                 HttpStatus.NOT_FOUND.value(),
                 "Not Found",
-                ex.getMessage(),
-                request.getDescription(false) //參數includeClientInfo false表示不包含客戶端資訊session id 和 username
-                .replace("uri=", "")
+                ex.getMessage()
+                // ,request.getDescription(false) //參數includeClientInfo false表示不包含客戶端資訊session id 和 username
+                // .replace("uri=", "")
         );
 
         // 找不到資源時，回傳 404 NOT FOUND
@@ -44,8 +44,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 LocalDateTime.now(),
                 HttpStatus.BAD_REQUEST.value(),
                 "Bad Request",
-                ex.getMessage(),
-                request.getDescription(false).replace("uri=", "")
+                ex.getMessage()
+                // ,request.getDescription(false).replace("uri=", "")
         );
 
         return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
@@ -60,8 +60,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 LocalDateTime.now(),
                 HttpStatus.BAD_REQUEST.value(),
                 "Bad Request",
-                ex.getMessage(),
-                request.getDescription(false).replace("uri=", "")
+                ex.getMessage()
+                // ,request.getDescription(false).replace("uri=", "")
         );
 
         return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
@@ -77,8 +77,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 LocalDateTime.now(),
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "Internal Server Error",
-                "發生未預期的內部錯誤，請聯繫管理員。",
-                request.getDescription(false).replace("uri=", "")
+                "發生未預期的錯誤。"
+                // ,request.getDescription(false).replace("uri=", "")
         );
 
         return new ResponseEntity<>(apiErrorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
