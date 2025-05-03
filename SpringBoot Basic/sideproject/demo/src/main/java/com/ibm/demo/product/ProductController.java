@@ -44,7 +44,7 @@ public class ProductController {
     }
 
     // Read Product List
-    @GetMapping("/getList")
+    @GetMapping
     public ResponseEntity<List<GetProductListResponse>> getProductList() {
         List<GetProductListResponse> productList = productService.getProductList();
         return ResponseEntity.ok(productList);

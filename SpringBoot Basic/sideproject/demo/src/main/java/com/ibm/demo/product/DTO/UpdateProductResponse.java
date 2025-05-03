@@ -16,6 +16,5 @@ public class UpdateProductResponse {
     private BigDecimal price;
     private Integer saleStatus;
     private Integer stockQty;
-    LocalDate createDate;
     LocalDate modifiedDate;
 }

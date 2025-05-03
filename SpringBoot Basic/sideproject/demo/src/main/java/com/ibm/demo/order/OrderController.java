@@ -23,7 +23,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/orders") // 基礎路徑
-public class OrderController {    
+public class OrderController {
     private final OrderService orderService;
 
     public OrderController(OrderService orderService) {
@@ -53,7 +53,7 @@ public class OrderController {
 
     // Update Order
     @PutMapping
-    public ResponseEntity<UpdateOrderResponse> updateOrder(@RequestBody UpdateOrderRequest updateOrderRequest) {
+    public ResponseEntity<UpdateOrderResponse> updateOrder(@Valid @RequestBody UpdateOrderRequest updateOrderRequest) {
         UpdateOrderResponse updateOrderResponse = orderService.updateOrder(updateOrderRequest);
         return ResponseEntity.ok(updateOrderResponse);
     }

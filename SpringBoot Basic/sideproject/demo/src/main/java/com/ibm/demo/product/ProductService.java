@@ -180,8 +180,7 @@ public class ProductService {
                 product.getName(),
                 product.getPrice(),
                 product.getSaleStatus(),
-                product.getStockQty(),
-                product.getCreateDate(),
+                product.getStockQty(),                
                 product.getModifiedDate());
     }
 

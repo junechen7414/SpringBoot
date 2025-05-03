@@ -39,14 +39,14 @@ public class AccountController {
     }
 
     // Read Account List
-    @GetMapping("/getList")
+    @GetMapping
     public ResponseEntity<List<GetAccountListResponse>> getAccountList() {
         List<GetAccountListResponse> accountList = accountService.getAccountList();
         return ResponseEntity.ok(accountList);
     }
 
     // Read Account Detail
-    @GetMapping("/getDetail/{id}")
+    @GetMapping("/{id}")
     public ResponseEntity<GetAccountDetailResponse> getAccountDetail(@PathVariable Integer id) {
         GetAccountDetailResponse accountDetail = accountService.getAccountDetail(id);
         return ResponseEntity.ok(accountDetail);

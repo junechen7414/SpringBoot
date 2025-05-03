@@ -4,6 +4,7 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
@@ -21,6 +22,7 @@ public class CreateOrderRequest {
     private Integer accountId;
 
     @Valid
+    @NotEmpty(message = "Order details are required")
     private List<CreateOrderDetailRequest> orderDetails;
 
 }

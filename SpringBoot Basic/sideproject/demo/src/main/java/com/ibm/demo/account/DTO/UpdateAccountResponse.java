@@ -13,6 +13,5 @@ public class UpdateAccountResponse {
     private Integer id;
     private String name;
     private String status;
-    private LocalDate createDate;
     private LocalDate modifiedDate;
 }
