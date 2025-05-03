@@ -10,7 +10,8 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.account.DTO.UpdateAccountResponse;
-import com.ibm.demo.exception.InvalidRequestException; // 引入 InvalidRequestException
+import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
+import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.exception.NotFound.AccountNotFoundException;
 import com.ibm.demo.order.OrderClient;
 
@@ -26,6 +27,10 @@ public class AccountService {
         this.orderClient = orderClient;
     }
 
+    /**
+     * @param account_DTO
+     * @return CreateAccountResponse
+     */
     @Transactional
     public CreateAccountResponse createAccount(CreateAccountRequest account_DTO) {
         Account newAccount = new Account();
@@ -38,10 +43,17 @@ public class AccountService {
         return createAccountResponseDTO;
     }
 
+    /**
+     * @return List<GetAccountListResponse>
+     */
     public List<GetAccountListResponse> getAccountList() {
         return accountRepository.getAccountList();
     }
 
+    /**
+     * @param id
+     * @return GetAccountDetailResponse
+     */
     public GetAccountDetailResponse getAccountDetail(Integer id) {
         Account existingAccount = accountRepository.findById(id)
                 .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + id));
@@ -53,6 +65,10 @@ public class AccountService {
         return accountDetailResponseDTO;
     }
 
+    /**
+     * @param updateAccountRequestDto
+     * @return UpdateAccountResponse
+     */
     @Transactional
     public UpdateAccountResponse updateAccount(UpdateAccountRequest updateAccountRequestDto) {
         // 1. 取得帳戶實體並驗證帳戶是否存在否則拋出例外
@@ -70,7 +86,8 @@ public class AccountService {
         // 4. 驗證帳戶狀態是否更新，若有更新且要更新為N需檢核是否該帳戶仍有關聯的訂單，若仍有關聯的訂單不可更改狀態為N
         if (!originalStatus.equals(newStatus) && "N".equals(newStatus)) {
             if (orderClient.accountIdIsInOrder(accountId)) {
-                throw new InvalidRequestException("Account with id: " + accountId + " has associated orders and cannot be deactivated.");
+                throw new AccountStillHasOrderCanNotBeDeleteException(
+                        "Account with id: " + accountId + " has associated orders cannot be deactivated.");
             }
             existingAccount.setStatus(newStatus);
         }
@@ -80,33 +97,43 @@ public class AccountService {
 
         // 6. 準備回傳DTO
         UpdateAccountResponse updatedAccountResponseDto = new UpdateAccountResponse(updatedAccount.getId(),
-                updatedAccount.getName(), updatedAccount.getStatus(), updatedAccount.getCreateDate(),
+                updatedAccount.getName(), updatedAccount.getStatus(),
                 updatedAccount.getModifiedDate());
         return updatedAccountResponseDto;
     }
 
+    /**
+     * @param accountId
+     */
     @Transactional
     public void deleteAccount(Integer accountId) {
         Account existingAccount = accountRepository.findById(accountId)
                 .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
         if (orderClient.accountIdIsInOrder(accountId)) {
-            throw new InvalidRequestException("Account with id: " + accountId + " has associated orders and cannot be deleted.");
+            throw new AccountStillHasOrderCanNotBeDeleteException(
+                    "Account with id: " + accountId + " has associated orders cannot be deleted.");
         }
         existingAccount.setStatus("N");
-        accountRepository.save(existingAccount);        
+        accountRepository.save(existingAccount);
     }
 
+    /**
+     * @param accountId
+     */
     public void validateAccountExist(Integer accountId) {
         if (!accountRepository.existsById(accountId)) {
             throw new AccountNotFoundException("Account not found with id: " + accountId);
         }
     }
 
+    /**
+     * @param accountId
+     */
     public void validateAccountActive(Integer accountId) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
         if ("N".equals(account.getStatus())) {
-            throw new InvalidRequestException("Account " + accountId + " is inactive");
+            throw new AccountInactiveException("Account " + accountId + " is inactive");
         }
     }
 }

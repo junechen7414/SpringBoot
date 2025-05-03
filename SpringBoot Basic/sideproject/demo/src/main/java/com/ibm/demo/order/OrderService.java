@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.exception.InvalidRequestException;
+import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
+import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.exception.NotFound.OrderNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderDetailResponse;
@@ -53,6 +55,10 @@ public class OrderService {
                 this.productClient = productClient;
         }
 
+        /**
+         * @param createOrderRequest
+         * @return CreateOrderResponse
+         */
         @Transactional
         public CreateOrderResponse createOrder(CreateOrderRequest createOrderRequest) {
                 // 驗證帳戶存在且狀態非不啟用
@@ -64,9 +70,6 @@ public class OrderService {
                 OrderInfo newOrderInfo = new OrderInfo();
                 newOrderInfo.setAccountId(accountId);
                 newOrderInfo.setStatus(1001);
-
-                // 儲存訂單
-                OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
 
                 // 收集Request所有商品ID
                 Set<Integer> productIds = new HashSet<>();
@@ -84,7 +87,8 @@ public class OrderService {
                 List<CreateOrderDetailResponse> orderDetailResponses = new ArrayList<>();
                 BigDecimal totalAmount = BigDecimal.ZERO;
 
-                // 遍歷訂單明細
+                // 遍歷訂單明細，因為需要取得庫存和訂單數量，上面沒有拋出例外的話代表request的商品ID皆可用，
+                // 所以不用再額外判斷是否有null或空集合
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         Integer requestProductId = detailRequest.getProductId();
                         Integer requestQuantity = detailRequest.getQuantity();
@@ -99,7 +103,7 @@ public class OrderService {
                         stockUpdates.put(requestProductId, newStock);
 
                         // 建立訂單明細
-                        OrderDetail newOrderDetail = new OrderDetail(savedOrderInfo, requestProductId,
+                        OrderDetail newOrderDetail = new OrderDetail(newOrderInfo, requestProductId,
                                         requestQuantity);
                         orderDetailsToBeCreated.add(newOrderDetail);
 
@@ -120,11 +124,18 @@ public class OrderService {
                 // 批量建立訂單明細
                 orderDetailRepository.saveAll(orderDetailsToBeCreated);
 
+                // 儲存訂單
+                OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
+
                 return new CreateOrderResponse(savedOrderInfo.getId(), accountId,
                                 savedOrderInfo.getStatus(), totalAmount,
                                 savedOrderInfo.getCreateDate(), orderDetailResponses);
         }
 
+        /**
+         * @param accountId
+         * @return List<GetOrderListResponse>
+         */
         public List<GetOrderListResponse> getOrderList(Integer accountId) {
                 validateActiveAccount(accountId);
                 logger.info("找到啟用中帳戶，ID: {}", accountId);
@@ -144,6 +155,10 @@ public class OrderService {
                 return getOrderListResponse;
         }
 
+        /**
+         * @param orderId
+         * @return GetOrderDetailResponse
+         */
         public GetOrderDetailResponse getOrderDetails(Integer orderId) {
                 // 1. 獲取訂單基本資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
@@ -185,6 +200,10 @@ public class OrderService {
                 return response;
         }
 
+        /**
+         * @param updateOrderRequest
+         * @return UpdateOrderResponse
+         */
         @Transactional
         public UpdateOrderResponse updateOrder(UpdateOrderRequest updateOrderRequest) {
                 // 1. 驗證訂單存在和狀態
@@ -193,7 +212,7 @@ public class OrderService {
                                 .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + orderId));
 
                 if (existingOrderInfo.getStatus() != 1001) {
-                        throw new InvalidRequestException("訂單狀態不允許更新商品項目，目前狀態: " + existingOrderInfo.getStatus());
+                        throw new OrderStatusInvalidException("訂單狀態不允許更新商品項目，目前狀態: " + existingOrderInfo.getStatus());
                 }
                 logger.info("找到要更新的訂單，ID: {}", orderId);
 
@@ -234,7 +253,7 @@ public class OrderService {
                 productIdsToQuery.addAll(commonProductIds);
                 productIdsToQuery.addAll(removedProductIds);
 
-                // 6. 批量獲取商品資訊
+                // 6. 批量獲取商品資訊，
                 Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIdsToQuery);
 
                 // 7. 準備庫存更新資訊
@@ -331,28 +350,35 @@ public class OrderService {
 
                 if (!orderDetailsToRemove.isEmpty()) {
                         orderDetailRepository.deleteAll(orderDetailsToRemove);
+                        existingOrderInfo.getOrderDetails().removeAll(orderDetailsToRemove);
+                        logger.info("從 OrderInfo 記憶體集合中移除 {} 個已刪除的 OrderDetail", orderDetailsToRemove.size());
                         logger.info("批量刪除 {} 個訂單明細成功", orderDetailsToRemove.size());
                 }
 
-                // 12. 重新計算訂單總金額並準備回應
+                // 12. 儲存 OrderInfo 並獲取更新後的實體
+                // *** 手動設置 modifiedDate，即使 @PreUpdate 未觸發也能更新，因為訂單外層並沒有修改不會觸發 @PreUpdate ***
+                existingOrderInfo.setModifiedDate(java.time.LocalDate.now());
+                OrderInfo savedOrderInfo = orderInfoRepository.save(existingOrderInfo);
+                logger.info("OrderInfo saved, ID: {}, Modified Date: {}", savedOrderInfo.getId(),
+                                savedOrderInfo.getModifiedDate());
+
+                // 13. 重新計算訂單總金額並準備回應
                 BigDecimal totalAmount = BigDecimal.ZERO;
                 List<UpdateOrderDetailResponse> itemsResponse = new ArrayList<>();
 
-                // 取得最新的訂單明細
-                List<OrderDetail> updatedDetails = existingOrderInfo.getOrderDetails();
+                // 使用 updatedItemsMap (代表最終請求的狀態) 和 productDetailsMap (包含價格)
+                for (Map.Entry<Integer, UpdateOrderDetailRequest> entry : updatedItemsMap.entrySet()) {
+                        Integer productId = entry.getKey();
+                        Integer quantity = entry.getValue().getQuantity();
 
-                // 收集所有商品ID用於獲取最新的商品資訊
-                Set<Integer> allProductIds = new HashSet<>();
-                for (OrderDetail detail : updatedDetails) {
-                        allProductIds.add(detail.getProductId());
-                }
-
-                // 計算總金額並準備回應項目
-                for (OrderDetail detail : updatedDetails) {
-                        Integer productId = detail.getProductId();
-                        Integer quantity = detail.getQuantity();
+                        // 從之前批量獲取的商品資訊中取得價格
                         GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-                        BigDecimal price = productDetail.getPrice(); // 改用商品服務的即時價格
+                        if (productDetail == null) {
+                                // 理論上不應發生，因為前面已檢查過
+                                logger.error("無法找到商品 {} 的詳細資訊來計算總金額", productId);
+                                throw new IllegalStateException("Missing product details for ID: " + productId);
+                        }
+                        BigDecimal price = productDetail.getPrice();
 
                         // 計算總金額
                         totalAmount = totalAmount.add(price.multiply(BigDecimal.valueOf(quantity)));
@@ -371,12 +397,16 @@ public class OrderService {
                 response.setOrderId(existingOrderInfo.getId());
                 response.setTotalAmount(totalAmount);
                 response.setItems(itemsResponse);
+                response.setModifiedDate(savedOrderInfo.getModifiedDate());
 
                 logger.info("訂單更新完成，ID: {}，總金額: {}", orderId, totalAmount);
 
                 return response;
         }
 
+        /**
+         * @param orderId
+         */
         @Transactional
         public void deleteOrder(Integer orderId) {
                 // 1. 獲取訂單資訊
@@ -387,7 +417,7 @@ public class OrderService {
 
                 // 2. 驗證訂單狀態
                 if (existingOrderInfo.getStatus() != 1001) {
-                        throw new InvalidRequestException("訂單狀態不允許刪除，目前狀態: " + existingOrderInfo.getStatus());
+                        throw new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + existingOrderInfo.getStatus());
                 }
 
                 // 3. 收集所有商品ID並取得商品資訊
@@ -423,18 +453,28 @@ public class OrderService {
                 logger.info("訂單已刪除，ID: {}", orderId);
         }
 
+        /**
+         * @param accountId
+         */
         // functions to share
         private void validateActiveAccount(Integer accountId) {
                 accountClient.validateActiveAccount(accountId);
         }
 
+        /**
+         * @param orderInfo
+         */
         private void validateOrderStatus(OrderInfo orderInfo) {
                 Integer orderStatus = orderInfo.getStatus();
                 if (orderStatus != 1001) {
-                        throw new IllegalArgumentException("訂單狀態不允許更新商品項目，目前狀態: " + orderStatus);
+                        throw new OrderStatusInvalidException("訂單狀態不允許更新商品項目，目前狀態: " + orderStatus);
                 }
         }
 
+        /**
+         * @param productIds
+         * @return Map<Integer, GetProductDetailResponse>
+         */
         private Map<Integer, GetProductDetailResponse> batchGetProductDetails(Set<Integer> productIds) {
                 if (productIds.isEmpty()) {
                         return new HashMap<>();
@@ -444,6 +484,9 @@ public class OrderService {
                 return productDetailsMap;
         }
 
+        /**
+         * @param stockUpdates
+         */
         private void batchUpdateProductStock(Map<Integer, Integer> stockUpdates) {
                 if (!stockUpdates.isEmpty()) {
                         productClient.updateProductsStock(stockUpdates);
@@ -451,6 +494,10 @@ public class OrderService {
                 }
         }
 
+        /**
+         * @param orderDetails
+         * @return Set<Integer>
+         */
         private Set<Integer> collectProductIdsFromOrderDetails(List<OrderDetail> orderDetails) {
                 Set<Integer> productIds = new HashSet<>();
                 for (OrderDetail detail : orderDetails) {
@@ -474,11 +521,11 @@ public class OrderService {
                         Integer requestQuantity) {
                 // 基本驗證
                 if (productId == null || currentStock == null || originalQuantity == null || requestQuantity == null) {
-                        throw new IllegalArgumentException(
+                        throw new InvalidRequestException(
                                         "Product ID, current stock, old quantity, and new quantity cannot be null.");
                 }
                 if (originalQuantity < 0 || requestQuantity < 0) {
-                        throw new IllegalArgumentException(
+                        throw new InvalidRequestException(
                                         "Order quantities cannot be negative for product ID: " + productId);
                 }
                 if (currentStock < 0) {
@@ -503,7 +550,7 @@ public class OrderService {
                                         productId, currentStock, originalQuantity, requestQuantity, netChange,
                                         newQuantity);
                         // 拋出更詳細的錯誤訊息
-                        throw new IllegalArgumentException(String.format(
+                        throw new ProductStockNotEnoughException(String.format(
                                         "商品 %d 庫存不足。目前庫存: %d, 訂單原數量: %d, 訂單新數量: %d。需要額外 %d 個，但庫存不足。",
                                         productId, currentStock, originalQuantity, requestQuantity, netChange));
                 }
@@ -515,6 +562,10 @@ public class OrderService {
                 return newQuantity;
         }
 
+        /**
+         * @param orderInfo
+         * @return BigDecimal
+         */
         private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo) {
                 List<OrderDetail> orderDetails = orderInfo.getOrderDetails();
                 Set<Integer> productIds = collectProductIdsFromOrderDetails(orderDetails);
@@ -529,16 +580,23 @@ public class OrderService {
                 return totalAmount;
         }
 
+        /**
+         * @param accountId
+         */
         public void validateAccountExist(Integer accountId) {
                 accountClient.validateAccountExist(accountId);
-        }        
+        }
 
+        /**
+         * @param accountId
+         * @return boolean
+         */
         // 驗證帳戶ID有無關聯的訂單
-        public boolean AccountIdIsInOrder(Integer accountId){
-                if(!orderInfoRepository.findByAccountId(accountId).isEmpty()){
+        public boolean AccountIdIsInOrder(Integer accountId) {
+                if (!orderInfoRepository.findByAccountId(accountId).isEmpty()) {
                         return true;
                 }
                 return false;
         }
-        
+
 }
