@@ -51,11 +51,11 @@ public class ProductController {
     }
 
     // Read Product Detail
-    @GetMapping("/getDetail/{id}")
-    public ResponseEntity<GetProductDetailResponse> getProductDetail(@PathVariable Integer id) {
-        GetProductDetailResponse productDetail = productService.getProductDetail(id);
-        return ResponseEntity.ok(productDetail);
-    }
+    // @GetMapping("/getDetail/{id}")
+    // public ResponseEntity<GetProductDetailResponse> getProductDetail(@PathVariable Integer id) {
+    //     GetProductDetailResponse productDetail = productService.getProductDetail(id);
+    //     return ResponseEntity.ok(productDetail);
+    // }
 
     @GetMapping("/getDetails")
     public ResponseEntity<Map<Integer, GetProductDetailResponse>> getProductDetails(@RequestParam("ids") Set<Integer> ids) {

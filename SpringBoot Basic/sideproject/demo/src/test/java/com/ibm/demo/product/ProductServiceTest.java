@@ -5,37 +5,35 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
-import com.ibm.demo.exception.NotFound.ProductNotFoundException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.CreateProductResponse;
-import com.ibm.demo.product.DTO.GetProductDetailResponse;
+import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
-import com.ibm.demo.product.DTO.UpdateProductResponse;
 
+@ExtendWith(MockitoExtension.class)
 class ProductServiceTest {
 
     @Mock
@@ -46,7 +44,7 @@ class ProductServiceTest {
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
+        // MockitoAnnotations.openMocks(this);
     }
 
     // ==================================
@@ -54,6 +52,7 @@ class ProductServiceTest {
     // ==================================
 
     @Test
+    @DisplayName("建立產品成功，產品狀態初始值為1001")
     void testCreateProduct_Success() {
         // Arrange
         CreateProductRequest request = new CreateProductRequest();
@@ -77,10 +76,10 @@ class ProductServiceTest {
 
         // Mock the repository save method
         when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
-
+        
         // Act
         CreateProductResponse response = productService.createProduct(request);
-
+        
         // Assert
         assertNotNull(response);
         assertEquals(savedProduct.getId(), response.getId());
@@ -101,6 +100,7 @@ class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("取得多筆產品詳情時，若有產品不可銷售應拋出ProductInactiveException")
     void testGetProductDetails_ThrowsProductInactiveException_WhenProductNotSellable() {
         // Arrange
         Set<Integer> ids = new HashSet<>(Arrays.asList(1, 2));
@@ -120,6 +120,7 @@ class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("刪除產品成功，商品狀態更新為1002")
     void testDeleteProduct_Success() {
         // Arrange
         Integer productId = 8;
@@ -148,6 +149,7 @@ class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("驗證產品是否可銷售時，若產品不可銷售應拋出ProductInactiveException")
     void testValidateProductIsSellable_ThrowsInvalidRequestException() {
         // Arrange
         Product product = createTestProduct(1, "Inactive Product", BigDecimal.ONE, 1002, 0);
@@ -156,11 +158,101 @@ class ProductServiceTest {
         assertThrows(ProductInactiveException.class, () -> productService.validateProductIsSellable(product));
     }
 
+    @Test
+    @DisplayName("取得產品詳情時，若產品不可銷售應拋出ProductInactiveException")
+    void testGetProductDetail_ThrowsProductInactiveException_WhenProductNotSellable() {
+        // Arrange
+        Integer productId = 10;
+        // Create a product that exists but is inactive (status 1002)
+        Product inactiveProduct = createTestProduct(productId, "Inactive Gadget", new BigDecimal("50.00"), 1002, 0);
+
+        // Mock findById to return the inactive product
+        when(productRepository.findById(productId)).thenReturn(Optional.of(inactiveProduct));
+
+        // Act & Assert
+        // findProductById (called by getProductDetail) should throw the exception
+        assertThrows(ProductInactiveException.class, () -> productService.getProductDetail(productId));
+
+        // Verify findById was called
+        verify(productRepository, times(1)).findById(productId);
+    }
+
+    @Test
+    @DisplayName("更新產品時，若產品不可銷售應拋出ProductInactiveException")
+    void testUpdateProduct_ThrowsProductInactiveException_WhenProductNotSellable() {
+        // Arrange
+        Integer productId = 11;
+        Product inactiveProduct = createTestProduct(productId, "Inactive Gadget", new BigDecimal("50.00"), 1002, 0);
+
+        UpdateProductRequest request = new UpdateProductRequest();
+        request.setId(productId);
+        request.setName("Attempt Update");
+        request.setPrice(new BigDecimal("55.00"));
+        request.setSaleStatus(1001); // Attempt to make it sellable
+        request.setStockQty(10);
+
+        // Mock findById to return the inactive product, triggering the exception in findProductById
+        when(productRepository.findById(productId)).thenReturn(Optional.of(inactiveProduct));
+
+        // Act & Assert
+        // findProductById (called by updateProduct) should throw the exception
+        assertThrows(ProductInactiveException.class, () -> productService.updateProduct(request));
+
+        // Verify findById was called, but save should NOT be called
+        verify(productRepository, times(1)).findById(productId);
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    @DisplayName("刪除產品時，若產品已不可銷售應拋出ProductInactiveException")
+    void testDeleteProduct_ThrowsProductInactiveException_WhenProductAlreadyInactive() {
+        // Arrange
+        Integer productId = 12;
+        Product inactiveProduct = createTestProduct(productId, "Already Inactive", new BigDecimal("30.00"), 1002, 0);
+
+        // Mock findById to return the inactive product, triggering the exception in findProductById
+        when(productRepository.findById(productId)).thenReturn(Optional.of(inactiveProduct));
+
+        // Act & Assert
+        // findProductById (called by deleteProduct) should throw the exception
+        assertThrows(ProductInactiveException.class, () -> productService.deleteProduct(productId));
+
+        // Verify findById was called, but save should NOT be called
+        verify(productRepository, times(1)).findById(productId);
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    @DisplayName("取得產品列表時，應只包含可銷售的產品 (狀態不為1002)")
+    void testGetProductList_FiltersInactiveProducts() {
+        // Arrange
+        // Simulate the response from the repository query which already filters out status 1002
+        List<GetProductListResponse> mockResponseList = Arrays.asList(
+            new GetProductListResponse(1, "Active Product 1", new BigDecimal("10.00"), 1001, 5),
+            new GetProductListResponse(3, "Active Product 3", new BigDecimal("30.00"), 1001, 15)
+            // Product with ID 2 (status 1002) is implicitly excluded by the mocked query result
+        );
+        when(productRepository.getProductList()).thenReturn(mockResponseList);
+
+        // Act
+        List<GetProductListResponse> actualList = productService.getProductList();
+
+        // Assert
+        assertNotNull(actualList);
+        assertEquals(2, actualList.size(), "List should only contain active products");
+        assertTrue(actualList.stream().allMatch(p -> p.getSaleStatus() != 1002), "All products in the list should have status != 1002");
+        assertTrue(actualList.stream().anyMatch(p -> p.getId() == 1));
+        assertTrue(actualList.stream().anyMatch(p -> p.getId() == 3));
+
+        // Verify the repository method was called
+        verify(productRepository, times(1)).getProductList();
+    }
     // ==================================
     // Inactive Tests (Commented Out)
     // ==================================
 
     // @Test
+    // @DisplayName("根據ID尋找產品時，若產品不存在應拋出ProductNotFoundException")
     // void testFindProductById_ThrowsProductNotFoundException() {
     //     // Arrange
     //     Integer productId = 1;
@@ -174,6 +266,7 @@ class ProductServiceTest {
     // }
 
     // @Test
+    // @DisplayName("根據ID尋找產品時，若產品存在應回傳產品實體")
     // void testFindProductById_ProductFound() {
     //     // Arrange
     //     Integer productId = 2;
@@ -194,6 +287,7 @@ class ProductServiceTest {
     // }
 
     //  @Test
+    // @DisplayName("取得產品詳情成功")
     // void testGetProductDetail_Success() {
     //     // Arrange
     //     Integer productId = 3;
@@ -213,6 +307,7 @@ class ProductServiceTest {
     // }
 
     // @Test
+    // @DisplayName("取得產品詳情時，若產品不存在應拋出ProductNotFoundException")
     // void testGetProductDetail_NotFound() {
     //     // Arrange
     //     Integer productId = 4;
@@ -226,6 +321,7 @@ class ProductServiceTest {
     // }
 
     // @Test
+    // @DisplayName("根據多個ID取得產品詳情成功")
     // void testGetProductDetails_Success() {
     //     // Arrange
     //     Set<Integer> ids = new HashSet<>(Arrays.asList(1, 2));
@@ -251,6 +347,7 @@ class ProductServiceTest {
     // }
 
     // @Test
+    // @DisplayName("根據多個ID取得產品詳情時，若ID集合為null應拋出InvalidRequestException")
     // void testGetProductDetails_ThrowsInvalidRequestException_WhenIdsNull() {
     //     // Arrange
     //     Set<Integer> ids = null;
@@ -263,6 +360,7 @@ class ProductServiceTest {
     // }
 
     // @Test
+    // @DisplayName("根據多個ID取得產品詳情時，若ID集合為空應拋出InvalidRequestException")
     // void testGetProductDetails_ThrowsInvalidRequestException_WhenIdsEmpty() {
     //     // Arrange
     //     Set<Integer> ids = Collections.emptySet();
@@ -275,6 +373,7 @@ class ProductServiceTest {
     // }
 
     // @Test
+    // @DisplayName("根據多個ID取得產品詳情時，若部分產品不存在應拋出ProductNotFoundException")
     // void testGetProductDetails_ThrowsProductNotFoundException_WhenSomeIdsNotFound() {
     //     // Arrange
     //     Set<Integer> requestedIds = new HashSet<>(Arrays.asList(1, 2, 3)); // Request 3 IDs
@@ -294,6 +393,7 @@ class ProductServiceTest {
     // }
 
     // @Test
+    // @DisplayName("更新產品成功")
     // void testUpdateProduct_Success() {
     //     // Arrange
     //     Integer productId = 6;
@@ -345,6 +445,7 @@ class ProductServiceTest {
     // }
 
     // @Test
+    // @DisplayName("更新產品時，若產品不存在應拋出ProductNotFoundException")
     // void testUpdateProduct_NotFound() {
     //     // Arrange
     //     Integer productId = 7;

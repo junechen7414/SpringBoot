@@ -66,7 +66,7 @@ public class ProductService {
      * 根據 ID 獲取單一商品的詳細資訊。
      *
      * @param id 商品 ID
-     * @return 包含商品詳細資訊的回應 DTO     
+     * @return 包含商品詳細資訊的回應 DTO
      */
     public GetProductDetailResponse getProductDetail(Integer id) {
         Product existingProduct = findProductById(id);
@@ -98,7 +98,7 @@ public class ProductService {
      * 更新現有商品的資訊。
      *
      * @param updateProductRequestDto 包含要更新的商品資訊的請求 DTO
-     * @return 包含已更新商品資訊的回應 DTO     
+     * @return 包含已更新商品資訊的回應 DTO
      */
     @Transactional
     public UpdateProductResponse updateProduct(UpdateProductRequest updateProductRequestDto) {
@@ -118,7 +118,7 @@ public class ProductService {
     /**
      * 刪除商品 (邏輯刪除，將銷售狀態設為 1002)。
      *
-     * @param id 要刪除的商品 ID     
+     * @param id 要刪除的商品 ID
      */
     @Transactional
     public void deleteProduct(Integer id) {
@@ -131,7 +131,7 @@ public class ProductService {
     /**
      * 批量更新商品庫存。
      * 
-     * @param stockUpdates Map<商品ID, 新庫存數量>     
+     * @param stockUpdates Map<商品ID, 新庫存數量>
      */
     @Transactional
     public void updateProductsStock(Map<Integer, Integer> stockUpdates) {
@@ -175,7 +175,7 @@ public class ProductService {
                 product.getName(),
                 product.getPrice(),
                 product.getSaleStatus(),
-                product.getStockQty(),                
+                product.getStockQty(),
                 product.getModifiedDate());
     }
 
@@ -200,7 +200,7 @@ public class ProductService {
      * 2. 查詢商品是否存在，若有缺失則拋出例外。
      * 3. 驗證每個商品的銷售狀態是否為可銷售。
      *
-     * @param productIds 商品 ID 集合     
+     * @param productIds 商品 ID 集合
      */
     public void validateProducts(Set<Integer> productIds) {
         validateProductIds(productIds);
@@ -211,7 +211,7 @@ public class ProductService {
     /**
      * 驗證單一商品是否可銷售。
      *
-     * @param product 商品實體     
+     * @param product 商品實體
      */
     public void validateProductIsSellable(Product product) {
         if (product.getSaleStatus() == 1002) {
@@ -222,7 +222,7 @@ public class ProductService {
     /**
      * 驗證商品列表中的所有商品是否都可銷售。
      *
-     * @param products 商品實體列表     
+     * @param products 商品實體列表
      */
     public void validateProductsAreSellable(List<Product> products) {
         for (Product product : products) {
@@ -234,7 +234,7 @@ public class ProductService {
      * 根據一組 ID 查詢多個商品實體。
      *
      * @param productIds 商品 ID 集合
-     * @return 包含查詢到的商品實體的列表     
+     * @return 包含查詢到的商品實體的列表
      */
     public List<Product> findProductsByIds(Set<Integer> productIds) {
         validateProductIds(productIds);
@@ -255,7 +255,7 @@ public class ProductService {
     /**
      * 驗證商品 ID 集合是否為空或 null。
      *
-     * @param productIds 商品 ID 集合     
+     * @param productIds 商品 ID 集合
      */
     public void validateProductIds(Set<Integer> productIds) {
         if (productIds == null || productIds.isEmpty()) {
@@ -286,7 +286,9 @@ public class ProductService {
      * @return 找到的商品實體
      */
     public Product findProductById(Integer productId) {
-        return productRepository.findById(productId)
+        Product result = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException("Product not found with id: " + productId));
+        validateProductIsSellable(result);
+        return result;
     }
 }

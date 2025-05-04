@@ -55,8 +55,7 @@ public class AccountService {
      * @return GetAccountDetailResponse
      */
     public GetAccountDetailResponse getAccountDetail(Integer id) {
-        Account existingAccount = accountRepository.findById(id)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + id));
+        Account existingAccount = findAccountByIdOrThrow(id);
         GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(),
                 existingAccount.getStatus()
         // , existingAccount.getCreateDate()
@@ -73,9 +72,7 @@ public class AccountService {
     public UpdateAccountResponse updateAccount(UpdateAccountRequest updateAccountRequestDto) {
         // 1. 取得帳戶實體並驗證帳戶是否存在否則拋出例外
         Integer accountId = updateAccountRequestDto.getId();
-        Account existingAccount = accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException(
-                        "Account not found with id: " + updateAccountRequestDto.getId()));
+        Account existingAccount = findAccountByIdOrThrow(accountId);
         // 2. 宣告和初始化帳戶更新前後的狀態
         String originalStatus = existingAccount.getStatus();
         String newStatus = updateAccountRequestDto.getStatus();
@@ -85,10 +82,7 @@ public class AccountService {
 
         // 4. 驗證帳戶狀態是否更新，若有更新且要更新為N需檢核是否該帳戶仍有關聯的訂單，若仍有關聯的訂單不可更改狀態為N
         if (!originalStatus.equals(newStatus) && "N".equals(newStatus)) {
-            if (orderClient.accountIdIsInOrder(accountId)) {
-                throw new AccountStillHasOrderCanNotBeDeleteException(
-                        "Account with id: " + accountId + " has associated orders cannot be deactivated.");
-            }
+            checkAccountHasNoOrdersOrThrow(accountId, "deactivated");
             existingAccount.setStatus(newStatus);
         }
 
@@ -107,12 +101,8 @@ public class AccountService {
      */
     @Transactional
     public void deleteAccount(Integer accountId) {
-        Account existingAccount = accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
-        if (orderClient.accountIdIsInOrder(accountId)) {
-            throw new AccountStillHasOrderCanNotBeDeleteException(
-                    "Account with id: " + accountId + " has associated orders cannot be deleted.");
-        }
+        Account existingAccount = findAccountByIdOrThrow(accountId);
+        checkAccountHasNoOrdersOrThrow(accountId, "deleted");
         existingAccount.setStatus("N");
         accountRepository.save(existingAccount);
     }
@@ -130,10 +120,30 @@ public class AccountService {
      * @param accountId
      */
     public void validateAccountActive(Integer accountId) {
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
+        Account account = findAccountByIdOrThrow(accountId);
         if ("N".equals(account.getStatus())) {
             throw new AccountInactiveException("Account " + accountId + " is inactive");
+        }
+    }
+
+    // --- Private Helper Methods ---
+
+    /**
+     * Finds an account by its ID or throws AccountNotFoundException if not found.
+     */
+    private Account findAccountByIdOrThrow(Integer accountId) {
+        return accountRepository.findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
+    }
+
+    /**
+     * Checks if an account has associated orders via OrderClient. Throws
+     * AccountStillHasOrderCanNotBeDeleteException if orders exist.
+     */
+    private void checkAccountHasNoOrdersOrThrow(Integer accountId, String action) {
+        if (orderClient.accountIdIsInOrder(accountId)) {
+            throw new AccountStillHasOrderCanNotBeDeleteException(
+                    "Account with id: " + accountId + " has associated orders and cannot be " + action + ".");
         }
     }
 }
