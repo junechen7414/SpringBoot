@@ -12,7 +12,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
-import com.ibm.demo.exception.ValidationException;
 import com.ibm.demo.exception.BusinessLogicCheck.BusinessException;
 
 @ControllerAdvice
@@ -48,22 +47,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                                 ex.getMessage()
                 // ,request.getDescription(false).replace("uri=", "")
                 );
-                return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
-        }
-
-        // 處理 ValidationException
-        @ExceptionHandler(ValidationException.class)
-        public ResponseEntity<ApiErrorResponse> handleValidationException(
-                        ValidationException ex, WebRequest request) {
-
-                ApiErrorResponse apiErrorResponse = new ApiErrorResponse(
-                                LocalDateTime.now(),
-                                HttpStatus.BAD_REQUEST.value(),
-                                "Bad Request",
-                                ex.getMessage()
-                // ,request.getDescription(false).replace("uri=", "")
-                );
-
                 return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
         }
 
