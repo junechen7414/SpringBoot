@@ -9,8 +9,8 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.exception.InvalidRequestException;
+import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
-import com.ibm.demo.exception.NotFound.ProductNotFoundException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.CreateProductResponse;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
@@ -247,7 +247,7 @@ public class ProductService {
             }
             Set<Integer> missingIds = new HashSet<>(productIds);
             missingIds.removeAll(foundIdSet);
-            throw new ProductNotFoundException("Products not found with ids: " + missingIds);
+            throw new ResourceNotFoundException("Products not found with ids: " + missingIds);
         }
         return products;
     }
@@ -287,7 +287,7 @@ public class ProductService {
      */
     public Product findProductById(Integer productId) {
         Product result = productRepository.findById(productId)
-                .orElseThrow(() -> new ProductNotFoundException("Product not found with id: " + productId));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
         validateProductIsSellable(result);
         return result;
     }

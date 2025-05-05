@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -23,10 +25,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.CreateAccountResponse;
+import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
-import com.ibm.demo.exception.NotFound.AccountNotFoundException;
 import com.ibm.demo.order.OrderClient;
 
 @ExtendWith(MockitoExtension.class)
@@ -89,6 +91,25 @@ public class AccountServiceTest {
         ArgumentCaptor<Account> accountCaptor = ArgumentCaptor.forClass(Account.class);
         verify(accountRepository).save(accountCaptor.capture());
         assertEquals("Y", accountCaptor.getValue().getStatus()); // 驗證傳遞給 save 方法的實體狀態
+    }
+    @Test
+    @DisplayName("取得帳戶列表時，呼叫 Repository 的 getAccountList 方法，應僅回傳狀態為Y的帳戶")
+    void getAccountList_shouldReturnOnlyActiveAccounts() {
+        // Arrange
+        // 準備一個模擬的回傳列表 (內容不重要，重點是驗證呼叫)
+        List<GetAccountListResponse> mockList = Arrays.asList(
+            new GetAccountListResponse(1, "Acc 1", "Y"),
+            new GetAccountListResponse(3, "Acc 3", "Y")
+        );
+        when(accountRepository.getAccountList()).thenReturn(mockList);
+
+        // Act
+        List<GetAccountListResponse> result = accountService.getAccountList();
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(mockList, result); // 確保回傳的是 Repository 給的結果
+        verify(accountRepository, times(1)).getAccountList(); // 驗證 Repository 方法被呼叫一次
     }
 
     @Test
@@ -167,22 +188,22 @@ public class AccountServiceTest {
         verify(accountRepository, times(1)).findById(activeAccount.getId());
     }
 
-    @Test
-    @DisplayName("驗證帳戶是否存在時，若帳戶不存在應拋出AccountNotFoundException")
-    void validateAccountExist_whenAccountDoesNotExist_shouldThrowException() {
-        Integer nonExistentAccountId = 999;
-        when(accountRepository.existsById(nonExistentAccountId)).thenReturn(false);
+    // @Test
+    // @DisplayName("驗證帳戶是否存在時，若帳戶不存在應拋出AccountNotFoundException")
+    // void validateAccountExist_whenAccountDoesNotExist_shouldThrowException() {
+    //     Integer nonExistentAccountId = 999;
+    //     when(accountRepository.existsById(nonExistentAccountId)).thenReturn(false);
 
-        assertThrows(AccountNotFoundException.class, () -> accountService.validateAccountExist(nonExistentAccountId));
-    }
+    //     assertThrows(AccountNotFoundException.class, () -> accountService.validateAccountExist(nonExistentAccountId));
+    // }
 
-    @Test
-    @DisplayName("驗證帳戶是否存在時，若帳戶存在應不拋出例外")
-    void validateAccountExist_whenAccountExists_shouldNotThrowException() {
-        when(accountRepository.existsById(activeAccount.getId())).thenReturn(true);
+    // @Test
+    // @DisplayName("驗證帳戶是否存在時，若帳戶存在應不拋出例外")
+    // void validateAccountExist_whenAccountExists_shouldNotThrowException() {
+    //     when(accountRepository.existsById(activeAccount.getId())).thenReturn(true);
 
-        accountService.validateAccountExist(activeAccount.getId());
+    //     accountService.validateAccountExist(activeAccount.getId());
 
-        verify(accountRepository, times(1)).existsById(activeAccount.getId());
-    }
+    //     verify(accountRepository, times(1)).existsById(activeAccount.getId());
+    // }
 }

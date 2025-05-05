@@ -12,7 +12,8 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.InvalidRequestException;
-import com.ibm.demo.exception.NotFound.ProductNotFoundException;
+import com.ibm.demo.exception.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 
 @Component
@@ -44,10 +45,10 @@ public class ProductClient {
             String errorMessage = extractErrorMessage(ex, "無法獲取商品詳細資訊");
             if (ex.getStatusCode() == HttpStatusCode.valueOf(404)) {
                 // 商品服務的 404 意味著有商品 ID 找不到
-                throw new ProductNotFoundException(errorMessage);
+                throw new ResourceNotFoundException(errorMessage);
             } else if (ex.getStatusCode() == HttpStatusCode.valueOf(400)) {
-                // 商品服務的 400 可能意味著 ID 為空、或商品不可銷售等
-                throw new InvalidRequestException(errorMessage);
+                // 商品服務的 400 表示商品不可銷售
+                throw new ProductInactiveException(errorMessage);
             }
             throw new RuntimeException("呼叫商品服務失敗: " + errorMessage, ex);
         }
@@ -72,7 +73,7 @@ public class ProductClient {
             String errorMessage = extractErrorMessage(ex, "更新商品庫存失敗");
             if (ex.getStatusCode() == HttpStatusCode.valueOf(404)) {
                 // 如果更新時發現商品不存在
-                throw new ProductNotFoundException(errorMessage);
+                throw new ResourceNotFoundException(errorMessage);
             } else if (ex.getStatusCode() == HttpStatusCode.valueOf(400)) {
                 // 可能是請求格式錯誤或其他業務驗證失敗
                 throw new InvalidRequestException(errorMessage);
@@ -82,6 +83,8 @@ public class ProductClient {
     }
 
     // 輔助方法，嘗試從 WebClientResponseException 中提取下游服務的錯誤訊息
+    // 從 API 呼叫失敗的例外中，優先取得對方服務回傳的具體錯誤訊息 (假設格式符合 ApiErrorResponse)。如果無法取得，就退一步使用 HTTP
+    // 狀態文字。如果連 HTTP 狀態文字都怪怪的或不適用，最後就使用一個預設的通用錯誤訊息。
     private String extractErrorMessage(WebClientResponseException ex, String defaultMessage) {
         try {
             ApiErrorResponse errorResponse = ex.getResponseBodyAs(ApiErrorResponse.class);

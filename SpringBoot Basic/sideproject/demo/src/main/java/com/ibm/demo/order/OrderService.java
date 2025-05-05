@@ -14,9 +14,9 @@ import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.exception.InvalidRequestException;
+import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
-import com.ibm.demo.exception.NotFound.OrderNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderDetailResponse;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
@@ -162,7 +162,7 @@ public class OrderService {
         public GetOrderDetailResponse getOrderDetails(Integer orderId) {
                 // 1. 獲取訂單基本資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + orderId));
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
                 // 2. 獲取訂單明細
                 List<OrderDetail> orderDetails = existingOrderInfo.getOrderDetails();
@@ -209,7 +209,7 @@ public class OrderService {
                 // 1. 驗證訂單存在和狀態
                 Integer orderId = updateOrderRequest.getOrderId();
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + orderId));
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
                 if (existingOrderInfo.getStatus() != 1001) {
                         throw new OrderStatusInvalidException("訂單狀態不允許更新商品項目，目前狀態: " + existingOrderInfo.getStatus());
@@ -338,15 +338,14 @@ public class OrderService {
                 // 11. 執行批量更新
                 batchUpdateProductStock(stockUpdates);
 
-                if (!orderDetailsToAdd.isEmpty()) {
-                        orderDetailRepository.saveAll(orderDetailsToAdd);
-                        logger.info("批量新增 {} 個訂單明細成功", orderDetailsToAdd.size());
-                }
-
-                if (!orderDetailsToUpdate.isEmpty()) {
-                        orderDetailRepository.saveAll(orderDetailsToUpdate);
-                        logger.info("批量更新 {} 個訂單明細成功", orderDetailsToUpdate.size());
-                }
+                // 合併要執行saveAll的list，減少資料庫存取次數
+                List<OrderDetail> allOrderDetailsToSave = new ArrayList<>();
+                allOrderDetailsToSave.addAll(orderDetailsToAdd);
+                allOrderDetailsToSave.addAll(orderDetailsToUpdate);
+                if (!allOrderDetailsToSave.isEmpty()) {
+                        orderDetailRepository.saveAll(allOrderDetailsToSave);
+                        logger.info("批量儲存 {} 個訂單明細成功", orderDetailsToAdd.size());
+                }                
 
                 if (!orderDetailsToRemove.isEmpty()) {
                         orderDetailRepository.deleteAll(orderDetailsToRemove);
@@ -411,7 +410,7 @@ public class OrderService {
         public void deleteOrder(Integer orderId) {
                 // 1. 獲取訂單資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + orderId));
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
                 logger.info("找到要刪除的訂單，ID: {}", orderId);
 

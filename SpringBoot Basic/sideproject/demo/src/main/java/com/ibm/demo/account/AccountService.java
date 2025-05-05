@@ -10,9 +10,9 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.account.DTO.UpdateAccountResponse;
+import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
-import com.ibm.demo.exception.NotFound.AccountNotFoundException;
 import com.ibm.demo.order.OrderClient;
 
 import jakarta.transaction.Transactional;
@@ -112,7 +112,7 @@ public class AccountService {
      */
     public void validateAccountExist(Integer accountId) {
         if (!accountRepository.existsById(accountId)) {
-            throw new AccountNotFoundException("Account not found with id: " + accountId);
+            throw new ResourceNotFoundException("Account not found with id: " + accountId);
         }
     }
 
@@ -133,7 +133,7 @@ public class AccountService {
      */
     private Account findAccountByIdOrThrow(Integer accountId) {
         return accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException("Account not found with id: " + accountId));
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + accountId));
     }
 
     /**

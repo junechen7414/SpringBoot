@@ -11,9 +11,9 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.InvalidRequestException;
+import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.ValidationException;
 import com.ibm.demo.exception.BusinessLogicCheck.BusinessException;
-import com.ibm.demo.exception.NotFound.ResourceNotFoundException;
 
 @ControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
