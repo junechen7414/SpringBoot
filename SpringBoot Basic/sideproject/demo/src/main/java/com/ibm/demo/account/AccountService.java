@@ -5,11 +5,9 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.DTO.CreateAccountRequest;
-import com.ibm.demo.account.DTO.CreateAccountResponse;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
-import com.ibm.demo.account.DTO.UpdateAccountResponse;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
@@ -32,15 +30,14 @@ public class AccountService {
      * @return CreateAccountResponse
      */
     @Transactional
-    public CreateAccountResponse createAccount(CreateAccountRequest account_DTO) {
+    public Integer createAccount(CreateAccountRequest account_DTO) {
         Account newAccount = new Account();
         newAccount.setName(account_DTO.getName());
+        // 預設帳戶狀態為Y，啟用
         newAccount.setStatus("Y");
 
         Account savedAccount = accountRepository.save(newAccount);
-        CreateAccountResponse createAccountResponseDTO = new CreateAccountResponse(savedAccount.getId(),
-                savedAccount.getName(), savedAccount.getStatus(), savedAccount.getCreateDate());
-        return createAccountResponseDTO;
+        return savedAccount.getId();
     }
 
     /**
@@ -57,19 +54,15 @@ public class AccountService {
     public GetAccountDetailResponse getAccountDetail(Integer id) {
         Account existingAccount = findAccountByIdOrThrow(id);
         GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(),
-                existingAccount.getStatus()
-        // , existingAccount.getCreateDate()
-        // , existingAccount.getModifiedDate()
-        );
+                existingAccount.getStatus());
         return accountDetailResponseDTO;
     }
 
     /**
      * @param updateAccountRequestDto
-     * @return UpdateAccountResponse
      */
     @Transactional
-    public UpdateAccountResponse updateAccount(UpdateAccountRequest updateAccountRequestDto) {
+    public void updateAccount(UpdateAccountRequest updateAccountRequestDto) {
         // 1. 取得帳戶實體並驗證帳戶是否存在否則拋出例外
         Integer accountId = updateAccountRequestDto.getId();
         Account existingAccount = findAccountByIdOrThrow(accountId);
@@ -82,18 +75,13 @@ public class AccountService {
 
         // 4. 驗證帳戶狀態是否更新，若有更新且要更新為N需檢核是否該帳戶仍有關聯的訂單，若仍有關聯的訂單不可更改狀態為N
         if (!originalStatus.equals(newStatus) && "N".equals(newStatus)) {
-            checkAccountHasNoOrdersOrThrow(accountId, "deactivated");
-            existingAccount.setStatus(newStatus);
+            checkAccountHasNoOrdersOrThrow(accountId);            
         }
+        existingAccount.setStatus(newStatus);
 
         // 5. 儲存帳戶實體
-        Account updatedAccount = accountRepository.save(existingAccount);
+        accountRepository.save(existingAccount);
 
-        // 6. 準備回傳DTO
-        UpdateAccountResponse updatedAccountResponseDto = new UpdateAccountResponse(updatedAccount.getId(),
-                updatedAccount.getName(), updatedAccount.getStatus(),
-                updatedAccount.getModifiedDate());
-        return updatedAccountResponseDto;
     }
 
     /**
@@ -102,31 +90,24 @@ public class AccountService {
     @Transactional
     public void deleteAccount(Integer accountId) {
         Account existingAccount = findAccountByIdOrThrow(accountId);
-        checkAccountHasNoOrdersOrThrow(accountId, "deleted");
+        if (existingAccount.getStatus().equals("N")) {
+            throw new ResourceNotFoundException("Account not found with ID: " + accountId);
+        }
+        checkAccountHasNoOrdersOrThrow(accountId);
         existingAccount.setStatus("N");
         accountRepository.save(existingAccount);
     }
 
-    /**
-     * @param accountId
-     */
-    public void validateAccountExist(Integer accountId) {
-        if (!accountRepository.existsById(accountId)) {
-            throw new ResourceNotFoundException("Account not found with id: " + accountId);
-        }
-    }
-
-    /**
-     * @param accountId
-     */
-    public void validateAccountActive(Integer accountId) {
-        Account account = findAccountByIdOrThrow(accountId);
-        if ("N".equals(account.getStatus())) {
-            throw new AccountInactiveException("Account " + accountId + " is inactive");
-        }
-    }
-
     // --- Private Helper Methods ---
+    
+    // validateAccount
+    @Transactional
+    public void validateAccount(Integer accountId) {
+        Account existingAccount = findAccountByIdOrThrow(accountId);
+        if (existingAccount.getStatus().equals("N")){
+            throw new AccountInactiveException("Account is inactive with id: " + accountId);
+        }
+    }
 
     /**
      * Finds an account by its ID or throws AccountNotFoundException if not found.
@@ -140,10 +121,10 @@ public class AccountService {
      * Checks if an account has associated orders via OrderClient. Throws
      * AccountStillHasOrderCanNotBeDeleteException if orders exist.
      */
-    private void checkAccountHasNoOrdersOrThrow(Integer accountId, String action) {
+    private void checkAccountHasNoOrdersOrThrow(Integer accountId) {
         if (orderClient.accountIdIsInOrder(accountId)) {
             throw new AccountStillHasOrderCanNotBeDeleteException(
-                    "Account with id: " + accountId + " has associated orders and cannot be " + action + ".");
+                    "Account with id: " + accountId + " has associated orders and cannot be set to deactivate.");
         }
     }
 }

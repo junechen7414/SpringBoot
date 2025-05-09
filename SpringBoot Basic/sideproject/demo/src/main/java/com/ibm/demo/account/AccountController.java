@@ -13,16 +13,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ibm.demo.account.DTO.CreateAccountRequest;
-import com.ibm.demo.account.DTO.CreateAccountResponse;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
-import com.ibm.demo.account.DTO.UpdateAccountResponse;
 
 import jakarta.validation.Valid;
 
 @RestController // Restful Controller
-@RequestMapping("/api/accounts") // 基礎路徑
+@RequestMapping("/account") // 基礎路徑
 public class AccountController {
     private final AccountService accountService;
 
@@ -31,50 +29,45 @@ public class AccountController {
     }
 
     // Create Account
-    @PostMapping
-    public ResponseEntity<CreateAccountResponse> createAccount(
-            @Valid @RequestBody CreateAccountRequest createAccountRequest) {
-        CreateAccountResponse createAccountResponse = accountService.createAccount(createAccountRequest);
-        return ResponseEntity.ok(createAccountResponse);
+    @PostMapping("/create")
+    public ResponseEntity<Integer> createAccount(@Valid @RequestBody CreateAccountRequest createAccountRequest) {
+        Integer accountId = accountService.createAccount(createAccountRequest);
+        return ResponseEntity.ok(accountId);
     }
 
     // Read Account List
-    @GetMapping
+    @GetMapping("/getList")
     public ResponseEntity<List<GetAccountListResponse>> getAccountList() {
         List<GetAccountListResponse> accountList = accountService.getAccountList();
         return ResponseEntity.ok(accountList);
     }
 
     // Read Account Detail
-    @GetMapping("/{id}")
+    @GetMapping("/getDetail/{id}")
     public ResponseEntity<GetAccountDetailResponse> getAccountDetail(@PathVariable Integer id) {
         GetAccountDetailResponse accountDetail = accountService.getAccountDetail(id);
         return ResponseEntity.ok(accountDetail);
     }
 
     // Update Account
-    @PutMapping
-    public ResponseEntity<UpdateAccountResponse> updateAccount(UpdateAccountRequest updateAccountRequest) {
-        UpdateAccountResponse updateAccountResponse = accountService.updateAccount(updateAccountRequest);
-        return ResponseEntity.ok(updateAccountResponse);
+    @PutMapping("/update")
+    public ResponseEntity<Void> updateAccount(@Valid UpdateAccountRequest updateAccountRequest) {
+        accountService.updateAccount(updateAccountRequest);
+        return ResponseEntity.ok().build();
     }
 
     // Delete Account
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/delete/{id}")
     public ResponseEntity<Void> deleteAccount(@PathVariable Integer id) {
         accountService.deleteAccount(id);
         return ResponseEntity.ok().build();
     }
 
     // Validate Account
-    @GetMapping("/validate/{accountId}")
-    public void validateActiveAccount(@PathVariable Integer accountId) {
-        accountService.validateAccountActive(accountId);
-    }
-
-    @GetMapping("/exist/{accountId}")
-    public void getMethodName(@PathVariable Integer accountId) {
-        accountService.validateAccountExist(accountId);
+    @PostMapping("/validate/{id}")
+    public ResponseEntity<Void> validateAccount(@PathVariable Integer id) {
+        accountService.validateAccount(id);
+        return ResponseEntity.ok().build();
     }
 
 }

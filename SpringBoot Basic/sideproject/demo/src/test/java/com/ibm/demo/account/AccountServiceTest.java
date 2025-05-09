@@ -24,10 +24,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.DTO.CreateAccountRequest;
-import com.ibm.demo.account.DTO.CreateAccountResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.order.OrderClient;
 
@@ -79,14 +77,10 @@ public class AccountServiceTest {
         when(accountRepository.save(any(Account.class))).thenReturn(savedAccount);
 
         // Act
-        CreateAccountResponse response = accountService.createAccount(request);
+        Integer createdAccountId = accountService.createAccount(request);
 
-        // Assert
-        assertNotNull(response);
-        assertEquals(savedAccount.getId(), response.getId());
-        assertEquals(savedAccount.getName(), response.getName());
-        assertEquals("Y", response.getStatus()); // 驗證回傳 DTO 的狀態
-        assertEquals(savedAccount.getCreateDate(), response.getCreateDate());
+        // Assert        
+        assertEquals(savedAccount.getId(), createdAccountId);        
 
         ArgumentCaptor<Account> accountCaptor = ArgumentCaptor.forClass(Account.class);
         verify(accountRepository).save(accountCaptor.capture());
@@ -169,25 +163,7 @@ public class AccountServiceTest {
         assertEquals("N", activeAccount.getStatus());
         verify(accountRepository, times(1)).save(activeAccount);
     }
-
-    @Test
-    @DisplayName("驗證帳戶是否啟用時，若帳戶狀態為N應拋出AccountInactiveException")
-    void validateAccountActive_whenAccountIsInactive_shouldThrowException() {
-        when(accountRepository.findById(inactiveAccount.getId())).thenReturn(Optional.of(inactiveAccount));
-
-        assertThrows(AccountInactiveException.class, () -> accountService.validateAccountActive(inactiveAccount.getId()));
-    }
-
-    @Test
-    @DisplayName("驗證帳戶是否啟用時，若帳戶狀態為Y應不拋出例外")
-    void validateAccountActive_whenAccountIsActive_shouldNotThrowException() {
-        when(accountRepository.findById(activeAccount.getId())).thenReturn(Optional.of(activeAccount));
-
-        accountService.validateAccountActive(activeAccount.getId());
-
-        verify(accountRepository, times(1)).findById(activeAccount.getId());
-    }
-
+    
     // @Test
     // @DisplayName("驗證帳戶是否存在時，若帳戶不存在應拋出AccountNotFoundException")
     // void validateAccountExist_whenAccountDoesNotExist_shouldThrowException() {

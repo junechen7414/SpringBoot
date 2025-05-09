@@ -10,21 +10,21 @@ public class WebClientConfig {
     @Bean(name = "accountWebClient")
     public WebClient accountWebClient() {
         return WebClient.builder()
-                .baseUrl("http://localhost:8087/api/accounts")
+                .baseUrl("http://localhost:8087/account")
                 .build();
     }
 
     @Bean(name = "orderWebClient")
     public WebClient orderWebClient() {
         return WebClient.builder()
-                .baseUrl("http://localhost:8087/api/orders")
+                .baseUrl("http://localhost:8087/order")
                 .build();
     }
 
     @Bean(name = "productWebClient")
     public WebClient productWebClient() {
         return WebClient.builder()
-                .baseUrl("http://localhost:8087/api/products")
+                .baseUrl("http://localhost:8087/product")
                 .build();
     }
 }

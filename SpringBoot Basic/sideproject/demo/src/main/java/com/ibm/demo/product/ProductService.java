@@ -1,7 +1,6 @@
 package com.ibm.demo.product;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -10,13 +9,10 @@ import org.springframework.stereotype.Service;
 
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
-import com.ibm.demo.product.DTO.CreateProductResponse;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
-import com.ibm.demo.product.DTO.UpdateProductResponse;
 
 import jakarta.transaction.Transactional;
 
@@ -40,7 +36,7 @@ public class ProductService {
      * @return 包含已建立商品資訊的回應 DTO
      */
     @Transactional
-    public CreateProductResponse createProduct(CreateProductRequest product_DTO) {
+    public Integer createProduct(CreateProductRequest product_DTO) {
         Product newProduct = new Product();
         newProduct.setName(product_DTO.getName());
         newProduct.setPrice(product_DTO.getPrice());
@@ -48,9 +44,7 @@ public class ProductService {
         // 預設銷售狀態為 1001 (可銷售)
         newProduct.setSaleStatus(1001);
         Product savedProduct = productRepository.save(newProduct);
-        return new CreateProductResponse(savedProduct.getId(),
-                savedProduct.getName(), savedProduct.getPrice(), savedProduct.getSaleStatus(),
-                savedProduct.getStockQty(), savedProduct.getCreateDate());
+        return savedProduct.getId();
     }
 
     /**
@@ -69,7 +63,7 @@ public class ProductService {
      * @return 包含商品詳細資訊的回應 DTO
      */
     public GetProductDetailResponse getProductDetail(Integer id) {
-        Product existingProduct = findProductById(id);
+        Product existingProduct = findProductByIdOrThrow(id);
         return mapProductToDetailResponse(existingProduct);
     }
 
@@ -84,12 +78,10 @@ public class ProductService {
      * @return 以商品 ID 為鍵，商品詳細資訊 DTO 為值的 Map
      */
     public Map<Integer, GetProductDetailResponse> getProductDetails(Set<Integer> ids) {
-        // 驗證傳入的商品ID不為null或空集合
-        validateProductIds(ids);
-        // 使用多個ID查詢多個商品實體，若有對應不上的ID會拋出例外
+        // 使用多個ID查詢多個商品實體，若有對應不上的ID會忽略 continue，若傳入null會拋出例外
         List<Product> products = findProductsByIds(ids);
         // 驗證找出的所有商品狀態皆為可銷售
-        validateProductsAreSellable(products);
+        // validateProductsAreSellable(products);
         // 將商品映射到以商品ID為key的DTO Map
         return mapProductsToDetailResponses(products);
     }
@@ -101,18 +93,17 @@ public class ProductService {
      * @return 包含已更新商品資訊的回應 DTO
      */
     @Transactional
-    public UpdateProductResponse updateProduct(UpdateProductRequest updateProductRequestDto) {
+    public void updateProduct(UpdateProductRequest updateProductRequestDto) {
         // 1. 取得商品實體並驗證帳戶是否存在否則拋出例外
         Integer productId = updateProductRequestDto.getId();
-        Product existingProduct = findProductById(productId);
+        Product existingProduct = findProductByIdOrThrow(productId);
         // 2. 更新商品屬性
         existingProduct.setName(updateProductRequestDto.getName());
         existingProduct.setPrice(updateProductRequestDto.getPrice());
         existingProduct.setSaleStatus(updateProductRequestDto.getSaleStatus());
         existingProduct.setStockQty(updateProductRequestDto.getStockQty());
         // 3. 儲存商品資料
-        Product updatedProduct = productRepository.save(existingProduct);
-        return mapProductToUpdateResponse(updatedProduct);
+        productRepository.save(existingProduct);
     }
 
     /**
@@ -122,8 +113,11 @@ public class ProductService {
      */
     @Transactional
     public void deleteProduct(Integer id) {
-        Product existingProduct = findProductById(id);
+        Product existingProduct = findProductByIdOrThrow(id);
         // 將銷售狀態設為 1002 (不可銷售)
+        if(existingProduct.getSaleStatus() == 1002) {
+            throw new ResourceNotFoundException("Product not found with id: " + id);
+        }
         existingProduct.setSaleStatus(1002);
         productRepository.save(existingProduct);
     }
@@ -164,71 +158,26 @@ public class ProductService {
     }
 
     /**
-     * 將單一 Product 實體映射到 UpdateProductResponse DTO。
-     *
-     * @param product 商品實體
-     * @return 商品更新回應 DTO
-     */
-    private UpdateProductResponse mapProductToUpdateResponse(Product product) {
-        return new UpdateProductResponse(
-                product.getId(),
-                product.getName(),
-                product.getPrice(),
-                product.getSaleStatus(),
-                product.getStockQty(),
-                product.getModifiedDate());
-    }
-
-    /**
-     * 使用 UpdateProductRequest DTO 的資料更新 Product 實體的屬性。
-     *
-     * @param product 要更新的商品實體
-     * @param request 包含更新資料的請求 DTO
-     */
-    // private void updateProductEntity(Product product, UpdateProductRequest
-    // request) {
-    // product.setName(request.getName());
-    // product.setPrice(request.getPrice());
-    // product.setSaleStatus(request.getSaleStatus());
-    // product.setStockQty(request.getStockQty());
-    // // JPA 會自動處理 modifiedDate 的更新 (如果 @LastModifiedDate 有設定)
-    // }
-
-    /**
-     * 驗證一組商品 ID 是否有效且可銷售。
-     * 1. 檢查商品 ID 集合是否為空或 null。
-     * 2. 查詢商品是否存在，若有缺失則拋出例外。
-     * 3. 驗證每個商品的銷售狀態是否為可銷售。
-     *
-     * @param productIds 商品 ID 集合
-     */
-    public void validateProducts(Set<Integer> productIds) {
-        validateProductIds(productIds);
-        List<Product> products = findProductsByIds(productIds);
-        validateProductsAreSellable(products);
-    }
-
-    /**
      * 驗證單一商品是否可銷售。
      *
      * @param product 商品實體
      */
-    public void validateProductIsSellable(Product product) {
-        if (product.getSaleStatus() == 1002) {
-            throw new ProductInactiveException("商品id: " + product.getId() + " 不可銷售");
-        }
-    }
+    // public void validateProductIsSellable(Product product) {
+    //     if (product.getSaleStatus() == 1002) {
+    //         throw new ProductInactiveException("商品id: " + product.getId() + " 不可銷售");
+    //     }
+    // }
 
     /**
      * 驗證商品列表中的所有商品是否都可銷售。
      *
      * @param products 商品實體列表
      */
-    public void validateProductsAreSellable(List<Product> products) {
-        for (Product product : products) {
-            validateProductIsSellable(product); // 直接呼叫，讓 ProductInactiveException 自然拋出
-        }
-    }
+    // public void validateProductsAreSellable(List<Product> products) {
+    //     for (Product product : products) {
+    //         validateProductIsSellable(product); // 直接呼叫，讓 ProductInactiveException 自然拋出
+    //     }
+    // }
 
     /**
      * 根據一組 ID 查詢多個商品實體。
@@ -237,30 +186,11 @@ public class ProductService {
      * @return 包含查詢到的商品實體的列表
      */
     public List<Product> findProductsByIds(Set<Integer> productIds) {
-        validateProductIds(productIds);
-        List<Product> products = productRepository.findAllById(productIds);
-        if (products.size() != productIds.size()) {
-            // 使用傳統迴圈找出缺失的 ID
-            Set<Integer> foundIdSet = new HashSet<>();
-            for (Product product : products) {
-                foundIdSet.add(product.getId());
-            }
-            Set<Integer> missingIds = new HashSet<>(productIds);
-            missingIds.removeAll(foundIdSet);
-            throw new ResourceNotFoundException("Products not found with ids: " + missingIds);
-        }
-        return products;
-    }
-
-    /**
-     * 驗證商品 ID 集合是否為空或 null。
-     *
-     * @param productIds 商品 ID 集合
-     */
-    public void validateProductIds(Set<Integer> productIds) {
-        if (productIds == null || productIds.isEmpty()) {
+        if (productIds == null) {
             throw new InvalidRequestException("Product IDs cannot be null or empty");
         }
+        List<Product> products = productRepository.findAllById(productIds);
+        return products;
     }
 
     /**
@@ -270,7 +200,6 @@ public class ProductService {
      * @return 以商品 ID 為鍵，商品詳細資訊 DTO 為值的 Map
      */
     public Map<Integer, GetProductDetailResponse> mapProductsToDetailResponses(List<Product> products) {
-        // 使用傳統迴圈進行轉換
         Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
         for (Product product : products) {
             GetProductDetailResponse detailResponse = mapProductToDetailResponse(product);
@@ -280,15 +209,14 @@ public class ProductService {
     }
 
     /**
-     * 根據 ID 查找單一商品實體。若商品不存在拋出例外
+     * 根據 ID 查找單一商品實體，若商品不存在拋出例外。主要共用丟同樣例外的部分不然code都看起來很長且自動排版還分兩行，#%^#(˙^*。
      *
      * @param productId 商品 ID
      * @return 找到的商品實體
      */
-    public Product findProductById(Integer productId) {
+    public Product findProductByIdOrThrow(Integer productId) {
         Product result = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
-        validateProductIsSellable(result);
         return result;
     }
 }

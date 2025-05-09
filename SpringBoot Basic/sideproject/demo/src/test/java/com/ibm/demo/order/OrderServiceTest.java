@@ -1,7 +1,6 @@
 package com.ibm.demo.order;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,7 +19,6 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,13 +41,9 @@ import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
-import com.ibm.demo.order.DTO.CreateOrderResponse;
-import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
-import com.ibm.demo.order.DTO.OrderItemDTO;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
-import com.ibm.demo.order.DTO.UpdateOrderResponse;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
@@ -163,15 +157,11 @@ class OrderServiceTest {
         when(orderDetailRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0)); // Return
                                                                                                             // the list
                                                                                                             // passed
-
         // Act
-        CreateOrderResponse response = orderService.createOrder(request);
+        Integer createdOrderId = orderService.createOrder(request);
 
         // Assert
-        assertNotNull(response);
-        assertEquals(101, response.getOrderId()); // 直接使用值
-        assertEquals(1, response.getAccountId()); // 直接使用值
-        assertEquals(STATUS_PENDING, response.getStatus(), "訂單狀態應為處理中(1001)");
+        assertEquals(101, createdOrderId); // 直接使用值
 
         // Verify the status of the OrderInfo object *before* it was saved
         OrderInfo capturedOrderInfo = orderInfoCaptor.getValue();
@@ -323,94 +313,112 @@ class OrderServiceTest {
     // @Test
     // @DisplayName("更新訂單成功時，應正確處理新增、更新、移除的商品，並更新庫存")
     // void updateOrder_Success_HandlesAddUpdateRemoveCorrectly() { // 更名以反映測試目標
-    //     // Arrange
-    //     // 1. Create an existing order with PENDING status
-    //     // 原訂單: 商品1 (ID=1, Qty=5), 商品2 (ID=2, Qty=3)
-    //     OrderInfo existingOrder = createTestOrderInfo(101, 1, STATUS_PENDING); // Directly use constant
-    //     // Add an existing detail
-    //     createTestOrderDetail(existingOrder, 1, 5); // 直接使用值
-    //     createTestOrderDetail(existingOrder, 2, 3); // 直接使用值
+    // // Arrange
+    // // 1. Create an existing order with PENDING status
+    // // 原訂單: 商品1 (ID=1, Qty=5), 商品2 (ID=2, Qty=3)
+    // OrderInfo existingOrder = createTestOrderInfo(101, 1, STATUS_PENDING); //
+    // Directly use constant
+    // // Add an existing detail
+    // createTestOrderDetail(existingOrder, 1, 5); // 直接使用值
+    // createTestOrderDetail(existingOrder, 2, 3); // 直接使用值
 
-    //     // 2. Mock findById
-    //     when(orderInfoRepository.findById(101)).thenReturn(Optional.of(existingOrder)); // 直接使用值
+    // // 2. Mock findById
+    // when(orderInfoRepository.findById(101)).thenReturn(Optional.of(existingOrder));
+    // // 直接使用值
 
-    //     // 3. Prepare update request (e.g., change quantity)
-    //     UpdateOrderRequest request = new UpdateOrderRequest();
-    //     request.setOrderId(101); // 直接使用值
-    //     // 更新後訂單: 商品1 (ID=1, Qty=8 -> 更新), 商品3 (ID=3, Qty=2 -> 新增), 商品2被移除
-    //     List<UpdateOrderDetailRequest> updatedItems = new ArrayList<>();
-    //     updatedItems.add(new UpdateOrderDetailRequest(1, 8)); // Update quantity, 直接使用值
-    //     updatedItems.add(new UpdateOrderDetailRequest(3, 2)); // Add new item, 直接使用值
-    //     request.setItems(updatedItems);
+    // // 3. Prepare update request (e.g., change quantity)
+    // UpdateOrderRequest request = new UpdateOrderRequest();
+    // request.setOrderId(101); // 直接使用值
+    // // 更新後訂單: 商品1 (ID=1, Qty=8 -> 更新), 商品3 (ID=3, Qty=2 -> 新增), 商品2被移除
+    // List<UpdateOrderDetailRequest> updatedItems = new ArrayList<>();
+    // updatedItems.add(new UpdateOrderDetailRequest(1, 8)); // Update quantity,
+    // 直接使用值
+    // updatedItems.add(new UpdateOrderDetailRequest(3, 2)); // Add new item, 直接使用值
+    // request.setItems(updatedItems);
 
-    //     // 4. Mock Product Details (needed for update logic)
-    //     // 假設商品1庫存100, 商品3庫存50
-    //     // 假設商品2(被移除)庫存20
-    //     Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-    //     productDetailsMap.put(1,
-    //             createTestProductDetailResponse(1, "Product 1", new BigDecimal("10.00"), 100)); // 直接使用值
-    //     productDetailsMap.put(3,
-    //             createTestProductDetailResponse(3, "Product 3", new BigDecimal("20.00"), 50)); // 直接使用值
-    //     productDetailsMap.put(2,
-    //             createTestProductDetailResponse(2, "Product 2", new BigDecimal("15.00"), 20));
-    //     // 需取得更新後訂單的所有商品 (ID=1, ID=3)
-    //     // *** 修正: 實際呼叫會包含所有變動的商品ID (1, 2, 3) ***
-    //     when(productClient.getProductDetails(Set.of(1, 2, 3))).thenReturn(productDetailsMap); // 直接使用值
+    // // 4. Mock Product Details (needed for update logic)
+    // // 假設商品1庫存100, 商品3庫存50
+    // // 假設商品2(被移除)庫存20
+    // Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
+    // productDetailsMap.put(1,
+    // createTestProductDetailResponse(1, "Product 1", new BigDecimal("10.00"),
+    // 100)); // 直接使用值
+    // productDetailsMap.put(3,
+    // createTestProductDetailResponse(3, "Product 3", new BigDecimal("20.00"),
+    // 50)); // 直接使用值
+    // productDetailsMap.put(2,
+    // createTestProductDetailResponse(2, "Product 2", new BigDecimal("15.00"),
+    // 20));
+    // // 需取得更新後訂單的所有商品 (ID=1, ID=3)
+    // // *** 修正: 實際呼叫會包含所有變動的商品ID (1, 2, 3) ***
+    // when(productClient.getProductDetails(Set.of(1, 2,
+    // 3))).thenReturn(productDetailsMap); // 直接使用值
 
-    //     // 5. Mock stock update
-    //     // 使用 ArgumentCaptor 捕獲傳遞給 updateProductsStock 的 Map
-    //     ArgumentCaptor<Map<Integer, Integer>> stockUpdateCaptor = ArgumentCaptor.forClass(Map.class);
-    //     doNothing().when(productClient).updateProductsStock(stockUpdateCaptor.capture());
+    // // 5. Mock stock update
+    // // 使用 ArgumentCaptor 捕獲傳遞給 updateProductsStock 的 Map
+    // ArgumentCaptor<Map<Integer, Integer>> stockUpdateCaptor =
+    // ArgumentCaptor.forClass(Map.class);
+    // doNothing().when(productClient).updateProductsStock(stockUpdateCaptor.capture());
 
-    //     // 6. Mock OrderDetail save (for the updated detail)
-    //     ArgumentCaptor<List<OrderDetail>> savedDetailsCaptor = ArgumentCaptor.forClass(List.class);
-    //     when(orderDetailRepository.saveAll(savedDetailsCaptor.capture()))
-    //             .thenAnswer(invocation -> invocation.getArgument(0));
-    //     // Mock OrderDetail delete (for the removed detail)
-    //     ArgumentCaptor<List<OrderDetail>> deletedDetailsCaptor = ArgumentCaptor.forClass(List.class);
-    //     doNothing().when(orderDetailRepository).deleteAll(deletedDetailsCaptor.capture());
+    // // 6. Mock OrderDetail save (for the updated detail)
+    // ArgumentCaptor<List<OrderDetail>> savedDetailsCaptor =
+    // ArgumentCaptor.forClass(List.class);
+    // when(orderDetailRepository.saveAll(savedDetailsCaptor.capture()))
+    // .thenAnswer(invocation -> invocation.getArgument(0));
+    // // Mock OrderDetail delete (for the removed detail)
+    // ArgumentCaptor<List<OrderDetail>> deletedDetailsCaptor =
+    // ArgumentCaptor.forClass(List.class);
+    // doNothing().when(orderDetailRepository).deleteAll(deletedDetailsCaptor.capture());
 
-    //     // 7. Mock OrderInfo save
-    //     when(orderInfoRepository.save(any(OrderInfo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    // // 7. Mock OrderInfo save
+    // when(orderInfoRepository.save(any(OrderInfo.class))).thenAnswer(invocation ->
+    // invocation.getArgument(0));
 
-    //     // Act
-    //     // We expect this *not* to throw OrderStatusInvalidException
-    //     // We can assert the response or verify interactions to confirm processing
-    //     // continued
-    //     UpdateOrderResponse response = orderService.updateOrder(request);
+    // // Act
+    // // We expect this *not* to throw OrderStatusInvalidException
+    // // We can assert the response or verify interactions to confirm processing
+    // // continued
+    // UpdateOrderResponse response = orderService.updateOrder(request);
 
-    //     // Assert
-    //     assertNotNull(response);
-    //     assertEquals(101, response.getOrderId()); // 直接使用值
-    //     // 驗證回傳的項目數量是否正確
-    //     assertEquals(2, response.getItems().size());
-    //     assertTrue(response.getItems().stream().anyMatch(item -> item.getProductId() == 1 && item.getQuantity() == 8));
-    //     assertTrue(response.getItems().stream().anyMatch(item -> item.getProductId() == 3 && item.getQuantity() == 2));
+    // // Assert
+    // assertNotNull(response);
+    // assertEquals(101, response.getOrderId()); // 直接使用值
+    // // 驗證回傳的項目數量是否正確
+    // assertEquals(2, response.getItems().size());
+    // assertTrue(response.getItems().stream().anyMatch(item -> item.getProductId()
+    // == 1 && item.getQuantity() == 8));
+    // assertTrue(response.getItems().stream().anyMatch(item -> item.getProductId()
+    // == 3 && item.getQuantity() == 2));
 
-    //     // Verify that processing continued beyond the status check
-    //     verify(orderInfoRepository, times(1)).findById(101); // 直接使用值
-    //     verify(productClient, times(1)).getProductDetails(Set.of(1, 2, 3)); // 驗證取得的是所有變動商品的詳情
+    // // Verify that processing continued beyond the status check
+    // verify(orderInfoRepository, times(1)).findById(101); // 直接使用值
+    // verify(productClient, times(1)).getProductDetails(Set.of(1, 2, 3)); //
+    // 驗證取得的是所有變動商品的詳情
 
-    //     // 驗證庫存更新
-    //     verify(productClient, times(1)).updateProductsStock(anyMap()); // 驗證庫存更新被呼叫
-    //     Map<Integer, Integer> capturedStockUpdates = stockUpdateCaptor.getValue();
-    //     assertNotNull(capturedStockUpdates);
-    //     assertEquals(3, capturedStockUpdates.size(), "應包含所有變動商品的庫存更新 (1+2+3)");
-    //     // 商品1: 原5 -> 新8, 庫存應減少 3 (100 - 3 = 97)
-    //     assertEquals(97, capturedStockUpdates.get(1));
-    //     // 商品2: 原3 -> 移除, 庫存應增加 3 (20 + 3 = 23)
-    //     assertEquals(23, capturedStockUpdates.get(2));
-    //     // 商品3: 新增2, 庫存應減少 2 (50 - 2 = 48)
-    //     assertEquals(48, capturedStockUpdates.get(3));
+    // // 驗證庫存更新
+    // verify(productClient, times(1)).updateProductsStock(anyMap()); // 驗證庫存更新被呼叫
+    // Map<Integer, Integer> capturedStockUpdates = stockUpdateCaptor.getValue();
+    // assertNotNull(capturedStockUpdates);
+    // assertEquals(3, capturedStockUpdates.size(), "應包含所有變動商品的庫存更新 (1+2+3)");
+    // // 商品1: 原5 -> 新8, 庫存應減少 3 (100 - 3 = 97)
+    // assertEquals(97, capturedStockUpdates.get(1));
+    // // 商品2: 原3 -> 移除, 庫存應增加 3 (20 + 3 = 23)
+    // assertEquals(23, capturedStockUpdates.get(2));
+    // // 商品3: 新增2, 庫存應減少 2 (50 - 2 = 48)
+    // assertEquals(48, capturedStockUpdates.get(3));
 
-    //     verify(orderDetailRepository, times(1)).deleteAll(deletedDetailsCaptor.capture()); // 驗證刪除商品2
-    //     assertEquals(1, deletedDetailsCaptor.getValue().size());
-    //     assertEquals(2, deletedDetailsCaptor.getValue().get(0).getProductId());
-    //     verify(orderDetailRepository, times(1)).saveAll(savedDetailsCaptor.capture()); // 驗證儲存商品1和3
-    //     assertEquals(2, savedDetailsCaptor.getValue().size());
-    //     assertTrue(savedDetailsCaptor.getValue().stream().anyMatch(d -> d.getProductId() == 1 && d.getQuantity() == 8));
-    //     assertTrue(savedDetailsCaptor.getValue().stream().anyMatch(d -> d.getProductId() == 3 && d.getQuantity() == 2));
-    //     verify(orderInfoRepository, times(1)).save(any(OrderInfo.class)); // Called
+    // verify(orderDetailRepository,
+    // times(1)).deleteAll(deletedDetailsCaptor.capture()); // 驗證刪除商品2
+    // assertEquals(1, deletedDetailsCaptor.getValue().size());
+    // assertEquals(2, deletedDetailsCaptor.getValue().get(0).getProductId());
+    // verify(orderDetailRepository,
+    // times(1)).saveAll(savedDetailsCaptor.capture()); // 驗證儲存商品1和3
+    // assertEquals(2, savedDetailsCaptor.getValue().size());
+    // assertTrue(savedDetailsCaptor.getValue().stream().anyMatch(d ->
+    // d.getProductId() == 1 && d.getQuantity() == 8));
+    // assertTrue(savedDetailsCaptor.getValue().stream().anyMatch(d ->
+    // d.getProductId() == 3 && d.getQuantity() == 2));
+    // verify(orderInfoRepository, times(1)).save(any(OrderInfo.class)); // Called
     // }
 
     @Test
@@ -576,73 +584,77 @@ class OrderServiceTest {
 
     // --- Tests for getOrderList ---
 
-    // @Test
-    // @DisplayName("取得訂單列表成功，應回傳該帳戶的訂單列表及總金額")
-    // void getOrderList_Success_ShouldReturnOrderList() {
-    //     // Arrange
-    //     Integer accountId = 1;
-    //     doNothing().when(accountClient).validateActiveAccount(accountId);
+    @Test
+    @DisplayName("取得訂單列表成功，應只回傳該帳戶狀態為處理中(1001)的訂單列表及總金額") // Updated description
+    void getOrderList_Success_ShouldReturnOnlyPendingOrders() { // Updated method name
+        // Arrange
+        Integer accountId = 1;
+        doNothing().when(accountClient).validateActiveAccount(accountId);
 
-    //     // Create two orders for the account
-    //     OrderInfo order1 = createTestOrderInfo(101, accountId, STATUS_PENDING);
-    //     OrderDetail detail1_1 = createTestOrderDetail(order1, 1, 2); // P1, Qty 2
-    //     OrderDetail detail1_2 = createTestOrderDetail(order1, 2, 1); // P2, Qty 1
+        // Create one PENDING order and one COMPLETED order
+        OrderInfo pendingOrder = createTestOrderInfo(101, accountId, STATUS_PENDING);
+        createTestOrderDetail(pendingOrder, 1, 2); // P1, Qty 2
+        createTestOrderDetail(pendingOrder, 2, 1); // P2, Qty 1
 
-    //     OrderInfo order2 = createTestOrderInfo(102, accountId, STATUS_COMPLETED);
-    //     OrderDetail detail2_1 = createTestOrderDetail(order2, 1, 3); // P1, Qty 3
+        // This order should NOT be returned by the modified findByAccountId
+        OrderInfo completedOrder = createTestOrderInfo(102, accountId, STATUS_COMPLETED);
+        createTestOrderDetail(completedOrder, 1, 3); // P1, Qty 3
 
-    //     List<OrderInfo> orders = List.of(order1, order2);
-    //     when(orderInfoRepository.findByAccountId(accountId)).thenReturn(orders);
+        // Mock findByAccountId to return ONLY the pending order, reflecting the new
+        // query
+        List<OrderInfo> pendingOrdersOnly = List.of(pendingOrder);
+        when(orderInfoRepository.findByAccountId(accountId)).thenReturn(pendingOrdersOnly);
 
-    //     // Mock product details needed for total amount calculation
-    //     Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-    //     productDetailsMap.put(1, createTestProductDetailResponse(1, "P1", new BigDecimal("10.00"), 50));
-    //     productDetailsMap.put(2, createTestProductDetailResponse(2, "P2", new BigDecimal("25.50"), 30));
-    //     when(productClient.getProductDetails(Set.of(1, 2))).thenReturn(productDetailsMap); // For order1
-    //     when(productClient.getProductDetails(Set.of(1))).thenReturn(Map.of(1, productDetailsMap.get(1))); // For order2
+        // Mock product details needed for total amount calculation for the PENDING
+        // order
+        Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
+        productDetailsMap.put(1, createTestProductDetailResponse(1, "P1", new BigDecimal("10.00"), 50));
+        productDetailsMap.put(2, createTestProductDetailResponse(2, "P2", new BigDecimal("25.50"), 30));
+        // Only need details for products in the pending order (1 and 2)
+        when(productClient.getProductDetails(Set.of(1, 2))).thenReturn(productDetailsMap);
 
-    //     // Act
-    //     List<GetOrderListResponse> responseList = orderService.getOrderList(accountId);
+        // Act
+        List<GetOrderListResponse> responseList = orderService.getOrderList(accountId);
 
-    //     // Assert
-    //     assertNotNull(responseList);
-    //     assertEquals(2, responseList.size());
+        // Assert
+        assertNotNull(responseList);
+        // Should only return the PENDING order
+        assertEquals(1, responseList.size());
 
-    //     // Check Order 1
-    //     GetOrderListResponse res1 = responseList.stream().filter(r -> r.getOrderId() == 101).findFirst().orElseThrow();
-    //     assertEquals(STATUS_PENDING, res1.getStatus());
-    //     // Expected Total for Order 1: (2 * 10.00) + (1 * 25.50) = 20.00 + 25.50 = 45.50
-    //     assertEquals(new BigDecimal("45.50"), res1.getTotalAmount());
+        // Check the details of the returned (pending) order
+        GetOrderListResponse res1 = responseList.get(0); // Only one item expected
+        assertEquals(101, res1.getOrderId());
+        assertEquals(STATUS_PENDING, res1.getStatus());
+        // Expected Total for Pending Order: (2 * 10.00) + (1 * 25.50) = 20.00 + 25.50 =
+        // 45.50
+        assertEquals(new BigDecimal("45.50"), res1.getTotalAmount());
 
-    //     // Check Order 2
-    //     GetOrderListResponse res2 = responseList.stream().filter(r -> r.getOrderId() == 102).findFirst().orElseThrow();
-    //     assertEquals(STATUS_COMPLETED, res2.getStatus());
-    //     // Expected Total for Order 2: (3 * 10.00) = 30.00
-    //     assertEquals(new BigDecimal("30.00"), res2.getTotalAmount());
-
-    //     verify(accountClient, times(1)).validateActiveAccount(accountId);
-    //     verify(orderInfoRepository, times(1)).findByAccountId(accountId);
-    //     verify(productClient, times(2)).getProductDetails(anySet()); // Called once per order
-    // }
+        verify(accountClient, times(1)).validateActiveAccount(accountId);
+        verify(orderInfoRepository, times(1)).findByAccountId(accountId);
+        // Called once for the single pending order returned
+        verify(productClient, times(1)).getProductDetails(Set.of(1, 2));
+    }
 
     // @Test
     // @DisplayName("取得訂單列表時，若帳戶無訂單，應回傳空列表")
     // void getOrderList_WhenNoOrders_ShouldReturnEmptyList() {
-    //     // Arrange
-    //     Integer accountId = 2;
-    //     doNothing().when(accountClient).validateActiveAccount(accountId);
-    //     when(orderInfoRepository.findByAccountId(accountId)).thenReturn(Collections.emptyList());
+    // // Arrange
+    // Integer accountId = 2;
+    // doNothing().when(accountClient).validateActiveAccount(accountId);
+    // when(orderInfoRepository.findByAccountId(accountId)).thenReturn(Collections.emptyList());
 
-    //     // Act
-    //     List<GetOrderListResponse> responseList = orderService.getOrderList(accountId);
+    // // Act
+    // List<GetOrderListResponse> responseList =
+    // orderService.getOrderList(accountId);
 
-    //     // Assert
-    //     assertNotNull(responseList);
-    //     assertTrue(responseList.isEmpty());
+    // // Assert
+    // assertNotNull(responseList);
+    // assertTrue(responseList.isEmpty());
 
-    //     verify(accountClient, times(1)).validateActiveAccount(accountId);
-    //     verify(orderInfoRepository, times(1)).findByAccountId(accountId);
-    //     verify(productClient, never()).getProductDetails(anySet()); // No orders, no need to get product details
+    // verify(accountClient, times(1)).validateActiveAccount(accountId);
+    // verify(orderInfoRepository, times(1)).findByAccountId(accountId);
+    // verify(productClient, never()).getProductDetails(anySet()); // No orders, no
+    // need to get product details
     // }
 
     @Test
@@ -669,95 +681,108 @@ class OrderServiceTest {
     // @Test
     // @DisplayName("取得訂單詳情成功，應回傳包含商品資訊的完整明細")
     // void getOrderDetails_Success_ShouldReturnFullDetails() {
-    //     // Arrange
-    //     Integer orderId = 101;
-    //     Integer accountId = 1;
-    //     OrderInfo order = createTestOrderInfo(orderId, accountId, STATUS_PENDING);
-    //     OrderDetail detail1 = createTestOrderDetail(order, 1, 2); // P1, Qty 2
-    //     OrderDetail detail2 = createTestOrderDetail(order, 2, 1); // P2, Qty 1
+    // // Arrange
+    // Integer orderId = 101;
+    // Integer accountId = 1;
+    // OrderInfo order = createTestOrderInfo(orderId, accountId, STATUS_PENDING);
+    // OrderDetail detail1 = createTestOrderDetail(order, 1, 2); // P1, Qty 2
+    // OrderDetail detail2 = createTestOrderDetail(order, 2, 1); // P2, Qty 1
 
-    //     when(orderInfoRepository.findById(orderId)).thenReturn(Optional.of(order));
+    // when(orderInfoRepository.findById(orderId)).thenReturn(Optional.of(order));
 
-    //     // Mock product details
-    //     Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-    //     productDetailsMap.put(1, createTestProductDetailResponse(1, "Product A", new BigDecimal("15.00"), 50));
-    //     productDetailsMap.put(2, createTestProductDetailResponse(2, "Product B", new BigDecimal("30.00"), 30));
-    //     when(productClient.getProductDetails(Set.of(1, 2))).thenReturn(productDetailsMap);
+    // // Mock product details
+    // Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
+    // productDetailsMap.put(1, createTestProductDetailResponse(1, "Product A", new
+    // BigDecimal("15.00"), 50));
+    // productDetailsMap.put(2, createTestProductDetailResponse(2, "Product B", new
+    // BigDecimal("30.00"), 30));
+    // when(productClient.getProductDetails(Set.of(1,
+    // 2))).thenReturn(productDetailsMap);
 
-    //     // Act
-    //     GetOrderDetailResponse response = orderService.getOrderDetails(orderId);
+    // // Act
+    // GetOrderDetailResponse response = orderService.getOrderDetails(orderId);
 
-    //     // Assert
-    //     assertNotNull(response);
-    //     assertEquals(accountId, response.getAccountId());
-    //     assertEquals(STATUS_PENDING, response.getOrderStatus());
-    //     // Expected Total: (2 * 15.00) + (1 * 30.00) = 30.00 + 30.00 = 60.00
-    //     assertEquals(new BigDecimal("60.00"), response.getTotalAmount());
-    //     assertEquals(2, response.getItems().size());
+    // // Assert
+    // assertNotNull(response);
+    // assertEquals(accountId, response.getAccountId());
+    // assertEquals(STATUS_PENDING, response.getOrderStatus());
+    // // Expected Total: (2 * 15.00) + (1 * 30.00) = 30.00 + 30.00 = 60.00
+    // assertEquals(new BigDecimal("60.00"), response.getTotalAmount());
+    // assertEquals(2, response.getItems().size());
 
-    //     // Check Item 1
-    //     OrderItemDTO item1 = response.getItems().stream().filter(i -> i.getProductId() == 1).findFirst().orElseThrow();
-    //     assertEquals("Product A", item1.getProductName());
-    //     assertEquals(2, item1.getQuantity());
-    //     assertEquals(new BigDecimal("15.00"), item1.getProductPrice());
+    // // Check Item 1
+    // OrderItemDTO item1 = response.getItems().stream().filter(i ->
+    // i.getProductId() == 1).findFirst().orElseThrow();
+    // assertEquals("Product A", item1.getProductName());
+    // assertEquals(2, item1.getQuantity());
+    // assertEquals(new BigDecimal("15.00"), item1.getProductPrice());
 
-    //     // Check Item 2
-    //     OrderItemDTO item2 = response.getItems().stream().filter(i -> i.getProductId() == 2).findFirst().orElseThrow();
-    //     assertEquals("Product B", item2.getProductName());
-    //     assertEquals(1, item2.getQuantity());
-    //     assertEquals(new BigDecimal("30.00"), item2.getProductPrice());
+    // // Check Item 2
+    // OrderItemDTO item2 = response.getItems().stream().filter(i ->
+    // i.getProductId() == 2).findFirst().orElseThrow();
+    // assertEquals("Product B", item2.getProductName());
+    // assertEquals(1, item2.getQuantity());
+    // assertEquals(new BigDecimal("30.00"), item2.getProductPrice());
 
-    //     verify(orderInfoRepository, times(1)).findById(orderId);
-    //     verify(productClient, times(2)).getProductDetails(Set.of(1, 2)); // Called once for details, once for total
+    // verify(orderInfoRepository, times(1)).findById(orderId);
+    // verify(productClient, times(2)).getProductDetails(Set.of(1, 2)); // Called
+    // once for details, once for total
     // }
 
     // @Test
     // @DisplayName("取得訂單詳情時，若訂單不存在，應拋出 ResourceNotFoundException")
-    // void getOrderDetails_WhenOrderNotFound_ShouldThrowResourceNotFoundException() {
-    //     // Arrange
-    //     Integer orderId = 999;
-    //     when(orderInfoRepository.findById(orderId)).thenReturn(Optional.empty());
+    // void getOrderDetails_WhenOrderNotFound_ShouldThrowResourceNotFoundException()
+    // {
+    // // Arrange
+    // Integer orderId = 999;
+    // when(orderInfoRepository.findById(orderId)).thenReturn(Optional.empty());
 
-    //     // Act & Assert
-    //     ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-    //         orderService.getOrderDetails(orderId);
-    //     });
-    //     assertTrue(exception.getMessage().contains("Order not found with id: " + orderId));
+    // // Act & Assert
+    // ResourceNotFoundException exception =
+    // assertThrows(ResourceNotFoundException.class, () -> {
+    // orderService.getOrderDetails(orderId);
+    // });
+    // assertTrue(exception.getMessage().contains("Order not found with id: " +
+    // orderId));
 
-    //     verify(orderInfoRepository, times(1)).findById(orderId);
-    //     verify(productClient, never()).getProductDetails(anySet());
+    // verify(orderInfoRepository, times(1)).findById(orderId);
+    // verify(productClient, never()).getProductDetails(anySet());
     // }
 
     // --- Tests for AccountIdIsInOrder ---
 
+    @Test
+    @DisplayName("檢查帳戶是否有處理中訂單時，若有處理中(1001)訂單，應回傳 true") // Updated description
+    void accountIdIsInOrder_WhenPendingOrdersExist_ShouldReturnTrue() { // Updated method name
+        // Arrange
+        Integer accountId = 1;
+        // Create a mock order with PENDING status
+        OrderInfo pendingOrder = createTestOrderInfo(101, accountId, STATUS_PENDING);
+        // Mock findByAccountId to return a list containing the pending order
+        when(orderInfoRepository.findByAccountId(accountId)).thenReturn(List.of(pendingOrder));
+
+        // Act
+        boolean result = orderService.ActiveAccountIdIsInOrder(accountId); // Use the actual method name
+
+        // Assert
+        assertTrue(result);
+        verify(orderInfoRepository, times(1)).findByAccountId(accountId);
+    }
+
     // @Test
-    // @DisplayName("檢查帳戶是否有訂單時，若有訂單，應回傳 true")
-    // void accountIdIsInOrder_WhenOrdersExist_ShouldReturnTrue() {
-    //     // Arrange
-    //     Integer accountId = 1;
-    //     when(orderInfoRepository.findByAccountId(accountId)).thenReturn(List.of(new OrderInfo())); // Return non-empty
-    //                                                                                                // list
+    // @DisplayName("檢查帳戶是否有處理中訂單時，若無處理中(1001)訂單，應回傳 false") // Updated description
+    // void accountIdIsInOrder_WhenNoPendingOrdersExist_ShouldReturnFalse() { //
+    // Updated method name
+    // // Arrange
+    // Integer accountId = 2;
+    // when(orderInfoRepository.findByAccountId(accountId)).thenReturn(Collections.emptyList());
+    // // Still valid
 
-    //     // Act
-    //     boolean result = orderService.AccountIdIsInOrder(accountId);
+    // // Act
+    // boolean result = orderService.AccountIdIsInOrder(accountId);
 
-    //     // Assert
-    //     assertTrue(result);
-    //     verify(orderInfoRepository, times(1)).findByAccountId(accountId);
-    // }
-
-    // @Test
-    // @DisplayName("檢查帳戶是否有訂單時，若無訂單，應回傳 false")
-    // void accountIdIsInOrder_WhenNoOrdersExist_ShouldReturnFalse() {
-    //     // Arrange
-    //     Integer accountId = 2;
-    //     when(orderInfoRepository.findByAccountId(accountId)).thenReturn(Collections.emptyList()); // Return empty list
-
-    //     // Act
-    //     boolean result = orderService.AccountIdIsInOrder(accountId);
-
-    //     // Assert
-    //     assertFalse(result);
-    //     verify(orderInfoRepository, times(1)).findByAccountId(accountId);
+    // // Assert
+    // assertFalse(result);
+    // verify(orderInfoRepository, times(1)).findByAccountId(accountId);
     // }
 }

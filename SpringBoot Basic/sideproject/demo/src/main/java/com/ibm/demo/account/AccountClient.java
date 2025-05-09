@@ -38,7 +38,7 @@ public class AccountClient {
 
     public void validateActiveAccount(Integer accountId) {
         try {
-            webClient.get()
+            webClient.post()
                     .uri("/validate/{accountId}", accountId)
                     .retrieve()
                     .bodyToMono(Void.class)
@@ -54,14 +54,6 @@ public class AccountClient {
             // 對於其他 4xx/5xx 錯誤
             throw new RuntimeException("呼叫帳戶服務驗證失敗: " + errorMessage, ex);
         }
-    }
-
-    public void validateAccountExist(Integer accountId) {
-        webClient.get()
-                .uri("/exist/{accountId}", accountId)
-                .retrieve()
-                .bodyToMono(Void.class)
-                .block();
     }
 
     // 輔助方法，嘗試從 WebClientResponseException 中提取下游服務的錯誤訊息

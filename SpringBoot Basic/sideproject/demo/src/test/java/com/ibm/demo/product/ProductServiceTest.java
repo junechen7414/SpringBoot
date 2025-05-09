@@ -30,11 +30,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
-import com.ibm.demo.product.DTO.CreateProductResponse;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
-import com.ibm.demo.product.DTO.UpdateProductResponse;
 
 @ExtendWith(MockitoExtension.class)
 class ProductServiceTest {
@@ -81,16 +79,10 @@ class ProductServiceTest {
         when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
 
         // Act
-        CreateProductResponse response = productService.createProduct(request);
+        Integer createdProductId = productService.createProduct(request);
 
-        // Assert
-        assertNotNull(response);
-        assertEquals(savedProduct.getId(), response.getId());
-        assertEquals(savedProduct.getName(), response.getName());
-        assertEquals(savedProduct.getPrice(), response.getPrice());
-        assertEquals(savedProduct.getStockQty(), response.getStockQty());
-        assertEquals(1001, response.getSaleStatus()); // Verify default status
-        assertEquals(savedProduct.getCreateDate(), response.getCreateDate());
+        // Assert        
+        assertEquals(savedProduct.getId(), createdProductId);        
 
         // Verify that save was called with the correct product details (before ID/date)
         ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
@@ -152,15 +144,15 @@ class ProductServiceTest {
         assertEquals(existingProduct.getStockQty(), savedProduct.getStockQty());
     }
 
-    @Test
-    @DisplayName("驗證產品是否可銷售時，若產品不可銷售應拋出ProductInactiveException")
-    void testValidateProductIsSellable_ThrowsProductInactiveException() {
-        // Arrange
-        Product product = createTestProduct(1, "Inactive Product", BigDecimal.ONE, 1002, 0);
+    // @Test
+    // @DisplayName("驗證產品是否可銷售時，若產品不可銷售應拋出ProductInactiveException")
+    // void testValidateProductIsSellable_ThrowsProductInactiveException() {
+    //     // Arrange
+    //     Product product = createTestProduct(1, "Inactive Product", BigDecimal.ONE, 1002, 0);
 
-        // Act & Assert
-        assertThrows(ProductInactiveException.class, () -> productService.validateProductIsSellable(product));
-    }
+    //     // Act & Assert
+    //     assertThrows(ProductInactiveException.class, () -> productService.validateProductIsSellable(product));
+    // }
 
     @Test
     @DisplayName("取得產品詳情時，若產品不可銷售應拋出ProductInactiveException")
@@ -286,7 +278,7 @@ class ProductServiceTest {
         when(productRepository.findById(productId)).thenReturn(Optional.of(expectedProduct));
 
         // Act
-        Product actualProduct = productService.findProductById(productId);
+        Product actualProduct = productService.findProductByIdOrThrow(productId);
 
         // Assert
         assertNotNull(actualProduct);
@@ -440,17 +432,8 @@ class ProductServiceTest {
         when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
 
         // Act
-        UpdateProductResponse response = productService.updateProduct(request);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(savedProduct.getId(), response.getId());
-        assertEquals(savedProduct.getName(), response.getName());
-        assertEquals(savedProduct.getPrice(), response.getPrice());
-        assertEquals(savedProduct.getSaleStatus(), response.getSaleStatus());
-        assertEquals(savedProduct.getStockQty(), response.getStockQty());
-        assertEquals(savedProduct.getModifiedDate(), response.getModifiedDate());
-
+        productService.updateProduct(request);
+        
         // Verify interactions
         verify(productRepository, times(1)).findById(productId);
         ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);

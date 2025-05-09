@@ -3,7 +3,9 @@ package com.ibm.demo;
 import java.time.LocalDateTime;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode; // 新增 import
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
@@ -63,6 +65,38 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 // ,request.getDescription(false).replace("uri=", "")
                 );
 
+                return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
+        }
+
+        // 處理MethodArgumentNotValidException
+        @Override
+        // 移除 @ExceptionHandler(MethodArgumentNotValidException.class) 因為繼承的方法已有
+        protected ResponseEntity<Object> handleMethodArgumentNotValid(
+                        MethodArgumentNotValidException ex,
+                        org.springframework.http.HttpHeaders headers, // 修正 import
+                        HttpStatusCode status, // 使用 HttpStatusCode
+                        WebRequest request) {
+
+                // 用 StringBuilder 來組合多個錯誤訊息
+                StringBuilder errorMessage = new StringBuilder("Validation failed: ");
+                ex.getBindingResult().getFieldErrors().forEach(fieldError -> {
+                    errorMessage.append("[Field: '")
+                                .append(fieldError.getField())
+                                .append("', Message: '")
+                                .append(fieldError.getDefaultMessage())
+                                .append("']; ");
+                });
+                // 移除最後多餘的分號和空格
+                if (errorMessage.length() > "Validation failed: ".length()) {
+                    errorMessage.setLength(errorMessage.length() - 2);
+                }
+
+                ApiErrorResponse apiErrorResponse = new ApiErrorResponse(
+                                LocalDateTime.now(),
+                                HttpStatus.BAD_REQUEST.value(),
+                                "Validation Error", // 可以給一個更明確的錯誤類型
+                                errorMessage.toString() // 使用組合後的訊息
+                );
                 return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
         }
 

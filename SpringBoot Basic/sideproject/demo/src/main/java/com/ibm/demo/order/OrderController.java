@@ -13,16 +13,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ibm.demo.order.DTO.CreateOrderRequest;
-import com.ibm.demo.order.DTO.CreateOrderResponse;
 import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
-import com.ibm.demo.order.DTO.UpdateOrderResponse;
 
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/orders") // 基礎路徑
+@RequestMapping("/order") // 基礎路徑
 public class OrderController {
     private final OrderService orderService;
 
@@ -31,10 +29,10 @@ public class OrderController {
     }
 
     // Create Order
-    @PostMapping
-    public ResponseEntity<CreateOrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest createOrderRequest) {
-        CreateOrderResponse createOrderResponse = orderService.createOrder(createOrderRequest);
-        return ResponseEntity.ok(createOrderResponse);
+    @PostMapping("/create")
+    public ResponseEntity<Integer> createOrder(@Valid @RequestBody CreateOrderRequest createOrderRequest) {
+        Integer orderId = orderService.createOrder(createOrderRequest);
+        return ResponseEntity.ok(orderId);
     }
 
     // Read Order List
@@ -47,19 +45,19 @@ public class OrderController {
     // Read Order Detail
     @GetMapping("/getDetail/{orderId}")
     public ResponseEntity<GetOrderDetailResponse> getOrderDetails(@PathVariable Integer orderId) {
-        GetOrderDetailResponse getOrderDetailResponse = orderService.getOrderDetails(orderId);
+        GetOrderDetailResponse getOrderDetailResponse = orderService.getOrderDetail(orderId);
         return ResponseEntity.ok(getOrderDetailResponse);
     }
 
     // Update Order
-    @PutMapping
-    public ResponseEntity<UpdateOrderResponse> updateOrder(@Valid @RequestBody UpdateOrderRequest updateOrderRequest) {
-        UpdateOrderResponse updateOrderResponse = orderService.updateOrder(updateOrderRequest);
-        return ResponseEntity.ok(updateOrderResponse);
+    @PutMapping("/update")
+    public ResponseEntity<Void> updateOrder(@Valid @RequestBody UpdateOrderRequest updateOrderRequest) {
+        orderService.updateOrder(updateOrderRequest);
+        return ResponseEntity.ok().build();
     }
 
     // Delete Order
-    @DeleteMapping("/{orderId}")
+    @DeleteMapping("/delete/{orderId}")
     public ResponseEntity<Void> deleteOrder(@PathVariable Integer orderId) {
         orderService.deleteOrder(orderId);
         return ResponseEntity.noContent().build();
@@ -68,7 +66,7 @@ public class OrderController {
     // 帳戶ID是否存在任何訂單中
     @GetMapping("/AccountIdIsInOrder/{accountId}")
     public ResponseEntity<Boolean> AccountIdIsInOrder(@PathVariable Integer accountId) {
-        boolean isExist = orderService.AccountIdIsInOrder(accountId);
+        boolean isExist = orderService.ActiveAccountIdIsInOrder(accountId);
         return ResponseEntity.ok(isExist);
     }
 }

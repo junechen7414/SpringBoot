@@ -13,7 +13,6 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 
 @Component
@@ -46,9 +45,6 @@ public class ProductClient {
             if (ex.getStatusCode() == HttpStatusCode.valueOf(404)) {
                 // 商品服務的 404 意味著有商品 ID 找不到
                 throw new ResourceNotFoundException(errorMessage);
-            } else if (ex.getStatusCode() == HttpStatusCode.valueOf(400)) {
-                // 商品服務的 400 表示商品不可銷售
-                throw new ProductInactiveException(errorMessage);
             }
             throw new RuntimeException("呼叫商品服務失敗: " + errorMessage, ex);
         }
