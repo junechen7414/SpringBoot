@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
@@ -37,12 +38,17 @@ public class ProductService {
      */
     @Transactional
     public Integer createProduct(CreateProductRequest product_DTO) {
+        // 1. 驗證商品名稱是否已存在
+        String requestProductName = product_DTO.getName();        
+        checkProductExistsByNameOrThrow(requestProductName);
+        // 2. 建構商品實體
         Product newProduct = new Product();
-        newProduct.setName(product_DTO.getName());
+        newProduct.setName(requestProductName);
         newProduct.setPrice(product_DTO.getPrice());
         newProduct.setStockQty(product_DTO.getStockQty());
         // 預設銷售狀態為 1001 (可銷售)
         newProduct.setSaleStatus(1001);
+        // 3. 儲存商品資料
         Product savedProduct = productRepository.save(newProduct);
         return savedProduct.getId();
     }
@@ -97,12 +103,15 @@ public class ProductService {
         // 1. 取得商品實體並驗證帳戶是否存在否則拋出例外
         Integer productId = updateProductRequestDto.getId();
         Product existingProduct = findProductByIdOrThrow(productId);
-        // 2. 更新商品屬性
+        // 2. 驗證商品名稱是否已存在
+        String requestProductName = updateProductRequestDto.getName();
+        checkProductExistsByNameOrThrow(requestProductName);
+        // 3. 更新商品屬性
         existingProduct.setName(updateProductRequestDto.getName());
         existingProduct.setPrice(updateProductRequestDto.getPrice());
         existingProduct.setSaleStatus(updateProductRequestDto.getSaleStatus());
         existingProduct.setStockQty(updateProductRequestDto.getStockQty());
-        // 3. 儲存商品資料
+        // 4. 儲存商品資料
         productRepository.save(existingProduct);
     }
 
@@ -206,6 +215,13 @@ public class ProductService {
             productDetailsMap.put(product.getId(), detailResponse);
         }
         return productDetailsMap;
+    }
+
+    // 根據商品名稱檢查商品是否已存在
+    public void checkProductExistsByNameOrThrow(String productName) {
+        if(productRepository.existsByName(productName)){
+            throw new ProductAlreadyExistException(productName + " already exists");
+        }
     }
 
     /**

@@ -13,8 +13,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
+import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
@@ -53,13 +55,13 @@ public class OrderService {
         }
 
         /**
-         * @param createOrderRequest         
+         * @param createOrderRequest
          */
         @Transactional
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 // 驗證帳戶存在且狀態為啟用
                 Integer accountId = createOrderRequest.getAccountId();
-                validateActiveAccount(accountId);
+                validateActiveAccountOrThrow(accountId);
                 logger.info("找到啟用中帳戶，ID: {}", accountId);
 
                 // 宣告新訂單並初始化
@@ -330,6 +332,7 @@ public class OrderService {
                 }
 
                 // 12. 儲存 OrderInfo 並獲取更新後的實體
+                existingOrderInfo.setStatus(updateOrderRequest.getOrderStatus());
                 OrderInfo savedOrderInfo = orderInfoRepository.save(existingOrderInfo);
                 logger.info("OrderInfo saved, ID: {}", savedOrderInfo.getId());
         }
@@ -347,7 +350,7 @@ public class OrderService {
                 logger.info("找到要刪除的訂單，ID: {}", orderId);
 
                 // 2. 驗證訂單狀態
-                if (existingOrderInfo.getStatus() == 1003){
+                if (existingOrderInfo.getStatus() == 1003) {
                         throw new ResourceNotFoundException("Order not found with ID: " + orderId);
                 }
                 if (existingOrderInfo.getStatus() != 1001) {
@@ -380,7 +383,13 @@ public class OrderService {
                 // 5. 批量更新商品庫存
                 batchUpdateProductStock(stockUpdates);
 
-                // 6. 更新訂單狀態為已刪除(1003)
+                // 6. 刪除訂單明細
+                List<OrderDetail> orderDetailsToDelete = existingOrderInfo.getOrderDetails();
+                orderDetailRepository.deleteAll(orderDetailsToDelete);
+                existingOrderInfo.getOrderDetails().removeAll(orderDetailsToDelete);
+                logger.info("批量刪除訂單明細");
+
+                // 7. 更新訂單狀態為已刪除(1003)
                 existingOrderInfo.setStatus(1003);
                 orderInfoRepository.save(existingOrderInfo);
 
@@ -391,19 +400,22 @@ public class OrderService {
          * @param accountId
          */
         // functions to share
-        private void validateActiveAccount(Integer accountId) {
-                accountClient.validateActiveAccount(accountId);
+        private void validateActiveAccountOrThrow(Integer accountId) {
+                GetAccountDetailResponse accountDetail = accountClient.getAccountDetail(accountId);
+                if (accountDetail.getStatus().equals("N")) {
+                        throw new AccountInactiveException("帳戶狀態停用");
+                }
         }
 
         /**
          * @param orderInfo
          */
-        private void validateOrderStatus(OrderInfo orderInfo) {
-                Integer orderStatus = orderInfo.getStatus();
-                if (orderStatus != 1001) {
-                        throw new OrderStatusInvalidException("訂單狀態不允許更新商品項目，目前狀態: " + orderStatus);
-                }
-        }
+        // private void validateOrderStatus(OrderInfo orderInfo) {
+        // Integer orderStatus = orderInfo.getStatus();
+        // if (orderStatus != 1001) {
+        // throw new OrderStatusInvalidException("訂單狀態不允許更新商品項目，目前狀態: " + orderStatus);
+        // }
+        // }
 
         /**
          * @param productIds

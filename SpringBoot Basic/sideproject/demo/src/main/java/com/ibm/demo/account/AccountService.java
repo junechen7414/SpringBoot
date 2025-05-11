@@ -9,7 +9,6 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.exception.ResourceNotFoundException;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.order.OrderClient;
 
@@ -101,13 +100,13 @@ public class AccountService {
     // --- Private Helper Methods ---
     
     // validateAccount
-    @Transactional
-    public void validateAccount(Integer accountId) {
-        Account existingAccount = findAccountByIdOrThrow(accountId);
-        if (existingAccount.getStatus().equals("N")){
-            throw new AccountInactiveException("Account is inactive with id: " + accountId);
-        }
-    }
+    // @Transactional
+    // public void validateAccount(Integer accountId) {
+    //     Account existingAccount = findAccountByIdOrThrow(accountId);
+    //     if (existingAccount.getStatus().equals("N")){
+    //         throw new AccountInactiveException("Account is inactive with id: " + accountId);
+    //     }
+    // }
 
     /**
      * Finds an account by its ID or throws AccountNotFoundException if not found.

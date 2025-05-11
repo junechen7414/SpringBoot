@@ -64,10 +64,10 @@ public class AccountController {
     }
 
     // Validate Account
-    @PostMapping("/validate/{id}")
-    public ResponseEntity<Void> validateAccount(@PathVariable Integer id) {
-        accountService.validateAccount(id);
-        return ResponseEntity.ok().build();
-    }
+    // @PostMapping("/validate/{id}")
+    // public ResponseEntity<Void> validateAccount(@PathVariable Integer id) {
+    //     accountService.validateAccount(id);
+    //     return ResponseEntity.ok().build();
+    // }
 
 }

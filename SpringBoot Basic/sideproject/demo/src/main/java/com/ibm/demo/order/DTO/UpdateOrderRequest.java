@@ -20,6 +20,11 @@ public class UpdateOrderRequest {
     @Positive(message = "Order ID must be positive")
     private Integer orderId;
 
+    @NotNull(message = "orderStatus is required")
+    @Digits(integer = 4, fraction = 0, message = "4 characters max")
+    @Positive(message = "orderStatus must be positive")
+    private Integer orderStatus;
+
     @Valid
     @NotEmpty(message = "Order items are required")    
     private List<UpdateOrderDetailRequest> items;
