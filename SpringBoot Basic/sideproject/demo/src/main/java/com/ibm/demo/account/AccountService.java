@@ -42,8 +42,8 @@ public class AccountService {
     /**
      * @return List<GetAccountListResponse>
      */
-    public List<GetAccountListResponse> getAccountList() {
-        return accountRepository.getAccountList();
+    public List<GetAccountListResponse> getAccountList(String status) {
+        return accountRepository.findByStatus(status);
     }
 
     /**

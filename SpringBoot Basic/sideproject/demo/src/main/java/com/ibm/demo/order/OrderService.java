@@ -77,7 +77,7 @@ public class OrderService {
 
                 // 使用收集到的商品ID呼叫Product的端點獲取商品資訊，該端點驗證傳入是否null
                 // 若有找不到的ID會忽略 continue 最終回傳 List
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIds);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIds);
 
                 // 宣告並初始化要用到的變數
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
@@ -159,7 +159,7 @@ public class OrderService {
                 }
 
                 // 4. 批量獲取商品資訊
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIds);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIds);
 
                 // 5. 建立回應DTO
                 GetOrderDetailResponse response = new GetOrderDetailResponse();
@@ -233,7 +233,7 @@ public class OrderService {
                 productIdsToQuery.addAll(removedProductIds);
 
                 // 6. 批量獲取會用到的商品資訊
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIdsToQuery);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIdsToQuery);
 
                 // 7. 準備庫存更新資訊
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
@@ -345,7 +345,7 @@ public class OrderService {
                 // 1. 獲取訂單資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
                                 .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Order not found with id: " + orderId));
+                                                "Order not found with ID: " + orderId));
 
                 logger.info("找到要刪除的訂單，ID: {}", orderId);
 
@@ -359,7 +359,7 @@ public class OrderService {
 
                 // 3. 收集所有商品ID並取得商品資訊
                 Set<Integer> productIds = collectProductIdsFromOrderDetails(existingOrderInfo.getOrderDetails());
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIds);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIds);
 
                 // 4. 計算需要歸還的庫存
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
@@ -421,7 +421,7 @@ public class OrderService {
          * @param productIds
          * @return Map<Integer, GetProductDetailResponse>
          */
-        private Map<Integer, GetProductDetailResponse> batchGetProductDetails(Set<Integer> productIds) {
+        private Map<Integer, GetProductDetailResponse> batchGetProductDetailsIfInactiveThrow(Set<Integer> productIds) {
                 if (productIds.isEmpty()) {
                         return new HashMap<>();
                 }
@@ -523,7 +523,7 @@ public class OrderService {
         private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo) {
                 List<OrderDetail> orderDetails = orderInfo.getOrderDetails();
                 Set<Integer> productIds = collectProductIdsFromOrderDetails(orderDetails);
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(productIds);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIds);
 
                 BigDecimal totalAmount = BigDecimal.ZERO;
                 for (OrderDetail detail : orderDetails) {
@@ -536,7 +536,7 @@ public class OrderService {
 
         public OrderInfo findByOrderIdOrThrow(Integer orderId) {
                 return orderInfoRepository.findById(orderId).orElseThrow(
-                                () -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                                () -> new ResourceNotFoundException("Order not found with ID: " + orderId));
         }
 
         /**

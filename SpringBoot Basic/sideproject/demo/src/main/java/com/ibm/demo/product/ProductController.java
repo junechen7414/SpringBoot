@@ -40,8 +40,8 @@ public class ProductController {
 
     // Read Product List
     @GetMapping("/getList")
-    public ResponseEntity<List<GetProductListResponse>> getProductList() {
-        List<GetProductListResponse> productList = productService.getProductList();
+    public ResponseEntity<List<GetProductListResponse>> getProductList(Integer status) {
+        List<GetProductListResponse> productList = productService.getProductList(status);
         return ResponseEntity.ok(productList);
     }
 

@@ -58,8 +58,8 @@ public class ProductService {
      *
      * @return 包含所有商品列表資訊的回應 DTO 列表
      */
-    public List<GetProductListResponse> getProductList() {
-        return productRepository.getProductList();
+    public List<GetProductListResponse> getProductList(Integer status) {
+        return productRepository.findBySaleStatus(status);
     }
 
     /**

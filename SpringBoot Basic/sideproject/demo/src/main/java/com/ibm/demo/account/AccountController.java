@@ -37,8 +37,8 @@ public class AccountController {
 
     // Read Account List
     @GetMapping("/getList")
-    public ResponseEntity<List<GetAccountListResponse>> getAccountList() {
-        List<GetAccountListResponse> accountList = accountService.getAccountList();
+    public ResponseEntity<List<GetAccountListResponse>> getAccountList(String status) {
+        List<GetAccountListResponse> accountList = accountService.getAccountList(status);
         return ResponseEntity.ok(accountList);
     }
 
