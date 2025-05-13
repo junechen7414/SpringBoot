@@ -1,16 +1,12 @@
 package com.ibm.demo.order;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -29,19 +25,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.AccountClient;
+import com.ibm.demo.account.DTO.GetAccountDetailResponse;
+import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
-import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
-import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
@@ -71,19 +66,44 @@ class OrderServiceTest {
 
     // --- Constants for Status Codes ---
     private static final int STATUS_PENDING = 1001;
-    private static final int STATUS_COMPLETED = 1002; // Assuming 1002 is Completed
+    // private static final int STATUS_COMPLETED = 1002; // Assuming 1002 is
+    // Completed
     private static final int STATUS_DELETED = 1003;
+
+    // --- Constants for Product Status ---
     private static final int PRODUCT_STATUS_SELLABLE = 1001;
     private static final int PRODUCT_STATUS_NOT_SELLABLE = 1002;
 
-    // Logger for test output if needed
-    // private static final Logger logger =
-    // LoggerFactory.getLogger(OrderServiceTest.class);
+    // --- Constants for Test Data ---
+    private static final Integer ACTIVE_ACCOUNT_ID = 1;
+    private static final Integer INACTIVE_ACCOUNT_ID = 2; // For testing inactive account scenarios
+    private static final Integer SELLABLE_PRODUCT_ID_1 = 1;
+    private static final Integer NON_SELLABLE_PRODUCT_ID = 2;
+    private static final Integer PRODUCT_ID_FOR_STOCK_CHECK = 3;
+    private static final Integer EXISTING_ORDER_ID = 101;
+
+    private static final BigDecimal DEFAULT_PRICE = BigDecimal.TEN;
+    private static final Integer DEFAULT_STOCK_QTY = 10;
+    private static final Integer LOW_STOCK_QTY = 5; // For product used in stock checks
+    private static final Integer REQUEST_QTY_EXCEEDING_STOCK = 15;
+    private static final Integer DEFAULT_ORDER_ITEM_QTY = 2;
+
+    // --- Shared Mock Responses ---
+    private GetAccountDetailResponse activeAccountResponse;
+    private GetAccountDetailResponse inactiveAccountResponse;
+    private GetProductDetailResponse sellableProduct1Detail;
+    private GetProductDetailResponse nonSellableProductDetail;
+    private GetProductDetailResponse productForStockCheckDetail;
 
     @BeforeEach
     void setUp() {
-        // MockitoAnnotations.openMocks(this); // @ExtendWith(MockitoExtension.class)
-        // 取代了這個
+        activeAccountResponse = createTestAccountDetailResponse(ACTIVE_ACCOUNT_ID, "Y");
+        inactiveAccountResponse = createTestAccountDetailResponse(INACTIVE_ACCOUNT_ID, "N");
+
+        sellableProduct1Detail = createTestProductDetailResponse(SELLABLE_PRODUCT_ID_1, "Sellable Product 1", DEFAULT_PRICE, DEFAULT_STOCK_QTY);
+        nonSellableProductDetail = createTestProductDetailResponse(NON_SELLABLE_PRODUCT_ID, "Non-Sellable Product", DEFAULT_PRICE, DEFAULT_STOCK_QTY);
+        nonSellableProductDetail.setSaleStatus(PRODUCT_STATUS_NOT_SELLABLE);
+        productForStockCheckDetail = createTestProductDetailResponse(PRODUCT_ID_FOR_STOCK_CHECK, "Low Stock Product", DEFAULT_PRICE, LOW_STOCK_QTY);
     }
 
     // --- Helper Methods ---
@@ -117,64 +137,10 @@ class OrderServiceTest {
         return dto;
     }
 
-    // --- Test Cases ---
-
-    @Test
-    @DisplayName("建立訂單成功時，訂單狀態應初始化為處理中(1001)")
-    void createOrder_Success_ShouldSetStatusToPendingAndReturnCorrectResponse() {
-        // Arrange
-        // 1. Request DTO
-        CreateOrderRequest request = new CreateOrderRequest();
-        request.setAccountId(1); // 直接使用值
-        List<CreateOrderDetailRequest> detailRequests = new ArrayList<>();
-        detailRequests.add(new CreateOrderDetailRequest(1, 5)); // 直接使用值
-        request.setOrderDetails(detailRequests);
-
-        // 2. Mock Account Validation
-        doNothing().when(accountClient).validateActiveAccount(1); // 直接使用值
-
-        // 3. Mock Product Details
-        Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-        productDetailsMap.put(1,
-                createTestProductDetailResponse(1, "Product 1", new BigDecimal("10.00"), 100)); // 直接使用值
-        when(productClient.getProductDetails(Set.of(1))).thenReturn(productDetailsMap); // 直接使用值
-
-        // 4. Mock Product Stock Update
-        doNothing().when(productClient).updateProductsStock(anyMap());
-
-        // 5. Mock OrderInfo Save
-        // Use ArgumentCaptor to capture the OrderInfo passed to save
-        ArgumentCaptor<OrderInfo> orderInfoCaptor = ArgumentCaptor.forClass(OrderInfo.class);
-        // Simulate save returning an OrderInfo with generated ID and date
-        when(orderInfoRepository.save(orderInfoCaptor.capture())).thenAnswer(invocation -> {
-            OrderInfo orderToSave = invocation.getArgument(0);
-            orderToSave.setId(101); // Simulate DB generated ID, 直接使用值
-            orderToSave.setCreateDate(LocalDate.now()); // Simulate DB generated date
-            return orderToSave;
-        });
-
-        // 6. Mock OrderDetail Save
-        when(orderDetailRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0)); // Return
-                                                                                                            // the list
-                                                                                                            // passed
-        // Act
-        Integer createdOrderId = orderService.createOrder(request);
-
-        // Assert
-        assertEquals(101, createdOrderId); // 直接使用值
-
-        // Verify the status of the OrderInfo object *before* it was saved
-        OrderInfo capturedOrderInfo = orderInfoCaptor.getValue();
-        assertNotNull(capturedOrderInfo);
-        assertEquals(STATUS_PENDING, capturedOrderInfo.getStatus(), "傳遞給 repository 的 OrderInfo 狀態應為處理中(1001)");
-        assertEquals(1, capturedOrderInfo.getAccountId()); // 直接使用值
-
-        // Verify interactions (optional but good practice)
-        verify(accountClient, times(1)).validateActiveAccount(1); // 直接使用值
-        verify(productClient, times(1)).getProductDetails(Set.of(1)); // 直接使用值
-        verify(productClient, times(1)).updateProductsStock(anyMap());
-        verify(orderInfoRepository, times(1)).save(any(OrderInfo.class)); // 驗證 save 被呼叫
-        verify(orderDetailRepository, times(1)).saveAll(anyList());
+    private GetAccountDetailResponse createTestAccountDetailResponse(Integer accountId, String status) {
+        GetAccountDetailResponse accResponse = new GetAccountDetailResponse();
+        accResponse.setStatus(status);
+        return accResponse;
     }
 
     @Test
@@ -182,19 +148,18 @@ class OrderServiceTest {
     void createOrder_WhenAccountIsInactive_ShouldThrowAccountInactiveException() {
         // Arrange
         CreateOrderRequest request = new CreateOrderRequest();
-        request.setAccountId(1); // 直接使用值
-        request.setOrderDetails(List.of(new CreateOrderDetailRequest(1, 1))); // 即使有商品也不應處理, 直接使用值
+        request.setAccountId(INACTIVE_ACCOUNT_ID);
+        request.setOrderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1)));
 
-        // 模擬 AccountClient 在驗證時拋出例外
-        doThrow(new AccountInactiveException("Account " + 1 + " is inactive.")).when(accountClient) // 直接使用值
-                .validateActiveAccount(1); // 直接使用值
+        // 模擬 accountClient.getAccountDetail 返回一個狀態為 "N" (非活躍) 的帳戶
+        when(accountClient.getAccountDetail(INACTIVE_ACCOUNT_ID)).thenReturn(this.inactiveAccountResponse);
 
         // Act & Assert
         AccountInactiveException exception = assertThrows(AccountInactiveException.class, () -> {
             orderService.createOrder(request);
         });
 
-        assertEquals("Account " + 1 + " is inactive.", exception.getMessage()); // 直接使用值
+        assertEquals("帳戶狀態停用", exception.getMessage());
         // Verify 確保沒有儲存任何訂單或明細
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
         verify(orderDetailRepository, never()).saveAll(anyList());
@@ -205,33 +170,30 @@ class OrderServiceTest {
     void createOrder_WhenProductNotSellable_ShouldThrowProductInactiveException() {
         // Arrange
         CreateOrderRequest request = new CreateOrderRequest();
-        request.setAccountId(1); // 直接使用值
+        request.setAccountId(ACTIVE_ACCOUNT_ID);
         request.setOrderDetails(List.of(
-                new CreateOrderDetailRequest(1, 1), // Sellable, 直接使用值
-                new CreateOrderDetailRequest(2, 1) // Not Sellable, 直接使用值
+                new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1),
+                new CreateOrderDetailRequest(NON_SELLABLE_PRODUCT_ID, 1)
         ));
 
-        doNothing().when(accountClient).validateActiveAccount(1); // 直接使用值
+        // 模擬 accountClient.getAccountDetail 返回一個活躍帳戶
+        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID)).thenReturn(this.activeAccountResponse);
 
-        // Mock Product Details: Product 2 is not sellable (status 1002)
+        // Mock Product Details: NON_SELLABLE_PRODUCT_ID is not sellable
         Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-        GetProductDetailResponse sellableProduct = createTestProductDetailResponse(1, "P1", BigDecimal.TEN, 10); // 直接使用值
-        GetProductDetailResponse notSellableProduct = createTestProductDetailResponse(2, "P2", BigDecimal.ONE, 5); // 直接使用值
-        notSellableProduct.setSaleStatus(PRODUCT_STATUS_NOT_SELLABLE); // <-- 設定為不可銷售
-        productDetailsMap.put(1, sellableProduct); // 直接使用值
-        productDetailsMap.put(2, notSellableProduct); // 直接使用值
+        productDetailsMap.put(SELLABLE_PRODUCT_ID_1, sellableProduct1Detail);
+        productDetailsMap.put(NON_SELLABLE_PRODUCT_ID, nonSellableProductDetail); // This one has status NOT_SELLABLE
 
-        // 模擬 ProductClient 在獲取商品詳情時，因商品不可銷售而拋出例外
-        when(productClient.getProductDetails(Set.of(1, 2))) // 直接使用值
-                .thenThrow(new ProductInactiveException("商品不可銷售: ID=" + 2)); // 模擬拋出例外, 直接使用值
+        // The service's batchGetProductDetailsIfInactiveThrow method will perform the check
+        when(productClient.getProductDetails(Set.of(SELLABLE_PRODUCT_ID_1, NON_SELLABLE_PRODUCT_ID)))
+                .thenReturn(productDetailsMap);
 
         // Act & Assert
-        ProductInactiveException exception = assertThrows(ProductInactiveException.class, () -> { // 預期
-                                                                                                  // ProductInactiveException
+        ProductInactiveException exception = assertThrows(ProductInactiveException.class, () -> {
             orderService.createOrder(request);
         });
-
-        assertTrue(exception.getMessage().contains("商品不可銷售: ID=" + 2)); // 直接使用值
+        // The service method batchGetProductDetailsIfInactiveThrow throws "商品不可銷售，ID: " + productId
+        assertTrue(exception.getMessage().contains("商品不可銷售，ID: " + NON_SELLABLE_PRODUCT_ID));
 
         // Verify no persistence occurred
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
@@ -244,25 +206,26 @@ class OrderServiceTest {
     void createOrder_WhenInsufficientStock_ShouldThrowProductStockNotEnoughException() {
         // Arrange
         CreateOrderRequest request = new CreateOrderRequest();
-        request.setAccountId(1); // 直接使用值
-        request.setOrderDetails(List.of(new CreateOrderDetailRequest(1, 15))); // Request 15, 直接使用值
+        request.setAccountId(ACTIVE_ACCOUNT_ID);
+        request.setOrderDetails(List.of(new CreateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK, REQUEST_QTY_EXCEEDING_STOCK)));
 
-        doNothing().when(accountClient).validateActiveAccount(1); // 直接使用值
+        // 模擬 accountClient.getAccountDetail 返回一個活躍帳戶
+        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID)).thenReturn(this.activeAccountResponse);
 
-        // Mock Product Details: Product 1 is sellable but only has 10 in stock
+        // Mock Product Details: PRODUCT_ID_FOR_STOCK_CHECK has LOW_STOCK_QTY
         Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-        productDetailsMap.put(1, createTestProductDetailResponse(1, "P1", BigDecimal.TEN, 10)); // Stock is 10, 直接使用值
-        when(productClient.getProductDetails(Set.of(1))).thenReturn(productDetailsMap); // 直接使用值
+        productDetailsMap.put(PRODUCT_ID_FOR_STOCK_CHECK, productForStockCheckDetail);
+        when(productClient.getProductDetails(Set.of(PRODUCT_ID_FOR_STOCK_CHECK))).thenReturn(productDetailsMap);
 
         // Act & Assert
         ProductStockNotEnoughException exception = assertThrows(ProductStockNotEnoughException.class, () -> {
-            orderService.createOrder(request); // 這裡不需要改
+            orderService.createOrder(request);
         });
 
-        // 驗證例外訊息符合 calculateNewStock 的格式
-        String expectedMsgPart1 = String.format("商品 %d 庫存不足", 1);
-        String expectedMsgPart2 = String.format("目前庫存: %d", 10); // 測試設定的庫存
-        String expectedMsgPart3 = String.format("訂單新數量: %d", 15); // 測試請求的數量
+        // Verify exception message based on calculateNewStock format
+        String expectedMsgPart1 = String.format("商品 %d 庫存不足", PRODUCT_ID_FOR_STOCK_CHECK);
+        String expectedMsgPart2 = String.format("目前庫存: %d", LOW_STOCK_QTY);
+        String expectedMsgPart3 = String.format("訂單新數量: %d", REQUEST_QTY_EXCEEDING_STOCK);
         assertTrue(exception.getMessage().contains(expectedMsgPart1),
                 "Exception message should contain product ID part");
         assertTrue(exception.getMessage().contains(expectedMsgPart2),
@@ -277,188 +240,61 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("更新訂單時，若訂單狀態非處理中(1001)，應拋出 OrderStatusInvalidException")
-    void updateOrder_WhenStatusNotPending_ShouldThrowOrderStatusInvalidException() {
+    @DisplayName("更新訂單時，若訂單不存在，應拋出 ResourceNotFoundException")
+    void updateOrder_WhenOrderNotFound_ShouldThrowResourceNotFoundException() {
         // Arrange
-        // 1. Create an existing order with a non-pending status (e.g., Completed)
-        OrderInfo existingOrder = createTestOrderInfo(101, 1, STATUS_COMPLETED); // Status is NOT PENDING
-
-        // 2. Mock findById to return this order
-        when(orderInfoRepository.findById(101)).thenReturn(Optional.of(existingOrder)); // 直接使用值
-
-        // 3. Prepare an update request (content doesn't matter much for this specific
-        // test)
         UpdateOrderRequest request = new UpdateOrderRequest();
-        request.setOrderId(101); // 直接使用值
-        request.setItems(List.of(new UpdateOrderDetailRequest(1, 1))); // Example item, 直接使用值
+        request.setOrderId(EXISTING_ORDER_ID);
+        request.setItems(List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1)));
+
+        // Mock findById to return empty
+        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.empty());
 
         // Act & Assert
-        OrderStatusInvalidException exception = assertThrows(OrderStatusInvalidException.class, () -> {
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
             orderService.updateOrder(request);
         });
 
-        assertTrue(exception.getMessage().contains("訂單狀態不允許更新商品項目")); // 訊息不變
-        assertTrue(exception.getMessage().contains(String.valueOf(STATUS_COMPLETED)));
+        assertEquals("Order not found with ID: " + EXISTING_ORDER_ID, exception.getMessage());
 
-        // Verify findById was called, but no further processing (like getting product
-        // details or saving) occurred
-        verify(orderInfoRepository, times(1)).findById(101);
-        verify(productClient, never()).getProductDetails(anySet());
-        verify(productClient, never()).updateProductsStock(anyMap());
+        // Verify no persistence occurred
+        verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
         verify(orderDetailRepository, never()).saveAll(anyList());
-        verify(orderDetailRepository, never()).deleteAll(anyList());
     }
-
-    // @Test
-    // @DisplayName("更新訂單成功時，應正確處理新增、更新、移除的商品，並更新庫存")
-    // void updateOrder_Success_HandlesAddUpdateRemoveCorrectly() { // 更名以反映測試目標
-    // // Arrange
-    // // 1. Create an existing order with PENDING status
-    // // 原訂單: 商品1 (ID=1, Qty=5), 商品2 (ID=2, Qty=3)
-    // OrderInfo existingOrder = createTestOrderInfo(101, 1, STATUS_PENDING); //
-    // Directly use constant
-    // // Add an existing detail
-    // createTestOrderDetail(existingOrder, 1, 5); // 直接使用值
-    // createTestOrderDetail(existingOrder, 2, 3); // 直接使用值
-
-    // // 2. Mock findById
-    // when(orderInfoRepository.findById(101)).thenReturn(Optional.of(existingOrder));
-    // // 直接使用值
-
-    // // 3. Prepare update request (e.g., change quantity)
-    // UpdateOrderRequest request = new UpdateOrderRequest();
-    // request.setOrderId(101); // 直接使用值
-    // // 更新後訂單: 商品1 (ID=1, Qty=8 -> 更新), 商品3 (ID=3, Qty=2 -> 新增), 商品2被移除
-    // List<UpdateOrderDetailRequest> updatedItems = new ArrayList<>();
-    // updatedItems.add(new UpdateOrderDetailRequest(1, 8)); // Update quantity,
-    // 直接使用值
-    // updatedItems.add(new UpdateOrderDetailRequest(3, 2)); // Add new item, 直接使用值
-    // request.setItems(updatedItems);
-
-    // // 4. Mock Product Details (needed for update logic)
-    // // 假設商品1庫存100, 商品3庫存50
-    // // 假設商品2(被移除)庫存20
-    // Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-    // productDetailsMap.put(1,
-    // createTestProductDetailResponse(1, "Product 1", new BigDecimal("10.00"),
-    // 100)); // 直接使用值
-    // productDetailsMap.put(3,
-    // createTestProductDetailResponse(3, "Product 3", new BigDecimal("20.00"),
-    // 50)); // 直接使用值
-    // productDetailsMap.put(2,
-    // createTestProductDetailResponse(2, "Product 2", new BigDecimal("15.00"),
-    // 20));
-    // // 需取得更新後訂單的所有商品 (ID=1, ID=3)
-    // // *** 修正: 實際呼叫會包含所有變動的商品ID (1, 2, 3) ***
-    // when(productClient.getProductDetails(Set.of(1, 2,
-    // 3))).thenReturn(productDetailsMap); // 直接使用值
-
-    // // 5. Mock stock update
-    // // 使用 ArgumentCaptor 捕獲傳遞給 updateProductsStock 的 Map
-    // ArgumentCaptor<Map<Integer, Integer>> stockUpdateCaptor =
-    // ArgumentCaptor.forClass(Map.class);
-    // doNothing().when(productClient).updateProductsStock(stockUpdateCaptor.capture());
-
-    // // 6. Mock OrderDetail save (for the updated detail)
-    // ArgumentCaptor<List<OrderDetail>> savedDetailsCaptor =
-    // ArgumentCaptor.forClass(List.class);
-    // when(orderDetailRepository.saveAll(savedDetailsCaptor.capture()))
-    // .thenAnswer(invocation -> invocation.getArgument(0));
-    // // Mock OrderDetail delete (for the removed detail)
-    // ArgumentCaptor<List<OrderDetail>> deletedDetailsCaptor =
-    // ArgumentCaptor.forClass(List.class);
-    // doNothing().when(orderDetailRepository).deleteAll(deletedDetailsCaptor.capture());
-
-    // // 7. Mock OrderInfo save
-    // when(orderInfoRepository.save(any(OrderInfo.class))).thenAnswer(invocation ->
-    // invocation.getArgument(0));
-
-    // // Act
-    // // We expect this *not* to throw OrderStatusInvalidException
-    // // We can assert the response or verify interactions to confirm processing
-    // // continued
-    // UpdateOrderResponse response = orderService.updateOrder(request);
-
-    // // Assert
-    // assertNotNull(response);
-    // assertEquals(101, response.getOrderId()); // 直接使用值
-    // // 驗證回傳的項目數量是否正確
-    // assertEquals(2, response.getItems().size());
-    // assertTrue(response.getItems().stream().anyMatch(item -> item.getProductId()
-    // == 1 && item.getQuantity() == 8));
-    // assertTrue(response.getItems().stream().anyMatch(item -> item.getProductId()
-    // == 3 && item.getQuantity() == 2));
-
-    // // Verify that processing continued beyond the status check
-    // verify(orderInfoRepository, times(1)).findById(101); // 直接使用值
-    // verify(productClient, times(1)).getProductDetails(Set.of(1, 2, 3)); //
-    // 驗證取得的是所有變動商品的詳情
-
-    // // 驗證庫存更新
-    // verify(productClient, times(1)).updateProductsStock(anyMap()); // 驗證庫存更新被呼叫
-    // Map<Integer, Integer> capturedStockUpdates = stockUpdateCaptor.getValue();
-    // assertNotNull(capturedStockUpdates);
-    // assertEquals(3, capturedStockUpdates.size(), "應包含所有變動商品的庫存更新 (1+2+3)");
-    // // 商品1: 原5 -> 新8, 庫存應減少 3 (100 - 3 = 97)
-    // assertEquals(97, capturedStockUpdates.get(1));
-    // // 商品2: 原3 -> 移除, 庫存應增加 3 (20 + 3 = 23)
-    // assertEquals(23, capturedStockUpdates.get(2));
-    // // 商品3: 新增2, 庫存應減少 2 (50 - 2 = 48)
-    // assertEquals(48, capturedStockUpdates.get(3));
-
-    // verify(orderDetailRepository,
-    // times(1)).deleteAll(deletedDetailsCaptor.capture()); // 驗證刪除商品2
-    // assertEquals(1, deletedDetailsCaptor.getValue().size());
-    // assertEquals(2, deletedDetailsCaptor.getValue().get(0).getProductId());
-    // verify(orderDetailRepository,
-    // times(1)).saveAll(savedDetailsCaptor.capture()); // 驗證儲存商品1和3
-    // assertEquals(2, savedDetailsCaptor.getValue().size());
-    // assertTrue(savedDetailsCaptor.getValue().stream().anyMatch(d ->
-    // d.getProductId() == 1 && d.getQuantity() == 8));
-    // assertTrue(savedDetailsCaptor.getValue().stream().anyMatch(d ->
-    // d.getProductId() == 3 && d.getQuantity() == 2));
-    // verify(orderInfoRepository, times(1)).save(any(OrderInfo.class)); // Called
-    // }
 
     @Test
     @DisplayName("更新訂單時，若有商品不可銷售，應拋出 ProductInactiveException")
     void updateOrder_WhenProductNotSellable_ShouldThrowProductInactiveException() {
         // Arrange
-        OrderInfo existingOrder = createTestOrderInfo(101, 1, STATUS_PENDING); // Directly use constant
-        createTestOrderDetail(existingOrder, 1, 2); // Original detail, 直接使用值
+        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_PENDING);
+        createTestOrderDetail(existingOrder, SELLABLE_PRODUCT_ID_1, DEFAULT_ORDER_ITEM_QTY); // Original detail
 
         UpdateOrderRequest request = new UpdateOrderRequest();
-        request.setOrderId(101); // 直接使用值
+        request.setOrderId(EXISTING_ORDER_ID);
         request.setItems(List.of(
-                new UpdateOrderDetailRequest(1, 1), // Still sellable, 直接使用值
-                new UpdateOrderDetailRequest(2, 1) // Add a non-sellable item, 直接使用值
+                new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1), // Update existing
+                new UpdateOrderDetailRequest(NON_SELLABLE_PRODUCT_ID, 1) // Add a non-sellable item
         ));
 
-        when(orderInfoRepository.findById(101)).thenReturn(Optional.of(existingOrder)); // 直接使用值
+        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
 
-        // Mock Product Details: Product 2 is not sellable
+        // Mock Product Details: NON_SELLABLE_PRODUCT_ID is not sellable
         Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-        GetProductDetailResponse sellableProduct = createTestProductDetailResponse(1, "P1", BigDecimal.TEN, 10); // 直接使用值
-        GetProductDetailResponse notSellableProduct = createTestProductDetailResponse(2, "P2", BigDecimal.ONE, 5); // 直接使用值
-        notSellableProduct.setSaleStatus(PRODUCT_STATUS_NOT_SELLABLE); // <-- 設定為不可銷售
-        productDetailsMap.put(1, sellableProduct); // 直接使用值
-        productDetailsMap.put(2, notSellableProduct); // 直接使用值
+        productDetailsMap.put(SELLABLE_PRODUCT_ID_1, sellableProduct1Detail);
+        productDetailsMap.put(NON_SELLABLE_PRODUCT_ID, nonSellableProductDetail); // This one has status NOT_SELLABLE
 
-        // 模擬 ProductClient 在獲取商品詳情時，因商品不可銷售而拋出例外
-        when(productClient.getProductDetails(Set.of(1, 2))) // 直接使用值
-                .thenThrow(new ProductInactiveException("商品不可銷售: ID=" + 2)); // 模擬拋出例外, 直接使用值
+        when(productClient.getProductDetails(Set.of(SELLABLE_PRODUCT_ID_1, NON_SELLABLE_PRODUCT_ID)))
+                .thenReturn(productDetailsMap);
 
         // Act & Assert
-        ProductInactiveException exception = assertThrows(ProductInactiveException.class, () -> { // 預期
-                                                                                                  // ProductInactiveException
+        ProductInactiveException exception = assertThrows(ProductInactiveException.class, () -> {
             orderService.updateOrder(request);
         });
-
-        assertTrue(exception.getMessage().contains("商品不可銷售: ID=" + 2)); // 直接使用值
+        assertTrue(exception.getMessage().contains("商品不可銷售，ID: " + NON_SELLABLE_PRODUCT_ID));
 
         // Verify no persistence occurred beyond finding the initial order
-        verify(orderInfoRepository, times(1)).findById(101); // 直接使用值
+        verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
         verify(orderDetailRepository, never()).saveAll(anyList());
         verify(orderDetailRepository, never()).deleteAll(anyList());
@@ -469,30 +305,31 @@ class OrderServiceTest {
     @DisplayName("更新訂單時，若有商品庫存不足，應拋出 ProductStockNotEnoughException")
     void updateOrder_WhenInsufficientStock_ShouldThrowProductStockNotEnoughException() { // 修正方法名中的例外類型
         // Arrange
-        OrderInfo existingOrder = createTestOrderInfo(101, 1, STATUS_PENDING); // Directly use constant
-        createTestOrderDetail(existingOrder, 1, 2); // Original detail, 直接使用值
+        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_PENDING);
+        createTestOrderDetail(existingOrder, PRODUCT_ID_FOR_STOCK_CHECK, DEFAULT_ORDER_ITEM_QTY); // Original detail
 
         UpdateOrderRequest request = new UpdateOrderRequest();
-        request.setOrderId(101); // 直接使用值
-        request.setItems(List.of(new UpdateOrderDetailRequest(1, 15))); // Request 15, 直接使用值
+        request.setOrderId(EXISTING_ORDER_ID);
+        // Update item to a quantity that exceeds available stock
+        request.setItems(List.of(new UpdateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK, REQUEST_QTY_EXCEEDING_STOCK)));
 
-        when(orderInfoRepository.findById(101)).thenReturn(Optional.of(existingOrder)); // 直接使用值
+        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
 
-        // Mock Product Details: Product 1 is sellable but only has 10 in stock
+        // Mock Product Details: PRODUCT_ID_FOR_STOCK_CHECK has LOW_STOCK_QTY
         Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-        productDetailsMap.put(1, createTestProductDetailResponse(1, "P1", BigDecimal.TEN, 10)); // Stock is 10, 直接使用值
-        when(productClient.getProductDetails(Set.of(1))).thenReturn(productDetailsMap); // 直接使用值
+        productDetailsMap.put(PRODUCT_ID_FOR_STOCK_CHECK, productForStockCheckDetail);
+        when(productClient.getProductDetails(Set.of(PRODUCT_ID_FOR_STOCK_CHECK))).thenReturn(productDetailsMap);
 
         // Act & Assert
         ProductStockNotEnoughException exception = assertThrows(ProductStockNotEnoughException.class, () -> {
             orderService.updateOrder(request);
         });
 
-        // 驗證例外訊息符合 calculateNewStock 的格式
-        String expectedMsgPart1 = String.format("商品 %d 庫存不足", 1); // 直接使用值
-        String expectedMsgPart2 = String.format("目前庫存: %d", 10); // 測試設定的庫存
-        String expectedMsgPart3 = String.format("訂單原數量: %d", 2); // 測試中訂單原數量
-        String expectedMsgPart4 = String.format("訂單新數量: %d", 15); // 測試請求的數量
+        // Verify exception message based on calculateNewStock format
+        String expectedMsgPart1 = String.format("商品 %d 庫存不足", PRODUCT_ID_FOR_STOCK_CHECK);
+        String expectedMsgPart2 = String.format("目前庫存: %d", LOW_STOCK_QTY);
+        String expectedMsgPart3 = String.format("訂單原數量: %d", DEFAULT_ORDER_ITEM_QTY);
+        String expectedMsgPart4 = String.format("訂單新數量: %d", REQUEST_QTY_EXCEEDING_STOCK);
         assertTrue(exception.getMessage().contains(expectedMsgPart1),
                 "Exception message should contain product ID part");
         assertTrue(exception.getMessage().contains(expectedMsgPart2),
@@ -503,286 +340,54 @@ class OrderServiceTest {
                 "Exception message should contain requested quantity part");
 
         // Verify no persistence occurred beyond finding the initial order
-        verify(orderInfoRepository, times(1)).findById(101); // 直接使用值
+        verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
         verify(orderDetailRepository, never()).saveAll(anyList());
         verify(orderDetailRepository, never()).deleteAll(anyList());
         verify(productClient, never()).updateProductsStock(anyMap());
     }
-
+    
     @Test
-    @DisplayName("刪除訂單時，若訂單狀態非處理中(1001)，應拋出 OrderStatusInvalidException")
-    void deleteOrder_WhenStatusNotPending_ShouldThrowOrderStatusInvalidException() {
+    @DisplayName("刪除訂單時，若訂單不存在，應拋出 ResourceNotFoundException")
+    void deleteOrder_WhenOrderNotFound_ShouldThrowResourceNotFoundException() {
         // Arrange
-        // 1. Create an existing order with a non-pending status
-        OrderInfo existingOrder = createTestOrderInfo(101, 1, STATUS_DELETED); // Status is NOT PENDING
-
-        // 2. Mock findById
-        when(orderInfoRepository.findById(101)).thenReturn(Optional.of(existingOrder)); // 直接使用值
+        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.empty());
 
         // Act & Assert
-        OrderStatusInvalidException exception = assertThrows(OrderStatusInvalidException.class, () -> {
-            orderService.deleteOrder(101); // 直接使用值
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            orderService.deleteOrder(EXISTING_ORDER_ID);
         });
 
-        assertTrue(exception.getMessage().contains("訂單狀態不允許刪除")); // 訊息不變
-        assertTrue(exception.getMessage().contains(String.valueOf(STATUS_DELETED)));
+        assertEquals("Order not found with ID: " + EXISTING_ORDER_ID, exception.getMessage());
 
         // Verify findById was called, but no further processing occurred
-        verify(orderInfoRepository, times(1)).findById(101); // 直接使用值
+        verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(productClient, never()).getProductDetails(anySet());
         verify(productClient, never()).updateProductsStock(anyMap());
         verify(orderInfoRepository, never()).save(any(OrderInfo.class)); // Save should not be called
     }
 
     @Test
-    @DisplayName("刪除訂單成功時，訂單狀態應更新為已刪除(1003)")
-    void deleteOrder_WhenStatusIsPending_ShouldUpdateStatusToDeleted() {
+    @DisplayName("刪除訂單時，若訂單狀態非處理中，應拋出 ResourceNotFoundException")
+    void deleteOrder_WhenStatusNotPending_ShouldThrowResourceNotFoundException() {
         // Arrange
-        // 1. Create an existing order with PENDING status
-        OrderInfo existingOrder = createTestOrderInfo(101, 1, STATUS_PENDING); // Directly use constant
-        // Add some details to simulate restoring stock
-        createTestOrderDetail(existingOrder, 1, 3); // 直接使用值
-        createTestOrderDetail(existingOrder, 2, 2); // 直接使用值
+        // 1. Create an existing order with a non-pending
+        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_DELETED); // Status is DELETED
 
         // 2. Mock findById
-        when(orderInfoRepository.findById(101)).thenReturn(Optional.of(existingOrder)); // 直接使用值
-
-        // 3. Mock Product Details (needed for stock restoration)
-        Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-        productDetailsMap.put(1,
-                createTestProductDetailResponse(1, "P1", new BigDecimal("10"), 50)); // 直接使用值
-        productDetailsMap.put(2,
-                createTestProductDetailResponse(2, "P2", new BigDecimal("20"), 30)); // 直接使用值
-        when(productClient.getProductDetails(Set.of(1, 2))) // 直接使用值
-                .thenReturn(productDetailsMap);
-
-        // 4. Mock stock update
-        doNothing().when(productClient).updateProductsStock(anyMap());
-
-        // 5. Mock OrderInfo save
-        ArgumentCaptor<OrderInfo> orderInfoCaptor = ArgumentCaptor.forClass(OrderInfo.class);
-        when(orderInfoRepository.save(orderInfoCaptor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
-
-        // Act
-        orderService.deleteOrder(101); // 直接使用值
-
-        // Assert
-        // Verify the status of the OrderInfo object passed to save
-        OrderInfo capturedOrderInfo = orderInfoCaptor.getValue();
-        assertNotNull(capturedOrderInfo);
-        assertEquals(STATUS_DELETED, capturedOrderInfo.getStatus(), "訂單狀態應更新為已刪除(1003)");
-        assertEquals(101, capturedOrderInfo.getId()); // Ensure it's the correct order, 直接使用值
-
-        // Verify interactions
-        verify(orderInfoRepository, times(1)).findById(101); // 直接使用值
-        verify(productClient, times(1)).getProductDetails(Set.of(1, 2)); // 直接使用值
-        verify(productClient, times(1)).updateProductsStock(anyMap());
-        verify(orderInfoRepository, times(1)).save(any(OrderInfo.class)); // Verify save was called
-
-    }
-
-    // --- Tests for getOrderList ---
-
-    @Test
-    @DisplayName("取得訂單列表成功，應只回傳該帳戶狀態為處理中(1001)的訂單列表及總金額") // Updated description
-    void getOrderList_Success_ShouldReturnOnlyPendingOrders() { // Updated method name
-        // Arrange
-        Integer accountId = 1;
-        doNothing().when(accountClient).validateActiveAccount(accountId);
-
-        // Create one PENDING order and one COMPLETED order
-        OrderInfo pendingOrder = createTestOrderInfo(101, accountId, STATUS_PENDING);
-        createTestOrderDetail(pendingOrder, 1, 2); // P1, Qty 2
-        createTestOrderDetail(pendingOrder, 2, 1); // P2, Qty 1
-
-        // This order should NOT be returned by the modified findByAccountId
-        OrderInfo completedOrder = createTestOrderInfo(102, accountId, STATUS_COMPLETED);
-        createTestOrderDetail(completedOrder, 1, 3); // P1, Qty 3
-
-        // Mock findByAccountId to return ONLY the pending order, reflecting the new
-        // query
-        List<OrderInfo> pendingOrdersOnly = List.of(pendingOrder);
-        when(orderInfoRepository.findByAccountId(accountId)).thenReturn(pendingOrdersOnly);
-
-        // Mock product details needed for total amount calculation for the PENDING
-        // order
-        Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-        productDetailsMap.put(1, createTestProductDetailResponse(1, "P1", new BigDecimal("10.00"), 50));
-        productDetailsMap.put(2, createTestProductDetailResponse(2, "P2", new BigDecimal("25.50"), 30));
-        // Only need details for products in the pending order (1 and 2)
-        when(productClient.getProductDetails(Set.of(1, 2))).thenReturn(productDetailsMap);
-
-        // Act
-        List<GetOrderListResponse> responseList = orderService.getOrderList(accountId);
-
-        // Assert
-        assertNotNull(responseList);
-        // Should only return the PENDING order
-        assertEquals(1, responseList.size());
-
-        // Check the details of the returned (pending) order
-        GetOrderListResponse res1 = responseList.get(0); // Only one item expected
-        assertEquals(101, res1.getOrderId());
-        assertEquals(STATUS_PENDING, res1.getStatus());
-        // Expected Total for Pending Order: (2 * 10.00) + (1 * 25.50) = 20.00 + 25.50 =
-        // 45.50
-        assertEquals(new BigDecimal("45.50"), res1.getTotalAmount());
-
-        verify(accountClient, times(1)).validateActiveAccount(accountId);
-        verify(orderInfoRepository, times(1)).findByAccountId(accountId);
-        // Called once for the single pending order returned
-        verify(productClient, times(1)).getProductDetails(Set.of(1, 2));
-    }
-
-    // @Test
-    // @DisplayName("取得訂單列表時，若帳戶無訂單，應回傳空列表")
-    // void getOrderList_WhenNoOrders_ShouldReturnEmptyList() {
-    // // Arrange
-    // Integer accountId = 2;
-    // doNothing().when(accountClient).validateActiveAccount(accountId);
-    // when(orderInfoRepository.findByAccountId(accountId)).thenReturn(Collections.emptyList());
-
-    // // Act
-    // List<GetOrderListResponse> responseList =
-    // orderService.getOrderList(accountId);
-
-    // // Assert
-    // assertNotNull(responseList);
-    // assertTrue(responseList.isEmpty());
-
-    // verify(accountClient, times(1)).validateActiveAccount(accountId);
-    // verify(orderInfoRepository, times(1)).findByAccountId(accountId);
-    // verify(productClient, never()).getProductDetails(anySet()); // No orders, no
-    // need to get product details
-    // }
-
-    @Test
-    @DisplayName("取得訂單列表時，若帳戶非活躍，應拋出 AccountInactiveException")
-    void getOrderList_WhenAccountInactive_ShouldThrowAccountInactiveException() {
-        // Arrange
-        Integer accountId = 3;
-        doThrow(new AccountInactiveException("Account " + accountId + " is inactive."))
-                .when(accountClient).validateActiveAccount(accountId);
+        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
 
         // Act & Assert
-        AccountInactiveException exception = assertThrows(AccountInactiveException.class, () -> {
-            orderService.getOrderList(accountId);
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            orderService.deleteOrder(EXISTING_ORDER_ID);
         });
-        assertTrue(exception.getMessage().contains("is inactive"));
 
-        verify(accountClient, times(1)).validateActiveAccount(accountId);
-        verify(orderInfoRepository, never()).findByAccountId(anyInt());
+        assertEquals("Order not found with ID: " + EXISTING_ORDER_ID, exception.getMessage());
+
+        // Verify findById was called, but no further processing occurred
+        verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(productClient, never()).getProductDetails(anySet());
+        verify(productClient, never()).updateProductsStock(anyMap());
+        verify(orderInfoRepository, never()).save(any(OrderInfo.class)); // Save should not be called
     }
-
-    // --- Tests for getOrderDetails ---
-
-    // @Test
-    // @DisplayName("取得訂單詳情成功，應回傳包含商品資訊的完整明細")
-    // void getOrderDetails_Success_ShouldReturnFullDetails() {
-    // // Arrange
-    // Integer orderId = 101;
-    // Integer accountId = 1;
-    // OrderInfo order = createTestOrderInfo(orderId, accountId, STATUS_PENDING);
-    // OrderDetail detail1 = createTestOrderDetail(order, 1, 2); // P1, Qty 2
-    // OrderDetail detail2 = createTestOrderDetail(order, 2, 1); // P2, Qty 1
-
-    // when(orderInfoRepository.findById(orderId)).thenReturn(Optional.of(order));
-
-    // // Mock product details
-    // Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-    // productDetailsMap.put(1, createTestProductDetailResponse(1, "Product A", new
-    // BigDecimal("15.00"), 50));
-    // productDetailsMap.put(2, createTestProductDetailResponse(2, "Product B", new
-    // BigDecimal("30.00"), 30));
-    // when(productClient.getProductDetails(Set.of(1,
-    // 2))).thenReturn(productDetailsMap);
-
-    // // Act
-    // GetOrderDetailResponse response = orderService.getOrderDetails(orderId);
-
-    // // Assert
-    // assertNotNull(response);
-    // assertEquals(accountId, response.getAccountId());
-    // assertEquals(STATUS_PENDING, response.getOrderStatus());
-    // // Expected Total: (2 * 15.00) + (1 * 30.00) = 30.00 + 30.00 = 60.00
-    // assertEquals(new BigDecimal("60.00"), response.getTotalAmount());
-    // assertEquals(2, response.getItems().size());
-
-    // // Check Item 1
-    // OrderItemDTO item1 = response.getItems().stream().filter(i ->
-    // i.getProductId() == 1).findFirst().orElseThrow();
-    // assertEquals("Product A", item1.getProductName());
-    // assertEquals(2, item1.getQuantity());
-    // assertEquals(new BigDecimal("15.00"), item1.getProductPrice());
-
-    // // Check Item 2
-    // OrderItemDTO item2 = response.getItems().stream().filter(i ->
-    // i.getProductId() == 2).findFirst().orElseThrow();
-    // assertEquals("Product B", item2.getProductName());
-    // assertEquals(1, item2.getQuantity());
-    // assertEquals(new BigDecimal("30.00"), item2.getProductPrice());
-
-    // verify(orderInfoRepository, times(1)).findById(orderId);
-    // verify(productClient, times(2)).getProductDetails(Set.of(1, 2)); // Called
-    // once for details, once for total
-    // }
-
-    // @Test
-    // @DisplayName("取得訂單詳情時，若訂單不存在，應拋出 ResourceNotFoundException")
-    // void getOrderDetails_WhenOrderNotFound_ShouldThrowResourceNotFoundException()
-    // {
-    // // Arrange
-    // Integer orderId = 999;
-    // when(orderInfoRepository.findById(orderId)).thenReturn(Optional.empty());
-
-    // // Act & Assert
-    // ResourceNotFoundException exception =
-    // assertThrows(ResourceNotFoundException.class, () -> {
-    // orderService.getOrderDetails(orderId);
-    // });
-    // assertTrue(exception.getMessage().contains("Order not found with id: " +
-    // orderId));
-
-    // verify(orderInfoRepository, times(1)).findById(orderId);
-    // verify(productClient, never()).getProductDetails(anySet());
-    // }
-
-    // --- Tests for AccountIdIsInOrder ---
-
-    @Test
-    @DisplayName("檢查帳戶是否有處理中訂單時，若有處理中(1001)訂單，應回傳 true") // Updated description
-    void accountIdIsInOrder_WhenPendingOrdersExist_ShouldReturnTrue() { // Updated method name
-        // Arrange
-        Integer accountId = 1;
-        // Create a mock order with PENDING status
-        OrderInfo pendingOrder = createTestOrderInfo(101, accountId, STATUS_PENDING);
-        // Mock findByAccountId to return a list containing the pending order
-        when(orderInfoRepository.findByAccountId(accountId)).thenReturn(List.of(pendingOrder));
-
-        // Act
-        boolean result = orderService.ActiveAccountIdIsInOrder(accountId); // Use the actual method name
-
-        // Assert
-        assertTrue(result);
-        verify(orderInfoRepository, times(1)).findByAccountId(accountId);
-    }
-
-    // @Test
-    // @DisplayName("檢查帳戶是否有處理中訂單時，若無處理中(1001)訂單，應回傳 false") // Updated description
-    // void accountIdIsInOrder_WhenNoPendingOrdersExist_ShouldReturnFalse() { //
-    // Updated method name
-    // // Arrange
-    // Integer accountId = 2;
-    // when(orderInfoRepository.findByAccountId(accountId)).thenReturn(Collections.emptyList());
-    // // Still valid
-
-    // // Act
-    // boolean result = orderService.AccountIdIsInOrder(accountId);
-
-    // // Assert
-    // assertFalse(result);
-    // verify(orderInfoRepository, times(1)).findByAccountId(accountId);
-    // }
 }

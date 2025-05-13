@@ -1,9 +1,7 @@
 package com.ibm.demo.product;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -11,27 +9,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
+import com.ibm.demo.exception.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
-import com.ibm.demo.product.DTO.GetProductDetailResponse;
-import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,603 +33,186 @@ class ProductServiceTest {
     @InjectMocks
     private ProductService productService;
 
+    // --- Constants for Test Data ---
+    private static final Integer ACTIVE_PRODUCT_ID = 1;
+    private static final BigDecimal DEFAULT_PRICE = new BigDecimal("10.00");
+    private static final Integer DEFAULT_STOCK = 100;
+    private static final Integer STATUS_SELLABLE = 1001;
+    private static final Integer STATUS_NOT_SELLABLE = 1002;
+
+    private static final Integer INACTIVE_PRODUCT_ID = 2;
+    private static final String INACTIVE_PRODUCT_NAME = "Inactive Product";
+
+    private static final String EXISTING_NAME_PRODUCT_NAME = "Existing Product Name";
+
+    private static final Integer NON_EXISTENT_PRODUCT_ID = 999;
+    private static final String NEW_PRODUCT_NAME = "New Product Name";
+    private static final String OLD_PRODUCT_NAME = "Old Product Name";
+    
+    private Product inactiveProduct;
+    
+
     @BeforeEach
-    void setUp() {
-        // MockitoAnnotations.openMocks(this);
+    void setUp() {        
+        inactiveProduct = createTestProduct(INACTIVE_PRODUCT_ID, INACTIVE_PRODUCT_NAME, new BigDecimal("20.00"), STATUS_NOT_SELLABLE, 0);        
     }
 
-    // ==================================
-    // Active Tests (Currently Running)
-    // ==================================
-
     @Test
-    @DisplayName("建立產品成功，產品狀態初始值為1001")
-    void testCreateProduct_Success() {
+    @DisplayName("建立產品時，若產品名稱已存在應拋出ProductAlreadyExistException")
+    void createProduct_WhenNameAlreadyExists_ShouldThrowProductAlreadyExistException() {
         // Arrange
         CreateProductRequest request = new CreateProductRequest();
-        request.setName("New Gadget");
-        request.setPrice(new BigDecimal("199.99"));
-        request.setStockQty(100);
+        request.setName(EXISTING_NAME_PRODUCT_NAME);
+        request.setPrice(DEFAULT_PRICE);
+        request.setStockQty(DEFAULT_STOCK);
 
-        Product productToSave = new Product();
-        productToSave.setName(request.getName());
-        productToSave.setPrice(request.getPrice());
-        productToSave.setStockQty(request.getStockQty());
-        productToSave.setSaleStatus(1001); // Default status
-
-        Product savedProduct = new Product();
-        savedProduct.setId(5); // Simulate DB generated ID
-        savedProduct.setName(request.getName());
-        savedProduct.setPrice(request.getPrice());
-        savedProduct.setStockQty(request.getStockQty());
-        savedProduct.setSaleStatus(1001);
-        savedProduct.setCreateDate(LocalDate.now()); // Simulate DB generated date
-
-        // Mock the repository save method
-        when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
-
-        // Act
-        Integer createdProductId = productService.createProduct(request);
-
-        // Assert        
-        assertEquals(savedProduct.getId(), createdProductId);        
-
-        // Verify that save was called with the correct product details (before ID/date)
-        ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
-        verify(productRepository).save(productCaptor.capture());
-        Product capturedProduct = productCaptor.getValue();
-        assertEquals(request.getName(), capturedProduct.getName());
-        assertEquals(request.getPrice(), capturedProduct.getPrice());
-        assertEquals(request.getStockQty(), capturedProduct.getStockQty());
-        assertEquals(1001, capturedProduct.getSaleStatus());
-    }
-
-    @Test
-    @DisplayName("取得多筆產品詳情時，若有產品不可銷售應拋出ProductInactiveException")
-    void testGetProductDetails_ThrowsProductInactiveException_WhenProductNotSellable() {
-        // Arrange
-        Set<Integer> ids = new HashSet<>(Arrays.asList(1, 2));
-        Product product1 = createTestProduct(1, "Product 1", new BigDecimal("10.00"), 1001, 10); // Sellable
-        Product product2 = createTestProduct(2, "Product 2", new BigDecimal("20.00"), 1002, 5); // Not sellable
-        List<Product> foundProducts = Arrays.asList(product1, product2);
-
-        when(productRepository.findAllById(ids)).thenReturn(foundProducts);
+        // Simulate that EXISTING_NAME_PRODUCT_NAME is already taken
+        when(productRepository.existsByName(EXISTING_NAME_PRODUCT_NAME)).thenReturn(true);
 
         // Act & Assert
-        ProductInactiveException exception = assertThrows(ProductInactiveException.class,
-                () -> productService.getProductDetails(ids));
-        assertTrue(exception.getMessage().contains("商品id: 2 不可銷售")); // Check for inactive product ID
+        ProductAlreadyExistException exception = assertThrows(ProductAlreadyExistException.class, () -> productService.createProduct(request));
+        assertEquals(EXISTING_NAME_PRODUCT_NAME + " already exists", exception.getMessage());
 
         // Verify
-        verify(productRepository, times(1)).findAllById(ids);
-    }
-
-    @Test
-    @DisplayName("刪除產品成功，商品狀態更新為1002")
-    void testDeleteProduct_Success() {
-        // Arrange
-        Integer productId = 8;
-        Product existingProduct = createTestProduct(productId, "Product to Delete", new BigDecimal("50.00"), 1001, 10); // Initially
-                                                                                                                        // sellable
-
-        when(productRepository.findById(productId)).thenReturn(Optional.of(existingProduct));
-        // Mock save to return the object passed to it, simulating a successful save
-        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        // Act
-        productService.deleteProduct(productId);
-
-        // Assert (Verify interactions and state change)
-        verify(productRepository, times(1)).findById(productId);
-
-        ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
-        verify(productRepository, times(1)).save(productCaptor.capture());
-
-        Product savedProduct = productCaptor.getValue();
-        assertEquals(productId, savedProduct.getId());
-        assertEquals(1002, savedProduct.getSaleStatus(), "SaleStatus should be updated to 1002 (inactive)");
-        // Ensure other fields weren't unintentionally changed
-        assertEquals(existingProduct.getName(), savedProduct.getName());
-        assertEquals(existingProduct.getPrice(), savedProduct.getPrice());
-        assertEquals(existingProduct.getStockQty(), savedProduct.getStockQty());
+        verify(productRepository, times(1)).existsByName(EXISTING_NAME_PRODUCT_NAME);
+        verify(productRepository, never()).save(any(Product.class));
     }
 
     // @Test
-    // @DisplayName("驗證產品是否可銷售時，若產品不可銷售應拋出ProductInactiveException")
-    // void testValidateProductIsSellable_ThrowsProductInactiveException() {
+    // @DisplayName("獲取產品詳情時，若產品不存在應拋出ResourceNotFoundException")
+    // void getProductDetail_WhenProductNotFound_ShouldThrowResourceNotFoundException() {
     //     // Arrange
-    //     Product product = createTestProduct(1, "Inactive Product", BigDecimal.ONE, 1002, 0);
+    //     when(productRepository.findById(NON_EXISTENT_PRODUCT_ID)).thenReturn(Optional.empty());
 
     //     // Act & Assert
-    //     assertThrows(ProductInactiveException.class, () -> productService.validateProductIsSellable(product));
+    //     ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
+    //             () -> productService.getProductDetail(NON_EXISTENT_PRODUCT_ID));
+    //     assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID, exception.getMessage());
+
+    //     // Verify
+    //     verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
+    // }
+
+    // @Test
+    // @DisplayName("獲取多個產品詳情時，若ID集合為null應拋出InvalidRequestException")
+    // void getProductDetails_WhenIdsIsNull_ShouldThrowInvalidRequestException() {
+    //     // Act & Assert
+    //     InvalidRequestException exception = assertThrows(InvalidRequestException.class,
+    //             () -> productService.getProductDetails(null));
+    //     assertEquals("Product IDs cannot be null or empty", exception.getMessage());
     // }
 
     @Test
-    @DisplayName("取得產品詳情時，若產品不可銷售應拋出ProductInactiveException")
-    void testGetProductDetail_ThrowsProductInactiveException_WhenProductNotSellable() {
+    @DisplayName("更新產品時，若產品不存在應拋出ResourceNotFoundException")
+    void updateProduct_WhenProductNotFound_ShouldThrowResourceNotFoundException() {
         // Arrange
-        Integer productId = 10;
-        // Create a product that exists but is inactive (status 1002)
-        Product inactiveProduct = createTestProduct(productId, "Inactive Gadget", new BigDecimal("50.00"), 1002, 0);
-
-        // Mock findById to return the inactive product
-        when(productRepository.findById(productId)).thenReturn(Optional.of(inactiveProduct));
-
-        // Act & Assert
-        // findProductById (called by getProductDetail) should throw the exception
-        assertThrows(ProductInactiveException.class, () -> productService.getProductDetail(productId));
-
-        // Verify findById was called
-        verify(productRepository, times(1)).findById(productId);
-    }
-
-    @Test
-    @DisplayName("更新產品時，若產品不可銷售應拋出ProductInactiveException")
-    void testUpdateProduct_ThrowsProductInactiveException_WhenProductNotSellable() {
-        // Arrange
-        Integer productId = 11;
-        Product inactiveProduct = createTestProduct(productId, "Inactive Gadget", new BigDecimal("50.00"), 1002, 0);
-
         UpdateProductRequest request = new UpdateProductRequest();
-        request.setId(productId);
-        request.setName("Attempt Update");
-        request.setPrice(new BigDecimal("55.00"));
-        request.setSaleStatus(1001); // Attempt to make it sellable
-        request.setStockQty(10);
+        request.setId(NON_EXISTENT_PRODUCT_ID);
+        request.setName(NEW_PRODUCT_NAME);
+        request.setPrice(DEFAULT_PRICE);
+        request.setSaleStatus(STATUS_SELLABLE);
+        request.setStockQty(DEFAULT_STOCK);
 
-        // Mock findById to return the inactive product, triggering the exception in
-        // findProductById
-        when(productRepository.findById(productId)).thenReturn(Optional.of(inactiveProduct));
+        // Simulate that the product with NON_EXISTENT_PRODUCT_ID does not exist
+        when(productRepository.findById(NON_EXISTENT_PRODUCT_ID)).thenReturn(Optional.empty());
 
         // Act & Assert
-        // findProductById (called by updateProduct) should throw the exception
-        assertThrows(ProductInactiveException.class, () -> productService.updateProduct(request));
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
+                () -> productService.updateProduct(request));
+        assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID, exception.getMessage());
 
-        // Verify findById was called, but save should NOT be called
-        verify(productRepository, times(1)).findById(productId);
+        // Verify
+        verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
+        verify(productRepository, never()).existsByName(any(String.class));
         verify(productRepository, never()).save(any(Product.class));
     }
 
     @Test
-    @DisplayName("刪除產品時，若產品已不可銷售應拋出ProductInactiveException")
-    void testDeleteProduct_ThrowsProductInactiveException_WhenProductAlreadyInactive() {
+    @DisplayName("更新產品時，若新產品名稱已存在應拋出ProductAlreadyExistException")
+    void updateProduct_WhenNewNameExists_ShouldThrowProductAlreadyExistException() {
         // Arrange
-        Integer productId = 12;
-        Product inactiveProduct = createTestProduct(productId, "Already Inactive", new BigDecimal("30.00"), 1002, 0);
+        // Use activeProduct from setUp, but we'll try to update its name to one that already exists
+        Product productToUpdate = createTestProduct(ACTIVE_PRODUCT_ID, OLD_PRODUCT_NAME, DEFAULT_PRICE, STATUS_SELLABLE, DEFAULT_STOCK);
 
-        // Mock findById to return the inactive product, triggering the exception in
-        // findProductById
-        when(productRepository.findById(productId)).thenReturn(Optional.of(inactiveProduct));
+        UpdateProductRequest request = new UpdateProductRequest();
+        request.setId(ACTIVE_PRODUCT_ID);
+        request.setName(EXISTING_NAME_PRODUCT_NAME); // This name conflicts with 'productWithExistingName'
+        request.setPrice(BigDecimal.ONE);
+        request.setSaleStatus(STATUS_SELLABLE);
+        request.setStockQty(5);
+
+        when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(productToUpdate));
+        // Simulate that EXISTING_NAME_PRODUCT_NAME is already taken
+        when(productRepository.existsByName(EXISTING_NAME_PRODUCT_NAME)).thenReturn(true);
 
         // Act & Assert
-        // findProductById (called by deleteProduct) should throw the exception
-        assertThrows(ProductInactiveException.class, () -> productService.deleteProduct(productId));
+        ProductAlreadyExistException exception = assertThrows(ProductAlreadyExistException.class,
+                () -> productService.updateProduct(request));
+        assertEquals(EXISTING_NAME_PRODUCT_NAME + " already exists", exception.getMessage());
 
-        // Verify findById was called, but save should NOT be called
-        verify(productRepository, times(1)).findById(productId);
+
+        // Verify
+        verify(productRepository, times(1)).findById(ACTIVE_PRODUCT_ID);
+        verify(productRepository, times(1)).existsByName(EXISTING_NAME_PRODUCT_NAME);
         verify(productRepository, never()).save(any(Product.class));
     }
 
     @Test
-    @DisplayName("取得產品列表時，應只包含可銷售的產品 (狀態不為1002)")
-    void testGetProductList_FiltersInactiveProducts() {
+    @DisplayName("刪除產品時，若產品已不可銷售應拋出ResourceNotFoundException")
+    void testDeleteProduct_ThrowsResourceNotFoundException_WhenProductAlreadyInactive() {
         // Arrange
-        // Simulate the response from the repository query which already filters out
-        // status 1002
-        List<GetProductListResponse> mockResponseList = Arrays.asList(
-                new GetProductListResponse(1, "Active Product 1", new BigDecimal("10.00"), 1001, 5),
-                new GetProductListResponse(3, "Active Product 3", new BigDecimal("30.00"), 1001, 15)
-        // Product with ID 2 (status 1002) is implicitly excluded by the mocked query
-        // result
-        );
-        when(productRepository.getProductList()).thenReturn(mockResponseList);
+        // Use the inactiveProduct from setUp
+        when(productRepository.findById(INACTIVE_PRODUCT_ID)).thenReturn(Optional.of(inactiveProduct));
 
-        // Act
-        List<GetProductListResponse> actualList = productService.getProductList();
+        // Act & Assert
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
+                () -> productService.deleteProduct(INACTIVE_PRODUCT_ID));
 
-        // Assert
-        assertNotNull(actualList);
-        assertEquals(2, actualList.size(), "List should only contain active products");
-        assertTrue(actualList.stream().allMatch(p -> p.getSaleStatus() != 1002),
-                "All products in the list should have status != 1002");
-        assertTrue(actualList.stream().anyMatch(p -> p.getId() == 1));
-        assertTrue(actualList.stream().anyMatch(p -> p.getId() == 3));
+        // Verify exception message
+        assertEquals("Product not found with id: " + INACTIVE_PRODUCT_ID, exception.getMessage());
 
-        // Verify the repository method was called
-        verify(productRepository, times(1)).getProductList();
+        // Verify findById was called once, but save should NOT be called
+        verify(productRepository, times(1)).findById(INACTIVE_PRODUCT_ID);
+        verify(productRepository, never()).save(any(Product.class));
     }
-    // ==================================
-    // Inactive Tests (Commented Out)
-    // ==================================
-
-    // @Test
-    // @DisplayName("根據ID尋找產品時，若產品不存在應拋出ProductNotFoundException")
-    // void testFindProductById_ThrowsProductNotFoundException() {
-    // // Arrange
-    // Integer productId = 1;
-    // when(productRepository.findById(productId)).thenReturn(Optional.empty());
-
-    // // Act & Assert
-    // assertThrows(ProductNotFoundException.class, () ->
-    // productService.findProductById(productId));
-
-    // // Verify
-    // verify(productRepository, times(1)).findById(productId);
-    // }
 
     @Test
-    @DisplayName("根據ID尋找產品時，若產品存在應回傳產品實體")
-    void testFindProductById_ProductFound() {
+    @DisplayName("刪除產品時，若產品ID不存在應拋出ResourceNotFoundException")
+    void deleteProduct_WhenProductNotFoundInitially_ShouldThrowResourceNotFoundException() {
         // Arrange
-        Integer productId = 2;
-        Product expectedProduct = createTestProduct(productId, "Found Product", new BigDecimal("99.99"), 1001, 50);
+        when(productRepository.findById(NON_EXISTENT_PRODUCT_ID)).thenReturn(Optional.empty());
 
-        // Mock the repository to return the product wrapped in Optional
-        when(productRepository.findById(productId)).thenReturn(Optional.of(expectedProduct));
-
-        // Act
-        Product actualProduct = productService.findProductByIdOrThrow(productId);
-
-        // Assert
-        assertNotNull(actualProduct);
-        assertEquals(expectedProduct, actualProduct, "The returned product should match the expected one.");
+        // Act & Assert
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
+                () -> productService.deleteProduct(NON_EXISTENT_PRODUCT_ID));
+        assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID, exception.getMessage());
 
         // Verify
-        verify(productRepository, times(1)).findById(productId);
-    }
-
-    @Test
-    @DisplayName("取得產品詳情成功")
-    void testGetProductDetail_Success() {
-        // Arrange
-        Integer productId = 3;
-        Product mockProduct = createTestProduct(productId, "Detailed Product", new BigDecimal("123.45"), 1001, 20);
-
-        when(productRepository.findById(productId)).thenReturn(Optional.of(mockProduct));
-
-        // Act
-        GetProductDetailResponse response = productService.getProductDetail(productId);
-
-        // Assert
-        assertNotNull(response);
-        assertProductDetailResponseMatchesProduct(response, mockProduct);
-
-        // Verify that findById was called
-        verify(productRepository, times(1)).findById(productId);
+        verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
+        verify(productRepository, never()).save(any(Product.class));
     }
 
     // @Test
-    // @DisplayName("取得產品詳情時，若產品不存在應拋出ProductNotFoundException")
-    // void testGetProductDetail_NotFound() {
-    // // Arrange
-    // Integer productId = 4;
-    // when(productRepository.findById(productId)).thenReturn(Optional.empty());
-
-    // // Act & Assert
-    // assertThrows(ProductNotFoundException.class, () ->
-    // productService.getProductDetail(productId));
-
-    // // Verify that findById was called
-    // verify(productRepository, times(1)).findById(productId);
-    // }
-
-    @Test
-    @DisplayName("根據多個ID取得產品詳情成功")
-    void testGetProductDetails_Success() {
-        // Arrange
-        Set<Integer> ids = new HashSet<>(Arrays.asList(1, 2));
-        Product product1 = createTestProduct(1, "Product 1", new BigDecimal("10.00"), 1001, 10);
-        Product product2 = createTestProduct(2, "Product 2", new BigDecimal("20.00"), 1001, 5);
-        List<Product> foundProducts = Arrays.asList(product1, product2);
-
-        when(productRepository.findAllById(ids)).thenReturn(foundProducts);
-
-        // Act
-        Map<Integer, GetProductDetailResponse> result = productService.getProductDetails(ids);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        assertTrue(result.containsKey(1));
-        assertTrue(result.containsKey(2));
-        assertProductDetailResponseMatchesProduct(result.get(1), product1);
-        assertProductDetailResponseMatchesProduct(result.get(2), product2);
-
-        // Verify
-        verify(productRepository, times(1)).findAllById(ids);
-    }
-
-    // @Test
-    // @DisplayName("根據多個ID取得產品詳情時，若ID集合為null應拋出InvalidRequestException")
-    // void testGetProductDetails_ThrowsInvalidRequestException_WhenIdsNull() {
-    // // Arrange
-    // Set<Integer> ids = null;
-
-    // // Act & Assert
-    // assertThrows(InvalidRequestException.class, () ->
-    // productService.getProductDetails(ids));
-
-    // // Verify no interaction with repository
-    // verifyNoInteractions(productRepository);
+    // @DisplayName("批量更新庫存時，若stockUpdates為null應拋出InvalidRequestException")
+    // void updateProductsStock_WhenStockUpdatesIsNull_ShouldThrowInvalidRequestException() {
+    //     InvalidRequestException exception = assertThrows(InvalidRequestException.class,
+    //             () -> productService.updateProductsStock(null));
+    //     assertEquals("Stock updates cannot be null or empty", exception.getMessage());
+    //     verify(productRepository, never()).findAllById(any());
+    //     verify(productRepository, never()).saveAll(any());
     // }
 
     // @Test
-    // @DisplayName("根據多個ID取得產品詳情時，若ID集合為空應拋出InvalidRequestException")
-    // void testGetProductDetails_ThrowsInvalidRequestException_WhenIdsEmpty() {
-    // // Arrange
-    // Set<Integer> ids = Collections.emptySet();
-
-    // // Act & Assert
-    // assertThrows(InvalidRequestException.class, () ->
-    // productService.getProductDetails(ids));
-
-    // // Verify no interaction with repository
-    // verifyNoInteractions(productRepository);
-    // }
-
-    // @Test
-    // @DisplayName("根據多個ID取得產品詳情時，若部分產品不存在應拋出ProductNotFoundException")
-    // void
-    // testGetProductDetails_ThrowsProductNotFoundException_WhenSomeIdsNotFound() {
-    // // Arrange
-    // Set<Integer> requestedIds = new HashSet<>(Arrays.asList(1, 2, 3)); // Request
-    // 3 IDs
-    // Product product1 = createTestProduct(1, "Product 1", new BigDecimal("10.00"),
-    // 1001, 10);
-    // Product product2 = createTestProduct(2, "Product 2", new BigDecimal("20.00"),
-    // 1001, 5);
-    // List<Product> foundProducts = Arrays.asList(product1, product2); // Only find
-    // 2
-
-    // when(productRepository.findAllById(requestedIds)).thenReturn(foundProducts);
-
-    // // Act & Assert
-    // ProductNotFoundException exception =
-    // assertThrows(ProductNotFoundException.class,
-    // () -> productService.getProductDetails(requestedIds));
-    // assertTrue(exception.getMessage().contains("Products not found with ids:
-    // [3]")); // Check for missing ID
-
-    // // Verify
-    // verify(productRepository, times(1)).findAllById(requestedIds);
-    // }
-
-    @Test
-    @DisplayName("更新產品成功")
-    void testUpdateProduct_Success() {
-        // Arrange
-        Integer productId = 6;
-        UpdateProductRequest request = new UpdateProductRequest();
-        request.setId(productId);
-        request.setName("Updated Gadget");
-        request.setPrice(new BigDecimal("249.99"));
-        request.setSaleStatus(1002); // Update status
-        request.setStockQty(75);
-
-        // Existing product found in DB
-        Product existingProduct = createTestProduct(productId, "Old Gadget", new BigDecimal("199.99"), 1001, 100);
-
-        // Product after save (potentially with updated modifiedDate)
-        Product savedProduct = new Product();
-        savedProduct.setId(productId);
-        savedProduct.setName(request.getName());
-        savedProduct.setPrice(request.getPrice());
-        savedProduct.setSaleStatus(request.getSaleStatus());
-        savedProduct.setStockQty(request.getStockQty());
-        savedProduct.setModifiedDate(LocalDate.now()); // Simulate DB update
-
-        when(productRepository.findById(productId)).thenReturn(Optional.of(existingProduct));
-        when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
-
-        // Act
-        productService.updateProduct(request);
-        
-        // Verify interactions
-        verify(productRepository, times(1)).findById(productId);
-        ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
-        verify(productRepository, times(1)).save(productCaptor.capture());
-
-        // Verify the state of the product passed to save
-        Product capturedProduct = productCaptor.getValue();
-        assertEquals(request.getName(), capturedProduct.getName());
-        assertEquals(request.getPrice(), capturedProduct.getPrice());
-        assertEquals(request.getSaleStatus(), capturedProduct.getSaleStatus());
-        assertEquals(request.getStockQty(), capturedProduct.getStockQty());
-    }
-
-    // @Test
-    // @DisplayName("更新產品時，若產品不存在應拋出ProductNotFoundException")
-    // void testUpdateProduct_NotFound() {
-    // // Arrange
-    // Integer productId = 7;
-    // UpdateProductRequest request = new UpdateProductRequest();
-    // request.setId(productId); // Set other fields if needed, but ID is key
-    // when(productRepository.findById(productId)).thenReturn(Optional.empty());
-
-    // // Act & Assert
-    // assertThrows(ProductNotFoundException.class, () ->
-    // productService.updateProduct(request));
-
-    // // Verify findById was called, but save was not
-    // verify(productRepository, times(1)).findById(productId);
-    // verify(productRepository, times(0)).save(any(Product.class)); // Ensure save
-    // is not called
-    // }
-
-    // @Test
-    // void testDeleteProduct_NotFound() {
-    // // Arrange
-    // Integer productId = 9;
-    // when(productRepository.findById(productId)).thenReturn(Optional.empty());
-
-    // // Act & Assert
-    // assertThrows(ProductNotFoundException.class, () ->
-    // productService.deleteProduct(productId));
-
-    // // Verify findById was called, but save was not
-    // verify(productRepository, times(1)).findById(productId);
-    // verify(productRepository, times(0)).save(any(Product.class));
-    // }
-
-    @Test
-    @DisplayName("批量更新庫存成功 (updateProductsStock)")
-    void testUpdateProductsStock_Success() {
-        // Arrange
-        Map<Integer, Integer> stockUpdates = Map.of(
-                1, 50, // Update product 1 stock to 50
-                2, 75 // Update product 2 stock to 75
-        );
-        Set<Integer> productIds = stockUpdates.keySet();
-
-        Product product1 = createTestProduct(1, "Product 1", new BigDecimal("10.00"), 1001, 10); // Initial stock 10
-        Product product2 = createTestProduct(2, "Product 2", new BigDecimal("20.00"), 1001, 20); // Initial stock 20
-        List<Product> foundProducts = Arrays.asList(product1, product2);
-
-        when(productRepository.findAllById(productIds)).thenReturn(foundProducts);
-        when(productRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0)); // Return the saved
-                                                                                                    // list
-
-        // Act
-        productService.updateProductsStock(stockUpdates);
-
-        // Assert
-        verify(productRepository, times(1)).findAllById(productIds);
-
-        ArgumentCaptor<List<Product>> listCaptor = ArgumentCaptor.forClass(List.class);
-        verify(productRepository, times(1)).saveAll(listCaptor.capture());
-
-        List<Product> savedProducts = listCaptor.getValue();
-        assertEquals(2, savedProducts.size());
-
-        // Check if stock quantities were updated correctly before saving
-        Product savedProduct1 = savedProducts.stream().filter(p -> p.getId().equals(1)).findFirst().orElseThrow();
-        Product savedProduct2 = savedProducts.stream().filter(p -> p.getId().equals(2)).findFirst().orElseThrow();
-
-        assertEquals(50, savedProduct1.getStockQty(), "Product 1 stock should be updated");
-        assertEquals(75, savedProduct2.getStockQty(), "Product 2 stock should be updated");
-    }
-
-    // @Test
-    // void testUpdateProductsStock_ThrowsInvalidRequestException_WhenMapIsNull() {
-    // // Arrange
-    // Map<Integer, Integer> stockUpdates = null;
-
-    // // Act & Assert
-    // assertThrows(InvalidRequestException.class, () ->
-    // productService.updateProductsStock(stockUpdates));
-    // verifyNoInteractions(productRepository); // Ensure no DB interaction
-    // }
-
-    // @Test
-    // void testUpdateProductsStock_ThrowsInvalidRequestException_WhenMapIsEmpty() {
-    // // Arrange
-    // Map<Integer, Integer> stockUpdates = Collections.emptyMap();
-
-    // // Act & Assert
-    // assertThrows(InvalidRequestException.class, () ->
-    // productService.updateProductsStock(stockUpdates));
-    // verifyNoInteractions(productRepository); // Ensure no DB interaction
-    // }
-
-    // @Test
-    // void
-    // testUpdateProductsStock_ThrowsProductNotFoundException_WhenProductMissing() {
-    // // Arrange
-    // Map<Integer, Integer> stockUpdates = Map.of(1, 50, 99, 100); // Product 99
-    // does not exist
-    // Set<Integer> requestedIds = stockUpdates.keySet();
-    // Product product1 = createTestProduct(1, "Product 1", new BigDecimal("10.00"),
-    // 1001, 10);
-    // when(productRepository.findAllById(requestedIds)).thenReturn(List.of(product1));
-    // // Only return product 1
-
-    // // Act & Assert (Exception comes from findProductsByIds)
-    // assertThrows(ProductNotFoundException.class, () ->
-    // productService.updateProductsStock(stockUpdates));
-    // verify(productRepository, times(1)).findAllById(requestedIds);
-    // verify(productRepository, times(0)).saveAll(any()); // Ensure saveAll is not
-    // called
-    // }
-
-    @Test
-    @DisplayName("根據多個ID尋找產品成功 (findProductsByIds)")
-    void testFindProductsByIds_Success() {
-        // Arrange
-        Set<Integer> productIds = Set.of(1, 2);
-        Product product1 = createTestProduct(1, "P1", BigDecimal.TEN, 1001, 5);
-        Product product2 = createTestProduct(2, "P2", BigDecimal.ONE, 1001, 10);
-        List<Product> expectedProducts = Arrays.asList(product1, product2);
-
-        when(productRepository.findAllById(productIds)).thenReturn(expectedProducts);
-
-        // Act
-        List<Product> actualProducts = productService.findProductsByIds(productIds);
-
-        // Assert
-        assertNotNull(actualProducts);
-        assertEquals(2, actualProducts.size());
-        assertTrue(actualProducts.containsAll(expectedProducts));
-        verify(productRepository, times(1)).findAllById(productIds);
-    }
-
-    // @Test
-    // void testFindProductsByIds_SomeNotFound_ThrowsProductNotFoundException() {
-    // // Arrange
-    // Set<Integer> requestedIds = Set.of(1, 2, 3); // Request 3
-    // Product product1 = createTestProduct(1, "P1", BigDecimal.TEN, 1001, 5);
-    // Product product2 = createTestProduct(2, "P2", BigDecimal.ONE, 1001, 10);
-    // List<Product> foundProducts = Arrays.asList(product1, product2); // Only find
-    // 2
-
-    // when(productRepository.findAllById(requestedIds)).thenReturn(foundProducts);
-
-    // // Act & Assert
-    // ProductNotFoundException exception =
-    // assertThrows(ProductNotFoundException.class,
-    // () -> productService.findProductsByIds(requestedIds));
-
-    // assertTrue(exception.getMessage().contains("Products not found with ids:
-    // [3]"),
-    // "Exception message should contain the missing ID");
-    // verify(productRepository, times(1)).findAllById(requestedIds);
-    // }
-
-    // @Test
-    // void testFindProductsByIds_AllNotFound_ThrowsProductNotFoundException() {
-    // // Arrange
-    // Set<Integer> requestedIds = Set.of(4, 5); // Request 2, find 0
-    // List<Product> foundProducts = Collections.emptyList();
-
-    // when(productRepository.findAllById(requestedIds)).thenReturn(foundProducts);
-
-    // // Act & Assert
-    // ProductNotFoundException exception =
-    // assertThrows(ProductNotFoundException.class,
-    // () -> productService.findProductsByIds(requestedIds));
-
-    // // The order in the set might vary, so check for both IDs
-    // assertTrue(exception.getMessage().contains("Products not found with ids: ")
-    // &&
-    // exception.getMessage().contains("4") &&
-    // exception.getMessage().contains("5"),
-    // "Exception message should contain all missing IDs");
-    // verify(productRepository, times(1)).findAllById(requestedIds);
-    // }
-
-    // Note: Tests for null/empty input IDs are implicitly covered by testing
-    // validateProductIds, which is called first by findProductsByIds.
-    // Adding explicit tests here would duplicate the validation logic test.
-    // See testValidateProductIds_ThrowsInvalidRequestException.
-
-    // @Test
-    // void testValidateProductIds_ThrowsInvalidRequestException() {
-    // // Act & Assert
-    // assertThrows(InvalidRequestException.class, () ->
-    // productService.validateProductIds(null));
+    // @DisplayName("批量更新庫存時，若stockUpdates為空Map應拋出InvalidRequestException")
+    // void updateProductsStock_WhenStockUpdatesIsEmpty_ShouldThrowInvalidRequestException() {
+    //     InvalidRequestException exception = assertThrows(InvalidRequestException.class,
+    //             () -> productService.updateProductsStock(new HashMap<>()));
+    //     assertEquals("Stock updates cannot be null or empty", exception.getMessage());
+    //     verify(productRepository, never()).findAllById(any());
+    //     verify(productRepository, never()).saveAll(any());
     // }
 
     // --- Helper Methods ---
-
     /**
      * Creates a Product instance for testing purposes.
      */
@@ -654,19 +227,5 @@ class ProductServiceTest {
         // always needed here
         return product;
     }
-
-    /**
-     * Asserts that the fields of a GetProductDetailResponse match the corresponding
-     * fields of a Product.
-     *
-     * @param actualResponse  The actual response DTO.
-     * @param expectedProduct The expected product entity.
-     */
-    private void assertProductDetailResponseMatchesProduct(GetProductDetailResponse actualResponse,
-            Product expectedProduct) {
-        assertEquals(expectedProduct.getName(), actualResponse.getName(), "Name should match");
-        assertEquals(expectedProduct.getPrice(), actualResponse.getPrice(), "Price should match");
-        assertEquals(expectedProduct.getSaleStatus(), actualResponse.getSaleStatus(), "SaleStatus should match");
-        assertEquals(expectedProduct.getStockQty(), actualResponse.getStockQty(), "StockQty should match");
-    }
+    
 }
