@@ -10,4 +10,7 @@ import com.ibm.demo.account.DTO.GetAccountListResponse;
 public interface AccountRepository extends JpaRepository<Account, Integer> {
     @Query("SELECT new com.ibm.demo.account.DTO.GetAccountListResponse(a.id, a.name, a.status) FROM Account a WHERE a.status = :status")
     List<GetAccountListResponse> findByStatus(String status);
+
+    @Query("SELECT new com.ibm.demo.account.DTO.GetAccountListResponse(a.id, a.name, a.status) FROM Account a")
+    List<GetAccountListResponse> findAllAccount();
 }

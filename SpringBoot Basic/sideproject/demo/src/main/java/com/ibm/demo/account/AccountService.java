@@ -43,6 +43,9 @@ public class AccountService {
      * @return List<GetAccountListResponse>
      */
     public List<GetAccountListResponse> getAccountList(String status) {
+        if (status == null || status.isEmpty()) {
+            return accountRepository.findAllAccount();
+        }
         return accountRepository.findByStatus(status);
     }
 
