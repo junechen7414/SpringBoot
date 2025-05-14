@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,11 +49,11 @@ class ProductServiceTest {
     private static final String NEW_PRODUCT_NAME = "New Product Name";
     private static final String OLD_PRODUCT_NAME = "Old Product Name";
     
-    private Product inactiveProduct;
+    private static Product inactiveProduct;
     
 
-    @BeforeEach
-    void setUp() {        
+    @BeforeAll
+    static void setUp() {        
         inactiveProduct = createTestProduct(INACTIVE_PRODUCT_ID, INACTIVE_PRODUCT_NAME, new BigDecimal("20.00"), STATUS_NOT_SELLABLE, 0);        
     }
 
@@ -216,7 +216,7 @@ class ProductServiceTest {
     /**
      * Creates a Product instance for testing purposes.
      */
-    private Product createTestProduct(Integer id, String name, BigDecimal price, Integer saleStatus, Integer stockQty) {
+    private static Product createTestProduct(Integer id, String name, BigDecimal price, Integer saleStatus, Integer stockQty) {
         Product product = new Product();
         product.setId(id);
         product.setName(name);

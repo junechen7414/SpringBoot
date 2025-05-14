@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,11 +35,11 @@ public class AccountServiceTest {
     @InjectMocks
     private AccountService accountService;
 
-    private Account activeAccount;
-    private Account inactiveAccount;
+    private static Account activeAccount;
+    private static Account inactiveAccount;
 
-    @BeforeEach
-    void setUp() {
+    @BeforeAll
+    static void setUp() {
         activeAccount = new Account();
         activeAccount.setId(1);
         activeAccount.setName("Test Account Active");

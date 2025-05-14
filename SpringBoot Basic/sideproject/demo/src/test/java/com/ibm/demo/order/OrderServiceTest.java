@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -89,26 +89,29 @@ class OrderServiceTest {
     private static final Integer DEFAULT_ORDER_ITEM_QTY = 2;
 
     // --- Shared Mock Responses ---
-    private GetAccountDetailResponse activeAccountResponse;
-    private GetAccountDetailResponse inactiveAccountResponse;
-    private GetProductDetailResponse sellableProduct1Detail;
-    private GetProductDetailResponse nonSellableProductDetail;
-    private GetProductDetailResponse productForStockCheckDetail;
+    private static GetAccountDetailResponse activeAccountResponse;
+    private static GetAccountDetailResponse inactiveAccountResponse;
+    private static GetProductDetailResponse sellableProduct1Detail;
+    private static GetProductDetailResponse nonSellableProductDetail;
+    private static GetProductDetailResponse productForStockCheckDetail;
 
-    @BeforeEach
-    void setUp() {
+    @BeforeAll
+    static void setUp() {
         activeAccountResponse = createTestAccountDetailResponse(ACTIVE_ACCOUNT_ID, "Y");
         inactiveAccountResponse = createTestAccountDetailResponse(INACTIVE_ACCOUNT_ID, "N");
 
-        sellableProduct1Detail = createTestProductDetailResponse(SELLABLE_PRODUCT_ID_1, "Sellable Product 1", DEFAULT_PRICE, DEFAULT_STOCK_QTY);
-        nonSellableProductDetail = createTestProductDetailResponse(NON_SELLABLE_PRODUCT_ID, "Non-Sellable Product", DEFAULT_PRICE, DEFAULT_STOCK_QTY);
+        sellableProduct1Detail = createTestProductDetailResponse(SELLABLE_PRODUCT_ID_1, "Sellable Product 1",
+                DEFAULT_PRICE, DEFAULT_STOCK_QTY);
+        nonSellableProductDetail = createTestProductDetailResponse(NON_SELLABLE_PRODUCT_ID, "Non-Sellable Product",
+                DEFAULT_PRICE, DEFAULT_STOCK_QTY);
         nonSellableProductDetail.setSaleStatus(PRODUCT_STATUS_NOT_SELLABLE);
-        productForStockCheckDetail = createTestProductDetailResponse(PRODUCT_ID_FOR_STOCK_CHECK, "Low Stock Product", DEFAULT_PRICE, LOW_STOCK_QTY);
+        productForStockCheckDetail = createTestProductDetailResponse(PRODUCT_ID_FOR_STOCK_CHECK, "Low Stock Product",
+                DEFAULT_PRICE, LOW_STOCK_QTY);
     }
 
     // --- Helper Methods ---
 
-    private OrderInfo createTestOrderInfo(Integer orderId, Integer accountId, Integer status) {
+    private static OrderInfo createTestOrderInfo(Integer orderId, Integer accountId, Integer status) {
         OrderInfo orderInfo = new OrderInfo();
         orderInfo.setId(orderId);
         orderInfo.setAccountId(accountId);
@@ -119,7 +122,7 @@ class OrderServiceTest {
         return orderInfo;
     }
 
-    private OrderDetail createTestOrderDetail(OrderInfo orderInfo, Integer productId, Integer quantity) {
+    private static OrderDetail createTestOrderDetail(OrderInfo orderInfo, Integer productId, Integer quantity) {
         OrderDetail detail = new OrderDetail(orderInfo, productId, quantity);
         // Assuming OrderDetail might have an ID after saving, but not needed for most
         // tests here
@@ -127,7 +130,8 @@ class OrderServiceTest {
         return detail;
     }
 
-    private GetProductDetailResponse createTestProductDetailResponse(Integer productId, String name, BigDecimal price,
+    private static GetProductDetailResponse createTestProductDetailResponse(Integer productId, String name,
+            BigDecimal price,
             Integer stock) {
         GetProductDetailResponse dto = new GetProductDetailResponse(); // 假設 DTO 有無參數建構子
         dto.setName(name);
@@ -137,7 +141,7 @@ class OrderServiceTest {
         return dto;
     }
 
-    private GetAccountDetailResponse createTestAccountDetailResponse(Integer accountId, String status) {
+    private static GetAccountDetailResponse createTestAccountDetailResponse(Integer accountId, String status) {
         GetAccountDetailResponse accResponse = new GetAccountDetailResponse();
         accResponse.setStatus(status);
         return accResponse;
@@ -152,7 +156,7 @@ class OrderServiceTest {
         request.setOrderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1)));
 
         // 模擬 accountClient.getAccountDetail 返回一個狀態為 "N" (非活躍) 的帳戶
-        when(accountClient.getAccountDetail(INACTIVE_ACCOUNT_ID)).thenReturn(this.inactiveAccountResponse);
+        when(accountClient.getAccountDetail(INACTIVE_ACCOUNT_ID)).thenReturn(OrderServiceTest.inactiveAccountResponse);
 
         // Act & Assert
         AccountInactiveException exception = assertThrows(AccountInactiveException.class, () -> {
@@ -173,18 +177,18 @@ class OrderServiceTest {
         request.setAccountId(ACTIVE_ACCOUNT_ID);
         request.setOrderDetails(List.of(
                 new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1),
-                new CreateOrderDetailRequest(NON_SELLABLE_PRODUCT_ID, 1)
-        ));
+                new CreateOrderDetailRequest(NON_SELLABLE_PRODUCT_ID, 1)));
 
         // 模擬 accountClient.getAccountDetail 返回一個活躍帳戶
-        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID)).thenReturn(this.activeAccountResponse);
+        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID)).thenReturn(OrderServiceTest.activeAccountResponse);
 
         // Mock Product Details: NON_SELLABLE_PRODUCT_ID is not sellable
         Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
         productDetailsMap.put(SELLABLE_PRODUCT_ID_1, sellableProduct1Detail);
         productDetailsMap.put(NON_SELLABLE_PRODUCT_ID, nonSellableProductDetail); // This one has status NOT_SELLABLE
 
-        // The service's batchGetProductDetailsIfInactiveThrow method will perform the check
+        // The service's batchGetProductDetailsIfInactiveThrow method will perform the
+        // check
         when(productClient.getProductDetails(Set.of(SELLABLE_PRODUCT_ID_1, NON_SELLABLE_PRODUCT_ID)))
                 .thenReturn(productDetailsMap);
 
@@ -192,7 +196,8 @@ class OrderServiceTest {
         ProductInactiveException exception = assertThrows(ProductInactiveException.class, () -> {
             orderService.createOrder(request);
         });
-        // The service method batchGetProductDetailsIfInactiveThrow throws "商品不可銷售，ID: " + productId
+        // The service method batchGetProductDetailsIfInactiveThrow throws "商品不可銷售，ID: "
+        // + productId
         assertTrue(exception.getMessage().contains("商品不可銷售，ID: " + NON_SELLABLE_PRODUCT_ID));
 
         // Verify no persistence occurred
@@ -207,10 +212,11 @@ class OrderServiceTest {
         // Arrange
         CreateOrderRequest request = new CreateOrderRequest();
         request.setAccountId(ACTIVE_ACCOUNT_ID);
-        request.setOrderDetails(List.of(new CreateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK, REQUEST_QTY_EXCEEDING_STOCK)));
+        request.setOrderDetails(
+                List.of(new CreateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK, REQUEST_QTY_EXCEEDING_STOCK)));
 
         // 模擬 accountClient.getAccountDetail 返回一個活躍帳戶
-        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID)).thenReturn(this.activeAccountResponse);
+        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID)).thenReturn(OrderServiceTest.activeAccountResponse);
 
         // Mock Product Details: PRODUCT_ID_FOR_STOCK_CHECK has LOW_STOCK_QTY
         Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
@@ -311,7 +317,8 @@ class OrderServiceTest {
         UpdateOrderRequest request = new UpdateOrderRequest();
         request.setOrderId(EXISTING_ORDER_ID);
         // Update item to a quantity that exceeds available stock
-        request.setItems(List.of(new UpdateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK, REQUEST_QTY_EXCEEDING_STOCK)));
+        request.setItems(
+                List.of(new UpdateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK, REQUEST_QTY_EXCEEDING_STOCK)));
 
         when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
 
@@ -346,7 +353,7 @@ class OrderServiceTest {
         verify(orderDetailRepository, never()).deleteAll(anyList());
         verify(productClient, never()).updateProductsStock(anyMap());
     }
-    
+
     @Test
     @DisplayName("刪除訂單時，若訂單不存在，應拋出 ResourceNotFoundException")
     void deleteOrder_WhenOrderNotFound_ShouldThrowResourceNotFoundException() {
@@ -372,7 +379,9 @@ class OrderServiceTest {
     void deleteOrder_WhenStatusNotPending_ShouldThrowResourceNotFoundException() {
         // Arrange
         // 1. Create an existing order with a non-pending
-        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_DELETED); // Status is DELETED
+        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_DELETED); // Status
+                                                                                                             // is
+                                                                                                             // DELETED
 
         // 2. Mock findById
         when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
