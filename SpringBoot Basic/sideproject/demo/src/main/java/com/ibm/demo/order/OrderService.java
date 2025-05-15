@@ -81,13 +81,14 @@ public class OrderService {
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
                 List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
 
-                // 遍歷訂單明細，因為需要取得庫存和訂單數量，上面沒有拋出例外的話代表request中所有存在的商品ID皆為可銷售的，
-                // 所以不用再額外判斷是否有null或空集合
+                // 遍歷訂單明細，如果requestProductId在productDetailsMap中存在，則計算庫存變更
+                // 並建立新的訂單明細物件，最後將其加入到orderDetailsToBeCreated列表中
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
                         Integer requestProductId = detailRequest.getProductId();
                         Integer requestQuantity = detailRequest.getQuantity();
                         GetProductDetailResponse productDetail = productDetailsMap.get(requestProductId);
 
+                        // 商品若不再取回的商品資訊中，該跳過，表示用該ID沒找到該商品
                         if (productDetail == null) {
                                 continue;
                         }

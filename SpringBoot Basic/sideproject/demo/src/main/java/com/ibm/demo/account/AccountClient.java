@@ -9,7 +9,6 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.ResourceNotFoundException;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 
 @Component
 public class AccountClient {
@@ -33,26 +32,6 @@ public class AccountClient {
             }
             // 對於其他 4xx/5xx 錯誤，可以拋出通用錯誤或更具體的錯誤
             throw new RuntimeException("呼叫帳戶服務失敗: " + errorMessage, ex);
-        }
-    }
-
-    public void validateActiveAccount(Integer accountId) {
-        try {
-            webClient.post()
-                    .uri("/validate/{accountId}", accountId)
-                    .retrieve()
-                    .bodyToMono(Void.class)
-                    .block();
-        } catch (WebClientResponseException ex) {
-            String errorMessage = extractErrorMessage(ex, "帳戶驗證失敗");
-            if (ex.getStatusCode() == HttpStatusCode.valueOf(404)) {
-                throw new ResourceNotFoundException(errorMessage);
-            } else if (ex.getStatusCode() == HttpStatusCode.valueOf(400)) {
-                // 回傳400表示帳戶模組拋出例外
-                throw new AccountInactiveException(errorMessage);
-            }
-            // 對於其他 4xx/5xx 錯誤
-            throw new RuntimeException("呼叫帳戶服務驗證失敗: " + errorMessage, ex);
         }
     }
 

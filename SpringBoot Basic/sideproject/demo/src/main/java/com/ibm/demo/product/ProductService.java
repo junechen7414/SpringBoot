@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -146,8 +147,35 @@ public class ProductService {
             throw new InvalidRequestException("Stock updates cannot be null or empty");
         }
 
-        List<Product> products = findProductsByIds(stockUpdates.keySet());
+        // 驗證 stockUpdates 中的值不能為 null，且不能為負數 (如果這是業務需求)
+        for (Map.Entry<Integer, Integer> entry : stockUpdates.entrySet()) {
+            Integer productId = entry.getKey();
+            Integer newStock = entry.getValue();
 
+            if (productId == null) {
+                // 理論上，JSON key 反序列化為 Integer key 時，key 不會是 null
+                // 但為求完整性，可以加上此判斷
+                throw new InvalidRequestException("Product ID in stock updates cannot be null.");
+            }
+            if (newStock == null) {
+                throw new InvalidRequestException("Stock quantity for product ID " + productId + " cannot be null.");
+            }
+            if (newStock < 0) {
+                // 假設庫存不能為負
+                throw new InvalidRequestException("Stock quantity for product ID " + productId + " cannot be negative.");
+            }
+        }
+
+        Set<Integer> productIdsToUpdate = stockUpdates.keySet();
+        List<Product> products = findProductsByIds(productIdsToUpdate);
+
+        // 確保請求中的所有 ID 都找到了對應的商品，如果需要嚴格檢查
+        if (products.size() != productIdsToUpdate.size()) {
+            Set<Integer> foundProductIds = products.stream().map(Product::getId).collect(Collectors.toSet());
+            productIdsToUpdate.removeAll(foundProductIds); // 找出未找到的 ID
+            throw new ResourceNotFoundException("Some products not found for IDs: " + productIdsToUpdate);
+        }
+        
         for (Product product : products) {
             Integer newStock = stockUpdates.get(product.getId());
             product.setStockQty(newStock);
