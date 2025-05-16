@@ -155,14 +155,14 @@ class OrderServiceTest {
         request.setAccountId(INACTIVE_ACCOUNT_ID);
         request.setOrderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1)));
 
-        // 模擬 accountClient.getAccountDetail 返回一個狀態為 "N" (非活躍) 的帳戶
+        // accountClient屬於依賴所以要設定當accountClient.getAccountDetail傳入這個INACTIVE_ACCOUNT_ID時應該立即回傳的結果
         when(accountClient.getAccountDetail(INACTIVE_ACCOUNT_ID)).thenReturn(OrderServiceTest.inactiveAccountResponse);
 
         // Act & Assert
         AccountInactiveException exception = assertThrows(AccountInactiveException.class, () -> {
             orderService.createOrder(request);
         });
-
+        // 有重複疑慮
         assertEquals("帳戶狀態停用", exception.getMessage());
         // Verify 確保沒有儲存任何訂單或明細
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));

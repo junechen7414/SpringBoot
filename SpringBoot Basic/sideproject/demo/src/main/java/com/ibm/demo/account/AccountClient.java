@@ -21,7 +21,7 @@ public class AccountClient {
     public GetAccountDetailResponse getAccountDetail(Integer accountId) {
         try {
             return webClient.get()
-                    .uri("/{id}", accountId)
+                    .uri("/getDetail/{id}", accountId)
                     .retrieve() // 取得回傳
                     .bodyToMono(GetAccountDetailResponse.class) // 將ResponseBody轉換型態到Mono，而Java需要知道如何將JSON轉換為具體的類型
                     .block();
