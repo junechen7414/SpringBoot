@@ -17,6 +17,7 @@ import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Data
 @NoArgsConstructor
@@ -34,25 +35,13 @@ public class OrderDetail {
     @Schema(description = "訂單明細編號", example = "1")
     private Integer id;
 
-    // @Column(name = "ORDER_ID", columnDefinition = "NUMBER(10)")
-    // @Schema(description = "關聯的訂單ID", example = "1")
-    // private Integer orderId;
-
-    // @Column(name = "PRODUCT_ID", columnDefinition = "NUMBER(10)")
-    // @Schema(description = "關聯的產品ID", example = "1")
-    // private Integer productId;
-
     // 加入與 OrderInfo 的多對一關係映射
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
     @JoinColumn(name = "ORDER_ID", referencedColumnName = "ID", nullable = false) // 外鍵欄位 ORDER_ID 指向 OrderInfo 的 ID
+    @ToString.Exclude //加在Entity中的OneToMany或ManyToOne的關聯上，否則會造成循環引用的問題，導致 StackOverflowError。
     @Schema(description = "訂單編號", example = "1")
     private OrderInfo orderInfo; // 指向所屬的 OrderInfo 物件
 
-    // 加入與 Product 的多對一關係映射
-    // @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
-    // @JoinColumn(name = "PRODUCT_ID", referencedColumnName = "ID", nullable =
-    // false) // 外鍵欄位 PRODUCT_ID 指向 Product 的 ID
-    // private Product product; // 指向關聯的 Product 物件
     @Schema(description = "商品編號", example = "1")
     @Column(name = "PRODUCT_ID", columnDefinition = "NUMBER(10)", nullable = false)
     private Integer productId;

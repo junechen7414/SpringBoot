@@ -20,6 +20,7 @@ import jakarta.persistence.TemporalType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Data
 @NoArgsConstructor
@@ -53,6 +54,7 @@ public class OrderInfo {
     private LocalDate modifiedDate;
 
     @OneToMany(mappedBy = "orderInfo", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude //加在Entity中的OneToMany或ManyToOne的關聯上，否則會造成循環引用的問題，導致 StackOverflowError。
     private List<OrderDetail> orderDetails; // 存放該訂單下的所有產品明細
 
     @PrePersist

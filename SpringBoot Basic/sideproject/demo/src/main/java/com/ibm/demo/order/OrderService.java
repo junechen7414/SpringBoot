@@ -348,7 +348,6 @@ public class OrderService {
                                 .orElseThrow(() -> new ResourceNotFoundException(
                                                 "Order not found with ID: " + orderId));
 
-                // logger.info("找到要刪除的訂單，ID: {}", orderId);
 
                 // 2. 驗證訂單狀態
                 if (existingOrderInfo.getStatus() == 1003) {
@@ -393,8 +392,7 @@ public class OrderService {
                 // 7. 更新訂單狀態為已刪除(1003)
                 existingOrderInfo.setStatus(1003);
                 orderInfoRepository.save(existingOrderInfo);
-
-                // logger.info("訂單已刪除，ID: {}", orderId);
+                
         }
 
         /**
