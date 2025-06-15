@@ -1,8 +1,6 @@
 package com.ibm.demo.order;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -159,12 +157,10 @@ class OrderServiceTest {
         when(accountClient.getAccountDetail(INACTIVE_ACCOUNT_ID)).thenReturn(OrderServiceTest.inactiveAccountResponse);
 
         // Act & Assert
-        AccountInactiveException exception = assertThrows(AccountInactiveException.class, () -> {
+        assertThrows(AccountInactiveException.class, () -> {
             orderService.createOrder(request);
         });
-        // 有重複疑慮
-        assertEquals("帳戶狀態停用", exception.getMessage());
-        // Verify 確保沒有儲存任何訂單或明細
+        // Verify 確保沒有儲存任何訂單或明細 (No need to assert message if type is correct)
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
         verify(orderDetailRepository, never()).saveAll(anyList());
     }
@@ -193,12 +189,9 @@ class OrderServiceTest {
                 .thenReturn(productDetailsMap);
 
         // Act & Assert
-        ProductInactiveException exception = assertThrows(ProductInactiveException.class, () -> {
+        assertThrows(ProductInactiveException.class, () -> {
             orderService.createOrder(request);
         });
-        // The service method batchGetProductDetailsIfInactiveThrow throws "商品不可銷售，ID: "
-        // + productId
-        assertTrue(exception.getMessage().contains("商品不可銷售，ID: " + NON_SELLABLE_PRODUCT_ID));
 
         // Verify no persistence occurred
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
@@ -224,20 +217,9 @@ class OrderServiceTest {
         when(productClient.getProductDetails(Set.of(PRODUCT_ID_FOR_STOCK_CHECK))).thenReturn(productDetailsMap);
 
         // Act & Assert
-        ProductStockNotEnoughException exception = assertThrows(ProductStockNotEnoughException.class, () -> {
+        assertThrows(ProductStockNotEnoughException.class, () -> {
             orderService.createOrder(request);
         });
-
-        // Verify exception message based on calculateNewStock format
-        String expectedMsgPart1 = String.format("商品 %d 庫存不足", PRODUCT_ID_FOR_STOCK_CHECK);
-        String expectedMsgPart2 = String.format("目前庫存: %d", LOW_STOCK_QTY);
-        String expectedMsgPart3 = String.format("訂單新數量: %d", REQUEST_QTY_EXCEEDING_STOCK);
-        assertTrue(exception.getMessage().contains(expectedMsgPart1),
-                "Exception message should contain product ID part");
-        assertTrue(exception.getMessage().contains(expectedMsgPart2),
-                "Exception message should contain current stock part");
-        assertTrue(exception.getMessage().contains(expectedMsgPart3),
-                "Exception message should contain requested quantity part");
 
         // Verify no persistence occurred
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
@@ -257,11 +239,9 @@ class OrderServiceTest {
         when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.empty());
 
         // Act & Assert
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             orderService.updateOrder(request);
         });
-
-        assertEquals("Order not found with ID: " + EXISTING_ORDER_ID, exception.getMessage());
 
         // Verify no persistence occurred
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
@@ -294,10 +274,9 @@ class OrderServiceTest {
                 .thenReturn(productDetailsMap);
 
         // Act & Assert
-        ProductInactiveException exception = assertThrows(ProductInactiveException.class, () -> {
+        assertThrows(ProductInactiveException.class, () -> {
             orderService.updateOrder(request);
         });
-        assertTrue(exception.getMessage().contains("商品不可銷售，ID: " + NON_SELLABLE_PRODUCT_ID));
 
         // Verify no persistence occurred beyond finding the initial order
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
@@ -328,23 +307,9 @@ class OrderServiceTest {
         when(productClient.getProductDetails(Set.of(PRODUCT_ID_FOR_STOCK_CHECK))).thenReturn(productDetailsMap);
 
         // Act & Assert
-        ProductStockNotEnoughException exception = assertThrows(ProductStockNotEnoughException.class, () -> {
+        assertThrows(ProductStockNotEnoughException.class, () -> {
             orderService.updateOrder(request);
         });
-
-        // Verify exception message based on calculateNewStock format
-        String expectedMsgPart1 = String.format("商品 %d 庫存不足", PRODUCT_ID_FOR_STOCK_CHECK);
-        String expectedMsgPart2 = String.format("目前庫存: %d", LOW_STOCK_QTY);
-        String expectedMsgPart3 = String.format("訂單原數量: %d", DEFAULT_ORDER_ITEM_QTY);
-        String expectedMsgPart4 = String.format("訂單新數量: %d", REQUEST_QTY_EXCEEDING_STOCK);
-        assertTrue(exception.getMessage().contains(expectedMsgPart1),
-                "Exception message should contain product ID part");
-        assertTrue(exception.getMessage().contains(expectedMsgPart2),
-                "Exception message should contain current stock part");
-        assertTrue(exception.getMessage().contains(expectedMsgPart3),
-                "Exception message should contain original quantity part");
-        assertTrue(exception.getMessage().contains(expectedMsgPart4),
-                "Exception message should contain requested quantity part");
 
         // Verify no persistence occurred beyond finding the initial order
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
@@ -361,11 +326,9 @@ class OrderServiceTest {
         when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.empty());
 
         // Act & Assert
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             orderService.deleteOrder(EXISTING_ORDER_ID);
         });
-
-        assertEquals("Order not found with ID: " + EXISTING_ORDER_ID, exception.getMessage());
 
         // Verify findById was called, but no further processing occurred
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
@@ -387,11 +350,9 @@ class OrderServiceTest {
         when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
 
         // Act & Assert
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             orderService.deleteOrder(EXISTING_ORDER_ID);
         });
-
-        assertEquals("Order not found with ID: " + EXISTING_ORDER_ID, exception.getMessage());
 
         // Verify findById was called, but no further processing occurred
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);

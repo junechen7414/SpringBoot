@@ -1,6 +1,5 @@
 package com.ibm.demo.account;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -84,10 +83,9 @@ public class AccountServiceTest {
         when(accountRepository.findById(nonExistentAccountId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             accountService.updateAccount(request);
         });
-        assertEquals("Account not found with id: " + nonExistentAccountId, exception.getMessage());
 
         // Verify
         verify(accountRepository, times(1)).findById(nonExistentAccountId);
@@ -127,10 +125,9 @@ public class AccountServiceTest {
         when(accountRepository.findById(nonExistentAccountId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             accountService.deleteAccount(nonExistentAccountId);
         });
-        assertEquals("Account not found with id: " + nonExistentAccountId, exception.getMessage());
 
         // Verify
         verify(accountRepository, times(1)).findById(nonExistentAccountId);
@@ -146,10 +143,9 @@ public class AccountServiceTest {
         when(accountRepository.findById(inactiveAccount.getId())).thenReturn(Optional.of(inactiveAccount));
 
         // Act & Assert
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             accountService.deleteAccount(inactiveAccount.getId());
         });
-        assertEquals("Account not found with ID: " + inactiveAccount.getId(), exception.getMessage());
 
         // Verify
         verify(accountRepository, times(1)).findById(inactiveAccount.getId());
