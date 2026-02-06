@@ -33,6 +33,7 @@ import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 
 import jakarta.transaction.Transactional;
+import lombok.NonNull;
 
 @Service
 public class OrderService {
@@ -342,7 +343,7 @@ public class OrderService {
          * @param orderId
          */
         @Transactional
-        public void deleteOrder(Integer orderId) {
+        public void deleteOrder(@NonNull Integer orderId) {
                 // 1. 獲取訂單資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
                                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -533,7 +534,7 @@ public class OrderService {
                 return totalAmount;
         }
 
-        public OrderInfo findByOrderIdOrThrow(Integer orderId) {
+        public OrderInfo findByOrderIdOrThrow(@NonNull Integer orderId) {
                 return orderInfoRepository.findById(orderId).orElseThrow(
                                 () -> new ResourceNotFoundException("Order not found with ID: " + orderId));
         }

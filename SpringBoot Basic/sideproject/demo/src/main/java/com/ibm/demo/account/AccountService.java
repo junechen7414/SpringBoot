@@ -13,6 +13,7 @@ import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDel
 import com.ibm.demo.order.OrderClient;
 
 import jakarta.transaction.Transactional;
+import lombok.NonNull;
 
 @Service
 public class AccountService {
@@ -114,7 +115,7 @@ public class AccountService {
     /**
      * Finds an account by its ID or throws AccountNotFoundException if not found.
      */
-    private Account findAccountByIdOrThrow(Integer accountId) {
+    private Account findAccountByIdOrThrow(@NonNull Integer accountId) {
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + accountId));
     }

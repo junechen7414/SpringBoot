@@ -17,6 +17,7 @@ import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 
 import jakarta.transaction.Transactional;
+import lombok.NonNull;
 
 @Service
 public class ProductService {
@@ -262,7 +263,7 @@ public class ProductService {
      * @param productId 商品 ID
      * @return 找到的商品實體
      */
-    public Product findProductByIdOrThrow(Integer productId) {
+    public Product findProductByIdOrThrow(@NonNull Integer productId) {
         Product result = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
         return result;
