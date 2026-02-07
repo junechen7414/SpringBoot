@@ -40,7 +40,7 @@ public class AccountController {
     // Read Account List
     @GetMapping("/getList")
     public ResponseEntity<List<GetAccountListResponse>> getAccountList(@RequestParam(required = false) String status) {
-        List<GetAccountListResponse> accountList = accountService.getAccountList(status);
+        List<GetAccountListResponse> accountList = accountService.getAccountsByStatus(status);
         return ResponseEntity.ok(accountList);
     }
 
