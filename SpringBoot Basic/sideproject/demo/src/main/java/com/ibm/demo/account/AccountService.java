@@ -18,6 +18,7 @@ import jakarta.transaction.Transactional;
 public class AccountService {
     private final AccountRepository accountRepository;
     private final OrderClient orderClient;
+    private final String ACTIVE_STATUS = "Y";
 
     public AccountService(AccountRepository accountRepository, OrderClient orderClient) {
         this.accountRepository = accountRepository;
@@ -30,10 +31,7 @@ public class AccountService {
      */
     @Transactional
     public Integer createAccount(CreateAccountRequest account_DTO) {
-        Account newAccount = new Account();
-        newAccount.setName(account_DTO.getName());
-        // 預設帳戶狀態為Y，啟用
-        newAccount.setStatus("Y");
+        Account newAccount = new Account(account_DTO.getName(), ACTIVE_STATUS);
 
         Account savedAccount = accountRepository.save(newAccount);
         return savedAccount.getId();
@@ -42,7 +40,7 @@ public class AccountService {
     /**
      * @return List<GetAccountListResponse>
      */
-    public List<GetAccountListResponse> getAccountList(String status) {
+    public List<GetAccountListResponse> getAccountsByStatus(String status) {
         if (status == null || status.isEmpty()) {
             return accountRepository.findAllAccount();
         }
@@ -72,18 +70,15 @@ public class AccountService {
         String originalStatus = existingAccount.getStatus();
         String newStatus = updateAccountRequestDto.getStatus();
 
-        // 3. 設定帳戶實體的物件
-        existingAccount.setName(updateAccountRequestDto.getName());
-
-        // 4. 驗證帳戶狀態是否更新，若有更新且要更新為N需檢核是否該帳戶仍有關聯的訂單，若仍有關聯的訂單不可更改狀態為N
+        // 3. 驗證帳戶狀態是否更新，若有更新且要更新為N需檢核是否該帳戶仍有關聯的訂單，若仍有關聯的訂單不可更改狀態為N
         if (!originalStatus.equals(newStatus) && "N".equals(newStatus)) {
-            checkAccountHasNoOrdersOrThrow(accountId);            
+            checkAccountHasNoOrdersOrThrow(accountId);
         }
+        existingAccount.setName(updateAccountRequestDto.getName());
         existingAccount.setStatus(newStatus);
 
-        // 5. 儲存帳戶實體
+        // 4. 儲存帳戶實體
         accountRepository.save(existingAccount);
-
     }
 
     /**
@@ -101,14 +96,15 @@ public class AccountService {
     }
 
     // --- Private Helper Methods ---
-    
+
     // validateAccount
     // @Transactional
     // public void validateAccount(Integer accountId) {
-    //     Account existingAccount = findAccountByIdOrThrow(accountId);
-    //     if (existingAccount.getStatus().equals("N")){
-    //         throw new AccountInactiveException("Account is inactive with id: " + accountId);
-    //     }
+    // Account existingAccount = findAccountByIdOrThrow(accountId);
+    // if (existingAccount.getStatus().equals("N")){
+    // throw new AccountInactiveException("Account is inactive with id: " +
+    // accountId);
+    // }
     // }
 
     /**
