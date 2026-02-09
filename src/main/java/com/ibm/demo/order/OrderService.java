@@ -36,7 +36,8 @@ import jakarta.transaction.Transactional;
 
 @Service
 public class OrderService {
-        // private static final Logger logger = LoggerFactory.getLogger(OrderService.class);
+        // private static final Logger logger =
+        // LoggerFactory.getLogger(OrderService.class);
         private OrderInfoRepository orderInfoRepository;
         private OrderDetailRepository orderDetailRepository;
         private final AccountClient accountClient;
@@ -62,11 +63,6 @@ public class OrderService {
                 validateActiveAccountOrThrow(accountId);
                 // logger.info("找到啟用中帳戶，ID: {}", accountId);
 
-                // 宣告新訂單並初始化
-                OrderInfo newOrderInfo = new OrderInfo();
-                newOrderInfo.setAccountId(accountId);
-                newOrderInfo.setStatus(1001);
-
                 // 收集Request所有商品ID放在集合productIds
                 Set<Integer> productIds = new HashSet<>();
                 for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
@@ -75,7 +71,13 @@ public class OrderService {
 
                 // 使用收集到的商品ID呼叫Product的端點獲取商品資訊，該端點驗證傳入是否null
                 // 若有找不到的ID會忽略 continue 最終回傳 List
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIds);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(
+                                productIds);
+
+                // 宣告新訂單並初始化
+                OrderInfo newOrderInfo = new OrderInfo();
+                newOrderInfo.setAccountId(accountId);
+                newOrderInfo.setStatus(1001);
 
                 // 宣告並初始化要用到的變數
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
@@ -121,11 +123,11 @@ public class OrderService {
          * @param accountId
          * @return List<GetOrderListResponse>
          */
-        public List<GetOrderListResponse> getOrderList(Integer accountId) {
+        public List<GetOrderListResponse> getOrderListByAccountId(Integer accountId) {
                 List<OrderInfo> orderInfoList = orderInfoRepository.findByAccountId(accountId);
                 // 如果回傳的訂單列表為空，則拋出例外
                 if (orderInfoList.isEmpty()) {
-                        throw new ResourceNotFoundException("帳戶ID " + accountId + " 沒有訂單");                        
+                        throw new ResourceNotFoundException("帳戶ID " + accountId + " 沒有訂單");
                 }
                 List<GetOrderListResponse> getOrderListResponse = new ArrayList<>();
 
@@ -145,7 +147,7 @@ public class OrderService {
          * @param orderId
          * @return GetOrderDetailResponse
          */
-        public GetOrderDetailResponse getOrderDetail(Integer orderId) {
+        public GetOrderDetailResponse getOrderDetailByOrderId(Integer orderId) {
                 // 1. 獲取訂單基本資訊
                 OrderInfo existingOrderInfo = findByOrderIdOrThrow(orderId);
 
@@ -159,7 +161,8 @@ public class OrderService {
                 }
 
                 // 4. 批量獲取商品資訊
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIds);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(
+                                productIds);
 
                 // 5. 建立回應DTO
                 GetOrderDetailResponse response = new GetOrderDetailResponse();
@@ -233,7 +236,8 @@ public class OrderService {
                 productIdsToQuery.addAll(removedProductIds);
 
                 // 6. 批量獲取會用到的商品資訊
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIdsToQuery);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(
+                                productIdsToQuery);
 
                 // 7. 準備庫存更新資訊
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
@@ -259,7 +263,7 @@ public class OrderService {
                         orderDetailsToAdd.add(newDetail);
 
                         // logger.info("訂單 {} 新增商品項目：產品ID {}, 數量 {}",
-                        //                 orderId, productId, quantityToAdd);
+                        // orderId, productId, quantityToAdd);
                 }
 
                 // 9. 處理移除項目
@@ -281,7 +285,7 @@ public class OrderService {
                         orderDetailsToRemove.add(detailToRemove);
 
                         // logger.info("訂單 {} 移除商品項目：產品ID {}, 數量 {}",
-                        //                 orderId, productId, quantityToRestore);
+                        // orderId, productId, quantityToRestore);
                 }
 
                 // 10. 處理更新項目
@@ -308,7 +312,7 @@ public class OrderService {
                                 orderDetailsToUpdate.add(existingDetail);
 
                                 // logger.info("訂單 {} 商品項目產品ID {} 數量由 {} 更新為 {}",
-                                //                 orderId, productId, oldQuantity, newQuantity);
+                                // orderId, productId, oldQuantity, newQuantity);
                         }
                 }
 
@@ -327,7 +331,8 @@ public class OrderService {
                 if (!orderDetailsToRemove.isEmpty()) {
                         orderDetailRepository.deleteAll(orderDetailsToRemove);
                         existingOrderInfo.getOrderDetails().removeAll(orderDetailsToRemove);
-                        // logger.info("從 OrderInfo 記憶體集合中移除 {} 個已刪除的 OrderDetail", orderDetailsToRemove.size());
+                        // logger.info("從 OrderInfo 記憶體集合中移除 {} 個已刪除的 OrderDetail",
+                        // orderDetailsToRemove.size());
                         // logger.info("批量刪除 {} 個訂單明細成功", orderDetailsToRemove.size());
                 }
 
@@ -348,7 +353,6 @@ public class OrderService {
                                 .orElseThrow(() -> new ResourceNotFoundException(
                                                 "Order not found with ID: " + orderId));
 
-
                 // 2. 驗證訂單狀態
                 if (existingOrderInfo.getStatus() == 1003) {
                         throw new ResourceNotFoundException("Order not found with ID: " + orderId);
@@ -359,7 +363,8 @@ public class OrderService {
 
                 // 3. 收集所有商品ID並取得商品資訊
                 Set<Integer> productIds = collectProductIdsFromOrderDetails(existingOrderInfo.getOrderDetails());
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIds);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(
+                                productIds);
 
                 // 4. 計算需要歸還的庫存
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
@@ -392,7 +397,7 @@ public class OrderService {
                 // 7. 更新訂單狀態為已刪除(1003)
                 existingOrderInfo.setStatus(1003);
                 orderInfoRepository.save(existingOrderInfo);
-                
+
         }
 
         /**
@@ -483,7 +488,8 @@ public class OrderService {
                 }
                 if (currentStock < 0) {
                         // 理論上 currentStock 不應為負，但加上just in case
-                        // logger.warn("Current stock is negative for product ID: {}. Stock: {}", productId, currentStock);
+                        // logger.warn("Current stock is negative for product ID: {}. Stock: {}",
+                        // productId, currentStock);
                         // 或者根據業務規則拋出例外
                         // throw new IllegalStateException("Current stock cannot be negative for product
                         // ID: " + productId);
@@ -499,18 +505,20 @@ public class OrderService {
 
                 // 驗證：新庫存不能小於 0
                 if (newQuantity < 0) {
-                        // logger.error("Stock insufficient for product ID: {}. Current: {}, Old Qty: {}, New Qty: {}, Required Change: {}, Potential New Stock: {}",
-                        //                 productId, currentStock, originalQuantity, requestQuantity, netChange,
-                        //                 newQuantity);
+                        // logger.error("Stock insufficient for product ID: {}. Current: {}, Old Qty:
+                        // {}, New Qty: {}, Required Change: {}, Potential New Stock: {}",
+                        // productId, currentStock, originalQuantity, requestQuantity, netChange,
+                        // newQuantity);
                         // 拋出更詳細的錯誤訊息
                         throw new ProductStockNotEnoughException(String.format(
                                         "商品 %d 庫存不足。目前庫存: %d, 訂單原數量: %d, 訂單新數量: %d。需要額外 %d 個，但庫存不足。",
                                         productId, currentStock, originalQuantity, requestQuantity, netChange));
                 }
 
-                // logger.debug("Calculated stock for product ID: {}. Current: {}, Old Qty: {}, New Qty: {}, Net Change Required: {}, New Stock: {}",
-                //                 productId, currentStock, originalQuantity, requestQuantity, netChange,
-                //                 newQuantity);
+                // logger.debug("Calculated stock for product ID: {}. Current: {}, Old Qty: {},
+                // New Qty: {}, Net Change Required: {}, New Stock: {}",
+                // productId, currentStock, originalQuantity, requestQuantity, netChange,
+                // newQuantity);
 
                 return newQuantity;
         }
@@ -522,7 +530,8 @@ public class OrderService {
         private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo) {
                 List<OrderDetail> orderDetails = orderInfo.getOrderDetails();
                 Set<Integer> productIds = collectProductIdsFromOrderDetails(orderDetails);
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(productIds);
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(
+                                productIds);
 
                 BigDecimal totalAmount = BigDecimal.ZERO;
                 for (OrderDetail detail : orderDetails) {
