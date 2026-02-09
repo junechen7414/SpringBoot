@@ -40,14 +40,14 @@ public class OrderController {
     // Read Order List
     @GetMapping("/getList/{accountId}")
     public ResponseEntity<List<GetOrderListResponse>> getOrderList(@PathVariable Integer accountId) {
-        List<GetOrderListResponse> getOrderListResponse = orderService.getOrderList(accountId);
+        List<GetOrderListResponse> getOrderListResponse = orderService.getOrderListByAccountId(accountId);
         return ResponseEntity.ok(getOrderListResponse);
     }
 
     // Read Order Detail
     @GetMapping("/getDetail/{orderId}")
     public ResponseEntity<GetOrderDetailResponse> getOrderDetails(@PathVariable Integer orderId) {
-        GetOrderDetailResponse getOrderDetailResponse = orderService.getOrderDetail(orderId);
+        GetOrderDetailResponse getOrderDetailResponse = orderService.getOrderDetailByOrderId(orderId);
         return ResponseEntity.ok(getOrderDetailResponse);
     }
 
