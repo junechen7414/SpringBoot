@@ -1,5 +1,9 @@
 package com.ibm.demo.order.Entity;
 
+import java.time.LocalDateTime;
+
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -15,8 +19,10 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.ToString;
 
 @Getter
@@ -42,7 +48,7 @@ public class OrderDetail {
     // 加入與 OrderInfo 的多對一關係映射
     @ManyToOne(fetch = FetchType.LAZY) // 延遲加載
     @JoinColumn(name = "ORDER_ID", referencedColumnName = "ID", nullable = false) // 外鍵欄位 ORDER_ID 指向 OrderInfo 的 ID
-    @ToString.Exclude //加在Entity中的OneToMany或ManyToOne的關聯上，否則會造成循環引用的問題，導致 StackOverflowError。
+    @ToString.Exclude // 加在Entity中的OneToMany或ManyToOne的關聯上，否則會造成循環引用的問題，導致 StackOverflowError。
     @Schema(description = "訂單編號", example = "1")
     private OrderInfo orderInfo; // 指向所屬的 OrderInfo 物件
 
@@ -79,6 +85,7 @@ public class OrderDetail {
         this.orderInfo = orderInfo;
         this.productId = productId;
         this.quantity = quantity;
+    }
 
     public void restore() {
         this.deleted = false;
