@@ -80,5 +80,8 @@ public class OrderDetail {
         this.productId = productId;
         this.quantity = quantity;
 
+    public void restore() {
+        this.deleted = false;
+        this.deletedAt = null;
     }
 }
