@@ -19,13 +19,15 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ORDER_PRODUCT_DETAIL")
 @Schema(description = "訂單產品明細")
+@Builder
 public class OrderDetail {
 
     @Id
