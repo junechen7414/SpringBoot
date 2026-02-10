@@ -50,6 +50,25 @@ public class OrderDetail {
     @Schema(description = "數量", example = "5")
     private Integer quantity;
 
+    @org.springframework.data.annotation.CreatedDate
+    @Column(name = "CREATED_AT", updatable = false)
+    @Schema(description = "創建時間", example = "2024-06-01T12:00:00")
+    private LocalDateTime createdAt;
+
+    @org.springframework.data.annotation.LastModifiedDate
+    @Column(name = "UPDATED_AT")
+    @Schema(description = "更新時間", example = "2024-06-01T12:00:00")
+    private LocalDateTime updatedAt;
+
+    @Column(name = "DELETED", columnDefinition = "NUMBER(1)", nullable = false)
+    @Schema(description = "是否刪除", example = "false")
+    @Builder.Default
+    private Boolean deleted = false;
+
+    @Column(name = "DELETED_AT", columnDefinition = "TIMESTAMP")
+    @Schema(description = "刪除時間", example = "2024-06-01T12:00:00")
+    private LocalDateTime deletedAt;
+
     // constructor
 
     public OrderDetail(OrderInfo orderInfo, Integer productId, Integer quantity) {
