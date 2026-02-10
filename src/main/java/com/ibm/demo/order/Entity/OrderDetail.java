@@ -26,6 +26,8 @@ import lombok.ToString;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ORDER_PRODUCT_DETAIL")
+@SQLDelete(sql = "UPDATE ORDER_PRODUCT_DETAIL SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP WHERE ID = ?")
+@SQLRestriction("DELETED = 0") // 只選擇未刪除的資料
 @Schema(description = "訂單產品明細")
 @Builder
 public class OrderDetail {
