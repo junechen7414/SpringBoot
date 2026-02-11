@@ -388,16 +388,8 @@ public class OrderService {
                 // 5. 批量更新商品庫存
                 batchUpdateProductStock(stockUpdates);
 
-                // 6. 刪除訂單明細
-                List<OrderDetail> orderDetailsToDelete = existingOrderInfo.getOrderDetails();
-                orderDetailRepository.deleteAll(orderDetailsToDelete);
-                existingOrderInfo.getOrderDetails().removeAll(orderDetailsToDelete);
-                // logger.info("批量刪除訂單明細");
-
-                // 7. 更新訂單狀態為已刪除(1003)
-                existingOrderInfo.setStatus(1003);
-                orderInfoRepository.save(existingOrderInfo);
-
+                // 6. 刪除訂單，連鎖刪除訂單明細
+                orderInfoRepository.delete(existingOrderInfo);
         }
 
         /**
