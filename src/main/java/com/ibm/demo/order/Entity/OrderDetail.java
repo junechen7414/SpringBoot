@@ -85,6 +85,7 @@ public class OrderDetail {
         this.orderInfo = orderInfo;
         this.productId = productId;
         this.quantity = quantity;
+        this.deleted = false; // 非空的建構子要定義deleted預設為false，Builder Default不會套用在非空建構子上
     }
 
     public void restore() {
