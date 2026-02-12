@@ -35,7 +35,6 @@ import lombok.ToString;
 @SQLDelete(sql = "UPDATE ORDER_PRODUCT_DETAIL SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP WHERE ID = ?")
 @SQLRestriction("DELETED = 0") // 只選擇未刪除的資料
 @Schema(description = "訂單產品明細")
-@Builder
 public class OrderDetail {
 
     @Id
@@ -72,7 +71,6 @@ public class OrderDetail {
 
     @Column(name = "DELETED", columnDefinition = "NUMBER(1)", nullable = false)
     @Schema(description = "是否刪除", example = "false")
-    @Builder.Default
     private Boolean deleted = false;
 
     @Column(name = "DELETED_AT", columnDefinition = "TIMESTAMP")
@@ -80,12 +78,12 @@ public class OrderDetail {
     private LocalDateTime deletedAt;
 
     // constructor
-
+    @Builder
     public OrderDetail(OrderInfo orderInfo, Integer productId, Integer quantity) {
         this.orderInfo = orderInfo;
         this.productId = productId;
         this.quantity = quantity;
-        this.deleted = false; // 非空的建構子要定義deleted預設為false，Builder Default不會套用在非空建構子上
+        this.deleted = false; // 預設為未刪除
     }
 
     public void restore() {
