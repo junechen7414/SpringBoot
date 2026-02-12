@@ -213,9 +213,12 @@ public class OrderService {
                 Map<Integer, Integer> stockUpdates = calculateStockUpdates(existingMap, incomingMap);
 
                 // 4. 同步 Entity 集合 (解決 ObjectDeletedException 的核心)
+                // 4A. 遍歷"現有"：辨別更新和刪除
+                // 4B. 執行刪除（依賴 Orphan Removal）
+                // 4C. 遍歷"新請求"：辨別新增
                 // 4A. 分類：哪些要刪除、哪些要更新
                 List<OrderDetail> detailsToDelete = new ArrayList<>();
-                
+
                 for (OrderDetail detail : order.getOrderDetails()) {
                         UpdateOrderDetailRequest incoming = incomingMap.get(detail.getProductId());
                         if (incoming == null) {
@@ -226,15 +229,15 @@ public class OrderService {
                                 detail.setQuantity(incoming.getQuantity());
                         }
                 }
-                
+
                 // 4B. 從內存集合中刪除 (Orphan Removal 會在 save 時自動刪除資料庫記錄)
                 order.getOrderDetails().removeAll(detailsToDelete);
-                
+
                 // 4C. 處理新增項目
                 for (Map.Entry<Integer, UpdateOrderDetailRequest> entry : incomingMap.entrySet()) {
                         Integer productId = entry.getKey();
                         UpdateOrderDetailRequest item = entry.getValue();
-                        
+
                         if (!existingMap.containsKey(productId)) {
                                 // 新商品，加入訂單
                                 order.getOrderDetails().add(new OrderDetail(order, productId, item.getQuantity()));
@@ -248,159 +251,6 @@ public class OrderService {
                 order.setStatus(request.getOrderStatus());
                 orderInfoRepository.save(order);
         }
-        // @Transactional
-        // public void updateOrder(UpdateOrderRequest updateOrderRequest) {
-        // // 1. 驗證訂單存在
-        // Integer orderId = updateOrderRequest.getOrderId();
-        // OrderInfo existingOrderInfo = findByOrderIdOrThrow(orderId);
-
-        // // 2. 建立現有明細的 Map
-        // Map<Integer, OrderDetail> existingDetailsMap = new HashMap<>();
-        // for (OrderDetail detail : existingOrderInfo.getOrderDetails()) {
-        // existingDetailsMap.put(detail.getProductId(), detail);
-        // }
-        // // 3. 建立更新明細的 Map
-        // Map<Integer, UpdateOrderDetailRequest> updatedItemsMap = new HashMap<>();
-        // for (UpdateOrderDetailRequest detailRequest : updateOrderRequest.getItems())
-        // {
-        // updatedItemsMap.put(detailRequest.getProductId(), detailRequest);
-        // }
-
-        // // 現有明細和更新後的明細比對會有四種情況:
-        // // 兩種情況是其中一邊有獨立的productId，分別代表更新後的明細中要新增product或是要移除product；
-        // // 兩種情況是兩邊有共同的productId，則看quantity是沒變還是有變，分別代表沒更改和更改數量。
-
-        // // keySet即是把Map中的key作為Set，這邊拿來分上面四種情況
-        // Set<Integer> existingProductIds = existingDetailsMap.keySet();
-        // Set<Integer> updatedProductIds = updatedItemsMap.keySet();
-
-        // // 取出更新後新增的產品id
-        // Set<Integer> newProductIds = new HashSet<>(updatedProductIds);
-        // newProductIds.removeAll(existingProductIds);
-
-        // // 取出更新後刪除的產品id
-        // Set<Integer> removedProductIds = new HashSet<>(existingProductIds);
-        // removedProductIds.removeAll(updatedProductIds);
-
-        // // 取出共同存在的產品 ID (可能已更新)
-        // Set<Integer> commonProductIds = new HashSet<>(existingProductIds);
-        // commonProductIds.retainAll(updatedProductIds);
-
-        // // 5. 收集所有需要查詢的商品 ID
-        // Set<Integer> productIdsToQuery = new HashSet<>();
-        // productIdsToQuery.addAll(newProductIds);
-        // productIdsToQuery.addAll(commonProductIds);
-        // productIdsToQuery.addAll(removedProductIds);
-
-        // // 6. 批量獲取會用到的商品資訊
-        // Map<Integer, GetProductDetailResponse> productDetailsMap =
-        // batchGetProductDetailsIfInactiveThrow(
-        // productIdsToQuery);
-
-        // // 7. 準備庫存更新資訊
-        // Map<Integer, Integer> stockUpdates = new HashMap<>();
-
-        // // 8. 處理新增項目
-        // List<OrderDetail> orderDetailsToAdd = new ArrayList<>();
-        // for (Integer productId : newProductIds) {
-        // UpdateOrderDetailRequest newItem = updatedItemsMap.get(productId);
-        // GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-        // Integer currentStock = productDetail.getStockQty();
-        // Integer quantityToAdd = newItem.getQuantity();
-
-        // // 計算新庫存 (oldQuantity 為 0)
-        // Integer newStock = calculateNewStock(
-        // productId,
-        // currentStock,
-        // 0, // oldQuantity for new item is 0
-        // quantityToAdd);
-        // stockUpdates.put(productId, newStock);
-
-        // // 建立新的 OrderDetail 實體
-        // OrderDetail newDetail = new OrderDetail(existingOrderInfo, productId,
-        // quantityToAdd);
-        // orderDetailsToAdd.add(newDetail);
-
-        // // logger.info("訂單 {} 新增商品項目：產品ID {}, 數量 {}",
-        // // orderId, productId, quantityToAdd);
-        // }
-
-        // // 9. 處理移除項目
-        // List<OrderDetail> orderDetailsToRemove = new ArrayList<>();
-        // for (Integer productId : removedProductIds) {
-        // OrderDetail detailToRemove = existingDetailsMap.get(productId);
-        // GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-        // Integer currentStock = productDetail.getStockQty();
-        // Integer quantityToRestore = detailToRemove.getQuantity();
-
-        // // 計算新庫存 (newQuantity 為 0)
-        // Integer newStock = calculateNewStock(
-        // productId,
-        // currentStock,
-        // quantityToRestore, // oldQuantity is the quantity being removed
-        // 0); // newQuantity is 0
-        // stockUpdates.put(productId, newStock);
-
-        // orderDetailsToRemove.add(detailToRemove);
-
-        // // logger.info("訂單 {} 移除商品項目：產品ID {}, 數量 {}",
-        // // orderId, productId, quantityToRestore);
-        // }
-
-        // // 10. 處理更新項目
-        // List<OrderDetail> orderDetailsToUpdate = new ArrayList<>();
-        // for (Integer productId : commonProductIds) {
-        // OrderDetail existingDetail = existingDetailsMap.get(productId);
-        // UpdateOrderDetailRequest updatedRequest = updatedItemsMap.get(productId);
-        // Integer oldQuantity = existingDetail.getQuantity();
-        // Integer newQuantity = updatedRequest.getQuantity();
-
-        // if (!oldQuantity.equals(newQuantity)) {
-        // GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-        // Integer currentStock = productDetail.getStockQty();
-
-        // // 計算新庫存
-        // Integer newStock = calculateNewStock(
-        // productId,
-        // currentStock,
-        // oldQuantity,
-        // newQuantity);
-        // stockUpdates.put(productId, newStock);
-
-        // existingDetail.setQuantity(newQuantity);
-        // orderDetailsToUpdate.add(existingDetail);
-
-        // // logger.info("訂單 {} 商品項目產品ID {} 數量由 {} 更新為 {}",
-        // // orderId, productId, oldQuantity, newQuantity);
-        // }
-        // }
-
-        // // 11. 執行批量更新
-        // batchUpdateProductStock(stockUpdates);
-
-        // // 合併要執行saveAll的list，減少資料庫存取次數
-        // List<OrderDetail> allOrderDetailsToSave = new ArrayList<>();
-        // allOrderDetailsToSave.addAll(orderDetailsToAdd);
-        // allOrderDetailsToSave.addAll(orderDetailsToUpdate);
-        // if (!allOrderDetailsToSave.isEmpty()) {
-        // orderDetailRepository.saveAll(allOrderDetailsToSave);
-        // // logger.info("批量儲存 {} 個訂單明細成功", orderDetailsToAdd.size());
-        // }
-
-        // if (!orderDetailsToRemove.isEmpty()) {
-        // orderDetailRepository.deleteAll(orderDetailsToRemove);
-        // existingOrderInfo.getOrderDetails().removeAll(orderDetailsToRemove);
-        // // logger.info("從 OrderInfo 記憶體集合中移除 {} 個已刪除的 OrderDetail",
-        // // orderDetailsToRemove.size());
-        // // logger.info("批量刪除 {} 個訂單明細成功", orderDetailsToRemove.size());
-        // }
-
-        // // 12. 儲存 OrderInfo 並獲取更新後的實體
-        // existingOrderInfo.setStatus(updateOrderRequest.getOrderStatus());
-        // orderInfoRepository.save(existingOrderInfo);
-        // // OrderInfo savedOrderInfo = orderInfoRepository.save(existingOrderInfo);
-        // // logger.info("OrderInfo saved, ID: {}", savedOrderInfo.getId());
-        // }
 
         /**
          * @param orderId
