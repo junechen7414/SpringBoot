@@ -104,8 +104,11 @@ public class OrderService {
                         stockUpdates.put(requestProductId, newStock);
 
                         // 建立訂單明細
-                        OrderDetail newOrderDetail = new OrderDetail(newOrderInfo, requestProductId,
-                                        requestQuantity);
+                        OrderDetail newOrderDetail = OrderDetail.builder()
+                                        .orderInfo(newOrderInfo) // 關聯到新訂單
+                                        .productId(requestProductId)
+                                        .quantity(requestQuantity)
+                                        .build();
                         orderDetailsToBeCreated.add(newOrderDetail);
                 }
 
