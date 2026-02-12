@@ -213,22 +213,33 @@ public class OrderService {
                 Map<Integer, Integer> stockUpdates = calculateStockUpdates(existingMap, incomingMap);
 
                 // 4. 同步 Entity 集合 (解決 ObjectDeletedException 的核心)
-                // A. 移除與更新
-                order.getOrderDetails().removeIf(detail -> {
+                // 4A. 分類：哪些要刪除、哪些要更新
+                List<OrderDetail> detailsToDelete = new ArrayList<>();
+                
+                for (OrderDetail detail : order.getOrderDetails()) {
                         UpdateOrderDetailRequest incoming = incomingMap.get(detail.getProductId());
-                        if (incoming == null)
-                                return true; // 移除：同時解除記憶體參照，避免噴錯
-
-                        detail.setQuantity(incoming.getQuantity()); // 更新數量
-                        return false;
-                });
-
-                // B. 新增
-                incomingMap.forEach((productId, item) -> {
+                        if (incoming == null) {
+                                // 該商品在新請求中不存在，標記為刪除
+                                detailsToDelete.add(detail);
+                        } else {
+                                // 該商品存在，更新數量
+                                detail.setQuantity(incoming.getQuantity());
+                        }
+                }
+                
+                // 4B. 從內存集合中刪除 (Orphan Removal 會在 save 時自動刪除資料庫記錄)
+                order.getOrderDetails().removeAll(detailsToDelete);
+                
+                // 4C. 處理新增項目
+                for (Map.Entry<Integer, UpdateOrderDetailRequest> entry : incomingMap.entrySet()) {
+                        Integer productId = entry.getKey();
+                        UpdateOrderDetailRequest item = entry.getValue();
+                        
                         if (!existingMap.containsKey(productId)) {
+                                // 新商品，加入訂單
                                 order.getOrderDetails().add(new OrderDetail(order, productId, item.getQuantity()));
                         }
-                });
+                }
 
                 // 5. 執行遠端/批量庫存更新
                 batchUpdateProductStock(stockUpdates);
