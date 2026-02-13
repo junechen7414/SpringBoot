@@ -486,4 +486,53 @@ public class OrderService {
                 return false;
         }
 
+        /**
+         * 內部record用於封裝訂單明細處理結果
+         */
+        private record OrderProcessResult(
+                        List<OrderDetail> orderDetails,
+                        Map<Integer, Integer> stockUpdates) {
+        }
+
+        /**
+         * 處理訂單明細：計算庫存變更並建立訂單明細物件
+         *
+         * @param createOrderRequest 訂單建立請求
+         * @param orderInfo          訂單主表
+         * @param productDetailsMap  商品詳細資訊Map
+         * @return OrderProcessResult 包含訂單明細和庫存更新
+         */
+        private OrderProcessResult processOrderDetails(
+                        CreateOrderRequest createOrderRequest,
+                        OrderInfo orderInfo,
+                        Map<Integer, GetProductDetailResponse> productDetailsMap) {
+
+                Map<Integer, Integer> stockUpdates = new HashMap<>();
+
+                List<OrderDetail> orderDetails = createOrderRequest.getOrderDetails().stream()
+                                .filter(detailRequest -> productDetailsMap.containsKey(detailRequest.getProductId()))
+                                .map(detailRequest -> {
+                                        Integer productId = detailRequest.getProductId();
+                                        Integer quantity = detailRequest.getQuantity();
+                                        GetProductDetailResponse productDetail = productDetailsMap.get(productId);
+
+                                        // 計算新庫存
+                                        Integer newStock = calculateNewStock(
+                                                        productId,
+                                                        productDetail.getStockQty(),
+                                                        0, // 新增時舊數量為0
+                                                        quantity);
+                                        stockUpdates.put(productId, newStock);
+
+                                        // 建立訂單明細
+                                        return OrderDetail.builder()
+                                                        .orderInfo(orderInfo)
+                                                        .productId(productId)
+                                                        .quantity(quantity)
+                                                        .build();
+                                })
+                                .collect(Collectors.toList());
+
+                return new OrderProcessResult(orderDetails, stockUpdates);
+        }
 }
