@@ -189,7 +189,12 @@ public class OrderService {
 
                         if (!existingMap.containsKey(productId)) {
                                 // 新商品，加入訂單
-                                order.getOrderDetails().add(new OrderDetail(order, productId, item.getQuantity()));
+                                order.getOrderDetails().add(
+                                        OrderDetail.builder()
+                                        .orderInfo(order) // 關聯到新訂單
+                                        .productId(productId)
+                                        .quantity(item.getQuantity())
+                                        .build());
                         }
                 }
 
