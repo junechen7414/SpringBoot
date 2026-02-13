@@ -14,7 +14,6 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
-import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
@@ -62,7 +61,9 @@ public class OrderService {
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 // 驗證帳戶存在且狀態為啟用
                 Integer accountId = createOrderRequest.getAccountId();
-                validateActiveAccountOrThrow(accountId);
+                if (accountClient.getAccountDetail(accountId).getStatus().equals("N")) {
+                        throw new AccountInactiveException("帳戶狀態停用");
+                }
 
                 // 收集商品ID並批取商品資訊
                 Set<Integer> productIds = createOrderRequest.getOrderDetails().stream()
@@ -190,11 +191,11 @@ public class OrderService {
                         if (!existingMap.containsKey(productId)) {
                                 // 新商品，加入訂單
                                 order.getOrderDetails().add(
-                                        OrderDetail.builder()
-                                        .orderInfo(order) // 關聯到新訂單
-                                        .productId(productId)
-                                        .quantity(item.getQuantity())
-                                        .build());
+                                                OrderDetail.builder()
+                                                                .orderInfo(order) // 關聯到新訂單
+                                                                .productId(productId)
+                                                                .quantity(item.getQuantity())
+                                                                .build());
                         }
                 }
 
@@ -225,7 +226,9 @@ public class OrderService {
                 }
 
                 // 3. 收集所有商品ID並取得商品資訊
-                Set<Integer> productIds = collectProductIdsFromOrderDetails(existingOrderInfo.getOrderDetails());
+                Set<Integer> productIds = existingOrderInfo.getOrderDetails().stream()
+                                .map(OrderDetail::getProductId)
+                                .collect(Collectors.toSet());
                 Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(
                                 productIds);
 
@@ -253,17 +256,6 @@ public class OrderService {
 
                 // 6. 刪除訂單，連鎖刪除訂單明細
                 orderInfoRepository.delete(existingOrderInfo);
-        }
-
-        /**
-         * @param accountId
-         */
-        // functions to share
-        private void validateActiveAccountOrThrow(Integer accountId) {
-                GetAccountDetailResponse accountDetail = accountClient.getAccountDetail(accountId);
-                if (accountDetail.getStatus().equals("N")) {
-                        throw new AccountInactiveException("帳戶狀態停用");
-                }
         }
 
         /**
@@ -299,18 +291,6 @@ public class OrderService {
                         productClient.updateProductsStock(stockUpdates);
                         // logger.info("批量更新商品庫存成功");
                 }
-        }
-
-        /**
-         * @param orderDetails
-         * @return Set<Integer>
-         */
-        private Set<Integer> collectProductIdsFromOrderDetails(List<OrderDetail> orderDetails) {
-                Set<Integer> productIds = new HashSet<>();
-                for (OrderDetail detail : orderDetails) {
-                        productIds.add(detail.getProductId());
-                }
-                return productIds;
         }
 
         /**
@@ -404,7 +384,9 @@ public class OrderService {
          */
         private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo) {
                 List<OrderDetail> orderDetails = orderInfo.getOrderDetails();
-                Set<Integer> productIds = collectProductIdsFromOrderDetails(orderDetails);
+                Set<Integer> productIds = orderInfo.getOrderDetails().stream()
+                                .map(OrderDetail::getProductId)
+                                .collect(Collectors.toSet());
                 Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(
                                 productIds);
 
