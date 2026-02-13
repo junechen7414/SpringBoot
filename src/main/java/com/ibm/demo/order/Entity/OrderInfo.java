@@ -37,7 +37,7 @@ import lombok.ToString;
 @EntityListeners(AuditingEntityListener.class)
 @Entity
 @SQLDelete(sql = "UPDATE ORDER_INFO SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP,STATUS = 1003 WHERE ID = ?")
-@SQLRestriction("DELETED = 0") // 只選擇未刪除的資料
+@SQLRestriction("DELETED = 0 AND STATUS=1001") // 只選擇未刪除的資料
 @Builder
 @Table(name = "ORDER_INFO") // 指定對應的資料表名稱
 @Schema(description = "訂單資訊")
@@ -67,7 +67,7 @@ public class OrderInfo {
     private LocalDate modifiedDate;
 
     @OneToMany(mappedBy = "orderInfo", cascade = CascadeType.ALL, orphanRemoval = true)
-    @ToString.Exclude //加在Entity中的OneToMany或ManyToOne的關聯上，否則會造成循環引用的問題，導致 StackOverflowError。
+    @ToString.Exclude // 加在Entity中的OneToMany或ManyToOne的關聯上，否則會造成循環引用的問題，導致 StackOverflowError。
     private List<OrderDetail> orderDetails; // 存放該訂單下的所有產品明細
 
     @Column(name = "DELETED", columnDefinition = "NUMBER(1)", nullable = false)
@@ -83,6 +83,7 @@ public class OrderInfo {
         this.deleted = false;
         this.deletedAt = null;
     }
+
     @PrePersist
     public void prePersist() {
         this.createDate = LocalDate.now();
