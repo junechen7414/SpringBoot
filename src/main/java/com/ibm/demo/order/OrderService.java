@@ -2,6 +2,7 @@ package com.ibm.demo.order;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -18,7 +19,6 @@ import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
@@ -63,89 +63,44 @@ public class OrderService {
                 // 驗證帳戶存在且狀態為啟用
                 Integer accountId = createOrderRequest.getAccountId();
                 validateActiveAccountOrThrow(accountId);
-                // logger.info("找到啟用中帳戶，ID: {}", accountId);
 
-                // 收集Request所有商品ID放在集合productIds
-                Set<Integer> productIds = new HashSet<>();
-                for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
-                        productIds.add(detailRequest.getProductId());
-                }
-
-                // 使用收集到的商品ID呼叫Product的端點獲取商品資訊，該端點驗證傳入是否null
-                // 若有找不到的ID會忽略 continue 最終回傳 List
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(
+                // 收集商品ID並批取商品資訊
+                Set<Integer> productIds = createOrderRequest.getOrderDetails().stream()
+                                .map(CreateOrderDetailRequest::getProductId)
+                                .collect(Collectors.toSet());
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(
                                 productIds);
 
-                // 宣告新訂單並初始化
-                OrderInfo newOrderInfo = new OrderInfo();
-                newOrderInfo.setAccountId(accountId);
-                newOrderInfo.setStatus(1001);
+                // 建立新訂單
+                OrderInfo newOrderInfo = OrderInfo.builder()
+                                .accountId(accountId)
+                                .status(1001)
+                                .build();
 
-                // 宣告並初始化要用到的變數
-                Map<Integer, Integer> stockUpdates = new HashMap<>();
-                List<OrderDetail> orderDetailsToBeCreated = new ArrayList<>();
+                // 處理訂單明細與庫存更新
+                var result = processOrderDetails(createOrderRequest, newOrderInfo, productDetailsMap);
 
-                // 遍歷訂單明細，如果requestProductId在productDetailsMap中存在，則計算庫存變更
-                // 並建立新的訂單明細物件，最後將其加入到orderDetailsToBeCreated列表中
-                for (CreateOrderDetailRequest detailRequest : createOrderRequest.getOrderDetails()) {
-                        Integer requestProductId = detailRequest.getProductId();
-                        Integer requestQuantity = detailRequest.getQuantity();
-                        GetProductDetailResponse productDetail = productDetailsMap.get(requestProductId);
-
-                        // 商品若不再取回的商品資訊中，該跳過，表示用該ID沒找到該商品
-                        if (productDetail == null) {
-                                continue;
-                        }
-
-                        // 使用共用方法計算庫存變更
-                        Integer newStock = calculateNewStock(
-                                        requestProductId,
-                                        productDetail.getStockQty(),
-                                        0, // oldQuantity for new item is 0
-                                        requestQuantity); // newQuantity is the requested quantity
-                        stockUpdates.put(requestProductId, newStock);
-
-                        // 建立訂單明細
-                        OrderDetail newOrderDetail = OrderDetail.builder()
-                                        .orderInfo(newOrderInfo) // 關聯到新訂單
-                                        .productId(requestProductId)
-                                        .quantity(requestQuantity)
-                                        .build();
-                        orderDetailsToBeCreated.add(newOrderDetail);
-                }
-
-                // 使用共用方法更新庫存
-                batchUpdateProductStock(stockUpdates);
-
-                // 儲存訂單，並批量建立其訂單明細
+                // 更新庫存並儲存訂單
+                batchUpdateProductStock(result.stockUpdates());
                 OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
-                orderDetailRepository.saveAll(orderDetailsToBeCreated);
-
+                orderDetailRepository.saveAll(result.orderDetails());
                 return savedOrderInfo.getId();
         }
 
-        /**
-         * @param accountId
-         * @return List<GetOrderListResponse>
-         */
         public List<GetOrderListResponse> getOrderListByAccountId(Integer accountId) {
                 List<OrderInfo> orderInfoList = orderInfoRepository.findByAccountId(accountId);
-                // 如果回傳的訂單列表為空，則拋出例外
-                if (orderInfoList.isEmpty()) {
-                        throw new ResourceNotFoundException("帳戶ID " + accountId + " 沒有訂單");
+                if (orderInfoList == null || orderInfoList.isEmpty()) {
+                        return new ArrayList<>();
                 }
-                List<GetOrderListResponse> getOrderListResponse = new ArrayList<>();
+                return orderInfoList.stream()
+                                .map(orderInfo -> {
+                                        GetOrderListResponse response = new GetOrderListResponse();
+                                        response.setOrderId(orderInfo.getId());
+                                        response.setStatus(orderInfo.getStatus());
+                                        response.setTotalAmount(calculateOrderTotalAmount(orderInfo));
+                                        return response;
+                                }).collect(Collectors.toList());
 
-                for (OrderInfo orderInfo : orderInfoList) {
-                        BigDecimal totalAmount = calculateOrderTotalAmount(orderInfo); // 使用共用方法計算總金額
-                        GetOrderListResponse response = new GetOrderListResponse();
-                        response.setOrderId(orderInfo.getId());
-                        response.setStatus(orderInfo.getStatus());
-                        response.setTotalAmount(totalAmount);
-                        getOrderListResponse.add(response);
-                }
-
-                return getOrderListResponse;
         }
 
         /**
@@ -153,43 +108,37 @@ public class OrderService {
          * @return GetOrderDetailResponse
          */
         public GetOrderDetailResponse getOrderDetailByOrderId(Integer orderId) {
-                // 1. 獲取訂單基本資訊
-                OrderInfo existingOrderInfo = findByOrderIdOrThrow(orderId);
+                // 1. 獲取訂單主檔（找不到直接噴 404）
+                OrderInfo orderInfo = findByOrderIdOrThrow(orderId);
+                List<OrderDetail> details = orderInfo.getOrderDetails();
 
-                // 2. 獲取訂單明細
-                List<OrderDetail> orderDetails = existingOrderInfo.getOrderDetails();
+                // 2. 批量獲取商品資訊（先收集 ID 再一次查詢，避免 N+1 問題）
+                Set<Integer> productIds = details.stream()
+                                .map(OrderDetail::getProductId)
+                                .collect(Collectors.toSet());
 
-                // 3. 收集所有商品ID
-                Set<Integer> productIds = new HashSet<>();
-                for (OrderDetail detail : orderDetails) {
-                        productIds.add(detail.getProductId());
-                }
+                Map<Integer, GetProductDetailResponse> productMap = batchGetProductDetails(productIds);
 
-                // 4. 批量獲取商品資訊
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(
-                                productIds);
+                // 3. 組裝 DTO (使用 Stream 讓轉換過程一目了然)
+                List<OrderItemDTO> itemDTOs = details.stream()
+                                .map(detail -> {
+                                        GetProductDetailResponse product = productMap.get(detail.getProductId());
+                                        OrderItemDTO item = new OrderItemDTO();
+                                        item.setProductId(detail.getProductId());
+                                        item.setProductName(product.getName());
+                                        item.setQuantity(detail.getQuantity());
+                                        item.setProductPrice(product.getPrice());
+                                        return item;
+                                })
+                                .collect(Collectors.toList());
 
-                // 5. 建立回應DTO
+                // 4. 回傳結果
                 GetOrderDetailResponse response = new GetOrderDetailResponse();
-                response.setAccountId(existingOrderInfo.getAccountId());
-                response.setOrderStatus(existingOrderInfo.getStatus());
-                response.setTotalAmount(calculateOrderTotalAmount(existingOrderInfo));
-
-                // 6. 建立訂單項目列表
-                List<OrderItemDTO> itemDTOs = new ArrayList<>();
-                for (OrderDetail orderDetail : orderDetails) {
-                        OrderItemDTO itemDTO = new OrderItemDTO();
-                        Integer productId = orderDetail.getProductId();
-                        GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-
-                        itemDTO.setProductId(productId);
-                        itemDTO.setProductName(productDetail.getName());
-                        itemDTO.setQuantity(orderDetail.getQuantity());
-                        itemDTO.setProductPrice(productDetail.getPrice());
-                        itemDTOs.add(itemDTO);
-                }
-
+                response.setAccountId(orderInfo.getAccountId());
+                response.setOrderStatus(orderInfo.getStatus());
+                response.setTotalAmount(calculateOrderTotalAmount(orderInfo));
                 response.setItems(itemDTOs);
+
                 return response;
         }
 
@@ -272,7 +221,7 @@ public class OrderService {
 
                 // 3. 收集所有商品ID並取得商品資訊
                 Set<Integer> productIds = collectProductIdsFromOrderDetails(existingOrderInfo.getOrderDetails());
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(
                                 productIds);
 
                 // 4. 計算需要歸還的庫存
@@ -326,21 +275,15 @@ public class OrderService {
          * @param productIds
          * @return Map<Integer, GetProductDetailResponse>
          */
-        private Map<Integer, GetProductDetailResponse> batchGetProductDetailsIfInactiveThrow(Set<Integer> productIds) {
-                if (productIds.isEmpty()) {
-                        return new HashMap<>();
+        private Map<Integer, GetProductDetailResponse> batchGetProductDetails(Set<Integer> productIds) {
+                if (productIds == null || productIds.isEmpty()) {
+                        return Collections.emptyMap();
                 }
-                Map<Integer, GetProductDetailResponse> productDetailsMap = productClient.getProductDetails(productIds);
-                // 遍歷商品詳細資訊，檢查是否有商品不可銷售
-                for (Map.Entry<Integer, GetProductDetailResponse> entry : productDetailsMap.entrySet()) {
-                        Integer productId = entry.getKey();
-                        GetProductDetailResponse productDetail = entry.getValue();
-                        if (productDetail.getSaleStatus() == 1002) {
-                                throw new ProductInactiveException("商品不可銷售，ID: " + productId);
-                        }
-                }
-                // logger.info("從 Product Service 獲取 {} 個商品的詳細資訊", productDetailsMap.size());
-                return productDetailsMap;
+
+                Map<Integer, GetProductDetailResponse> productMap = productClient.getProductDetails(productIds);
+
+                // 不應該 Throw Exception，除非歷史訂單也不准看停售商品
+                return productMap;
         }
 
         /**
@@ -433,7 +376,7 @@ public class OrderService {
                 allProductIds.addAll(incomingMap.keySet());
 
                 // 批次獲取商品資訊 (減少 IO 次數，符合你之前的實務做法)
-                Map<Integer, GetProductDetailResponse> productDetails = batchGetProductDetailsIfInactiveThrow(
+                Map<Integer, GetProductDetailResponse> productDetails = batchGetProductDetails(
                                 allProductIds);
 
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
@@ -457,7 +400,7 @@ public class OrderService {
         private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo) {
                 List<OrderDetail> orderDetails = orderInfo.getOrderDetails();
                 Set<Integer> productIds = collectProductIdsFromOrderDetails(orderDetails);
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetailsIfInactiveThrow(
+                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(
                                 productIds);
 
                 BigDecimal totalAmount = BigDecimal.ZERO;
