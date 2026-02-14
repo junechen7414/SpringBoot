@@ -8,6 +8,7 @@ import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
+import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.order.OrderClient;
@@ -33,7 +34,7 @@ public class AccountService {
         Account newAccount = new Account();
         newAccount.setName(account_DTO.name());
         // 預設帳戶狀態為Y，啟用
-        newAccount.setStatus("Y");
+        newAccount.setStatus(AccountStatus.ACTIVE.getCode());
 
         Account savedAccount = accountRepository.save(newAccount);
         return savedAccount.getId();
@@ -76,7 +77,7 @@ public class AccountService {
         existingAccount.setName(updateAccountRequestDto.name());
 
         // 4. 驗證帳戶狀態是否更新，若有更新且要更新為N需檢核是否該帳戶仍有關聯的訂單，若仍有關聯的訂單不可更改狀態為N
-        if (!originalStatus.equals(newStatus) && "N".equals(newStatus)) {
+        if (!originalStatus.equals(newStatus) && AccountStatus.INACTIVE.getCode().equals(newStatus)) {
             checkAccountHasNoOrdersOrThrow(accountId);
         }
         existingAccount.setStatus(newStatus);
@@ -92,11 +93,11 @@ public class AccountService {
     @Transactional
     public void deleteAccount(Integer accountId) {
         Account existingAccount = findAccountByIdOrThrow(accountId);
-        if (existingAccount.getStatus().equals("N")) {
+        if (existingAccount.getStatus().equals(AccountStatus.INACTIVE.getCode())) {
             throw new ResourceNotFoundException("Account not found with ID: " + accountId);
         }
         checkAccountHasNoOrdersOrThrow(accountId);
-        existingAccount.setStatus("N");
+        existingAccount.setStatus(AccountStatus.INACTIVE.getCode());
         accountRepository.save(existingAccount);
     }
 

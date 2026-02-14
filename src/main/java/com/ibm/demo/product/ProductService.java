@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
@@ -48,7 +49,7 @@ public class ProductService {
         newProduct.setPrice(product_DTO.price());
         newProduct.setStockQty(product_DTO.stockQty());
         // 預設銷售狀態為 1001 (可銷售)
-        newProduct.setSaleStatus(1001);
+        newProduct.setSaleStatus(ProductStatus.AVAILABLE.getCode());
         // 3. 儲存商品資料
         Product savedProduct = productRepository.save(newProduct);
         return savedProduct.getId();
@@ -121,18 +122,18 @@ public class ProductService {
     }
 
     /**
-     * 刪除商品 (邏輯刪除，將銷售狀態設為 1002)。
+     * 刪除商品 (邏輯刪除，將銷售狀態設為不可銷售)。
      *
      * @param id 要刪除的商品 ID
      */
     @Transactional
     public void deleteProduct(Integer id) {
         Product existingProduct = findProductByIdOrThrow(id);
-        // 將銷售狀態設為 1002 (不可銷售)
-        if (existingProduct.getSaleStatus() == 1002) {
+        // 將銷售狀態設為不可銷售
+        if (existingProduct.getSaleStatus() == ProductStatus.INAVAILABLE.getCode()) {
             throw new ResourceNotFoundException("Product not found with id: " + id);
         }
-        existingProduct.setSaleStatus(1002);
+        existingProduct.setSaleStatus(ProductStatus.INAVAILABLE.getCode());
         productRepository.save(existingProduct);
     }
 
@@ -198,17 +199,6 @@ public class ProductService {
                 product.getSaleStatus(),
                 product.getStockQty());
     }
-
-    /**
-     * 驗證單一商品是否可銷售。
-     *
-     * @param product 商品實體
-     */
-    // public void validateProductIsSellable(Product product) {
-    // if (product.getSaleStatus() == 1002) {
-    // throw new ProductInactiveException("商品id: " + product.getId() + " 不可銷售");
-    // }
-    // }
 
     /**
      * 驗證商品列表中的所有商品是否都可銷售。
