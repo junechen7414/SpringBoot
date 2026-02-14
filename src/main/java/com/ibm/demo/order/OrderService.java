@@ -28,6 +28,8 @@ import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
+import com.ibm.demo.enums.AccountStatus;
+import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
@@ -61,7 +63,7 @@ public class OrderService {
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 // 驗證帳戶存在且狀態為啟用
                 Integer accountId = createOrderRequest.accountId();
-                if (accountClient.getAccountDetail(accountId).status().equals("N")) {
+                if (accountClient.getAccountDetail(accountId).status().equals(AccountStatus.INACTIVE.getCode())) {
                         throw new AccountInactiveException("帳戶狀態停用");
                 }
 
@@ -75,7 +77,7 @@ public class OrderService {
                 // 建立新訂單
                 OrderInfo newOrderInfo = OrderInfo.builder()
                                 .accountId(accountId)
-                                .status(1001)
+                                .status(OrderStatus.CREATED.getCode())
                                 .build();
 
                 // 處理訂單明細與庫存更新
@@ -219,10 +221,10 @@ public class OrderService {
                                                 "Order not found with ID: " + orderId));
 
                 // 2. 驗證訂單狀態
-                if (existingOrderInfo.getStatus() == 1003) {
+                if (existingOrderInfo.getStatus() == OrderStatus.CANCELLED.getCode()) {
                         throw new ResourceNotFoundException("Order not found with ID: " + orderId);
                 }
-                if (existingOrderInfo.getStatus() != 1001) {
+                if (existingOrderInfo.getStatus() != OrderStatus.CREATED.getCode()) {
                         throw new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + existingOrderInfo.getStatus());
                 }
 
@@ -258,16 +260,6 @@ public class OrderService {
                 // 6. 刪除訂單，連鎖刪除訂單明細
                 orderInfoRepository.delete(existingOrderInfo);
         }
-
-        /**
-         * @param orderInfo
-         */
-        // private void validateOrderStatus(OrderInfo orderInfo) {
-        // Integer orderStatus = orderInfo.getStatus();
-        // if (orderStatus != 1001) {
-        // throw new OrderStatusInvalidException("訂單狀態不允許更新商品項目，目前狀態: " + orderStatus);
-        // }
-        // }
 
         /**
          * @param productIds
