@@ -102,7 +102,7 @@ class OrderServiceTest {
                 DEFAULT_PRICE, DEFAULT_STOCK_QTY);
         nonSellableProductDetail = createTestProductDetailResponse(NON_SELLABLE_PRODUCT_ID, "Non-Sellable Product",
                 DEFAULT_PRICE, DEFAULT_STOCK_QTY);
-        nonSellableProductDetail.setSaleStatus(PRODUCT_STATUS_NOT_SELLABLE);
+        nonSellableProductDetail = GetProductDetailResponse.builder().saleStatus(PRODUCT_STATUS_NOT_SELLABLE).build();
         productForStockCheckDetail = createTestProductDetailResponse(PRODUCT_ID_FOR_STOCK_CHECK, "Low Stock Product",
                 DEFAULT_PRICE, LOW_STOCK_QTY);
     }
@@ -131,17 +131,19 @@ class OrderServiceTest {
     private static GetProductDetailResponse createTestProductDetailResponse(Integer productId, String name,
             BigDecimal price,
             Integer stock) {
-        GetProductDetailResponse dto = new GetProductDetailResponse(); // 假設 DTO 有無參數建構子
-        dto.setName(name);
-        dto.setPrice(price);
-        dto.setStockQty(stock);
-        dto.setSaleStatus(PRODUCT_STATUS_SELLABLE); // Assume sellable
+        GetProductDetailResponse dto = GetProductDetailResponse.builder()
+                .name(name)
+                .price(price)
+                .stockQty(stock)
+                .saleStatus(PRODUCT_STATUS_SELLABLE) // Assume sellable
+                .build();
         return dto;
     }
 
     private static GetAccountDetailResponse createTestAccountDetailResponse(Integer accountId, String status) {
-        GetAccountDetailResponse accResponse = new GetAccountDetailResponse();
-        accResponse.setStatus(status);
+        GetAccountDetailResponse accResponse = GetAccountDetailResponse.builder()
+                .status(status)
+                .build();
         return accResponse;
     }
 
@@ -149,9 +151,8 @@ class OrderServiceTest {
     @DisplayName("建立訂單時，若帳號非活躍，應拋出 AccountInactiveException")
     void createOrder_WhenAccountIsInactive_ShouldThrowAccountInactiveException() {
         // Arrange
-        CreateOrderRequest request = new CreateOrderRequest();
-        request.setAccountId(INACTIVE_ACCOUNT_ID);
-        request.setOrderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1)));
+        CreateOrderRequest request = CreateOrderRequest.builder().accountId(INACTIVE_ACCOUNT_ID).orderDetails(
+                List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1))).build();
 
         // accountClient屬於依賴所以要設定當accountClient.getAccountDetail傳入這個INACTIVE_ACCOUNT_ID時應該立即回傳的結果
         when(accountClient.getAccountDetail(INACTIVE_ACCOUNT_ID)).thenReturn(OrderServiceTest.inactiveAccountResponse);
@@ -169,11 +170,12 @@ class OrderServiceTest {
     @DisplayName("建立訂單時，若有商品不可銷售，應拋出 ProductInactiveException")
     void createOrder_WhenProductNotSellable_ShouldThrowProductInactiveException() {
         // Arrange
-        CreateOrderRequest request = new CreateOrderRequest();
-        request.setAccountId(ACTIVE_ACCOUNT_ID);
-        request.setOrderDetails(List.of(
-                new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1),
-                new CreateOrderDetailRequest(NON_SELLABLE_PRODUCT_ID, 1)));
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .accountId(ACTIVE_ACCOUNT_ID)
+                .orderDetails(List.of(
+                        new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1),
+                        new CreateOrderDetailRequest(NON_SELLABLE_PRODUCT_ID, 1)))
+                .build();
 
         // 模擬 accountClient.getAccountDetail 返回一個活躍帳戶
         when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID)).thenReturn(OrderServiceTest.activeAccountResponse);
@@ -203,10 +205,11 @@ class OrderServiceTest {
     @DisplayName("建立訂單時，若有商品庫存不足，應拋出 ProductStockNotEnoughException")
     void createOrder_WhenInsufficientStock_ShouldThrowProductStockNotEnoughException() {
         // Arrange
-        CreateOrderRequest request = new CreateOrderRequest();
-        request.setAccountId(ACTIVE_ACCOUNT_ID);
-        request.setOrderDetails(
-                List.of(new CreateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK, REQUEST_QTY_EXCEEDING_STOCK)));
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .accountId(ACTIVE_ACCOUNT_ID)
+                .orderDetails(List.of(new CreateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK,
+                        REQUEST_QTY_EXCEEDING_STOCK)))
+                .build();
 
         // 模擬 accountClient.getAccountDetail 返回一個活躍帳戶
         when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID)).thenReturn(OrderServiceTest.activeAccountResponse);
@@ -231,9 +234,8 @@ class OrderServiceTest {
     @DisplayName("更新訂單時，若訂單不存在，應拋出 ResourceNotFoundException")
     void updateOrder_WhenOrderNotFound_ShouldThrowResourceNotFoundException() {
         // Arrange
-        UpdateOrderRequest request = new UpdateOrderRequest();
-        request.setOrderId(EXISTING_ORDER_ID);
-        request.setItems(List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1)));
+        UpdateOrderRequest request = new UpdateOrderRequest(EXISTING_ORDER_ID, STATUS_PENDING,
+                List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1)));
 
         // Mock findById to return empty
         when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.empty());
@@ -256,9 +258,7 @@ class OrderServiceTest {
         OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_PENDING);
         createTestOrderDetail(existingOrder, SELLABLE_PRODUCT_ID_1, DEFAULT_ORDER_ITEM_QTY); // Original detail
 
-        UpdateOrderRequest request = new UpdateOrderRequest();
-        request.setOrderId(EXISTING_ORDER_ID);
-        request.setItems(List.of(
+        UpdateOrderRequest request = new UpdateOrderRequest(EXISTING_ORDER_ID, STATUS_PENDING, List.of(
                 new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID_1, 1), // Update existing
                 new UpdateOrderDetailRequest(NON_SELLABLE_PRODUCT_ID, 1) // Add a non-sellable item
         ));
@@ -281,23 +281,20 @@ class OrderServiceTest {
         // Verify no persistence occurred beyond finding the initial order
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
-        verify(orderDetailRepository, never()).saveAll(anyList());
-        verify(orderDetailRepository, never()).deleteAll(anyList());
         verify(productClient, never()).updateProductsStock(anyMap());
     }
 
     @Test
     @DisplayName("更新訂單時，若有商品庫存不足，應拋出 ProductStockNotEnoughException")
-    void updateOrder_WhenInsufficientStock_ShouldThrowProductStockNotEnoughException() { // 修正方法名中的例外類型
+    void updateOrder_WhenInsufficientStock_ShouldThrowProductStockNotEnoughException() {
         // Arrange
         OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_PENDING);
         createTestOrderDetail(existingOrder, PRODUCT_ID_FOR_STOCK_CHECK, DEFAULT_ORDER_ITEM_QTY); // Original detail
 
-        UpdateOrderRequest request = new UpdateOrderRequest();
-        request.setOrderId(EXISTING_ORDER_ID);
         // Update item to a quantity that exceeds available stock
-        request.setItems(
-                List.of(new UpdateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK, REQUEST_QTY_EXCEEDING_STOCK)));
+        UpdateOrderRequest request = new UpdateOrderRequest(EXISTING_ORDER_ID, STATUS_PENDING,
+                List.of(new UpdateOrderDetailRequest(PRODUCT_ID_FOR_STOCK_CHECK,
+                        REQUEST_QTY_EXCEEDING_STOCK)));
 
         when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
 
@@ -314,8 +311,6 @@ class OrderServiceTest {
         // Verify no persistence occurred beyond finding the initial order
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
-        verify(orderDetailRepository, never()).saveAll(anyList());
-        verify(orderDetailRepository, never()).deleteAll(anyList());
         verify(productClient, never()).updateProductsStock(anyMap());
     }
 

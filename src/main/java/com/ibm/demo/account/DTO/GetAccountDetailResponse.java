@@ -1,13 +1,9 @@
 package com.ibm.demo.account.DTO;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Builder;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class GetAccountDetailResponse {
-    private String name;
-    private String status;    
+@Builder
+public record GetAccountDetailResponse(
+                String name,
+                String status) {
 }

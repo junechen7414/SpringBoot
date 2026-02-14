@@ -60,14 +60,14 @@ public class OrderService {
         @Transactional
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 // 驗證帳戶存在且狀態為啟用
-                Integer accountId = createOrderRequest.getAccountId();
-                if (accountClient.getAccountDetail(accountId).getStatus().equals("N")) {
+                Integer accountId = createOrderRequest.accountId();
+                if (accountClient.getAccountDetail(accountId).status().equals("N")) {
                         throw new AccountInactiveException("帳戶狀態停用");
                 }
 
                 // 收集商品ID並批取商品資訊
-                Set<Integer> productIds = createOrderRequest.getOrderDetails().stream()
-                                .map(CreateOrderDetailRequest::getProductId)
+                Set<Integer> productIds = createOrderRequest.orderDetails().stream()
+                                .map(CreateOrderDetailRequest::productId)
                                 .collect(Collectors.toSet());
                 Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(
                                 productIds);
@@ -95,10 +95,11 @@ public class OrderService {
                 }
                 return orderInfoList.stream()
                                 .map(orderInfo -> {
-                                        GetOrderListResponse response = new GetOrderListResponse();
-                                        response.setOrderId(orderInfo.getId());
-                                        response.setStatus(orderInfo.getStatus());
-                                        response.setTotalAmount(calculateOrderTotalAmount(orderInfo));
+                                        GetOrderListResponse response = GetOrderListResponse.builder()
+                                                        .orderId(orderInfo.getId())
+                                                        .status(orderInfo.getStatus())
+                                                        .totalAmount(calculateOrderTotalAmount(orderInfo))
+                                                        .build();
                                         return response;
                                 }).collect(Collectors.toList());
 
@@ -124,22 +125,22 @@ public class OrderService {
                 List<OrderItemDTO> itemDTOs = details.stream()
                                 .map(detail -> {
                                         GetProductDetailResponse product = productMap.get(detail.getProductId());
-                                        OrderItemDTO item = new OrderItemDTO();
-                                        item.setProductId(detail.getProductId());
-                                        item.setProductName(product.getName());
-                                        item.setQuantity(detail.getQuantity());
-                                        item.setProductPrice(product.getPrice());
-                                        return item;
+                                        return OrderItemDTO.builder()
+                                                        .productId(detail.getProductId())
+                                                        .productName(product.name())
+                                                        .quantity(detail.getQuantity())
+                                                        .productPrice(product.price())
+                                                        .build();
                                 })
                                 .collect(Collectors.toList());
 
                 // 4. 回傳結果
-                GetOrderDetailResponse response = new GetOrderDetailResponse();
-                response.setAccountId(orderInfo.getAccountId());
-                response.setOrderStatus(orderInfo.getStatus());
-                response.setTotalAmount(calculateOrderTotalAmount(orderInfo));
-                response.setItems(itemDTOs);
-
+                GetOrderDetailResponse response = GetOrderDetailResponse.builder()
+                                .accountId(orderInfo.getAccountId())
+                                .orderStatus(orderInfo.getStatus())
+                                .totalAmount(calculateOrderTotalAmount(orderInfo))
+                                .items(itemDTOs)
+                                .build();
                 return response;
         }
 
@@ -150,13 +151,13 @@ public class OrderService {
         @Transactional
         public void updateOrder(UpdateOrderRequest request) {
                 // 1. 獲取現有訂單
-                OrderInfo order = findByOrderIdOrThrow(request.getOrderId());
+                OrderInfo order = findByOrderIdOrThrow(request.orderId());
 
                 // 2. 準備 Map 以便比對
                 Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
                                 .collect(Collectors.toMap(OrderDetail::getProductId, Function.identity()));
-                Map<Integer, UpdateOrderDetailRequest> incomingMap = request.getItems().stream()
-                                .collect(Collectors.toMap(UpdateOrderDetailRequest::getProductId, Function.identity()));
+                Map<Integer, UpdateOrderDetailRequest> incomingMap = request.items().stream()
+                                .collect(Collectors.toMap(UpdateOrderDetailRequest::productId, Function.identity()));
 
                 // 3. 計算庫存 Delta (實務建議：計算「異動量」而非直接算「新庫存」，這對併發處理較友善)
                 // 但根據你的 batchUpdateProductStock 邏輯，我們維持計算最終 stock 的做法
@@ -176,7 +177,7 @@ public class OrderService {
                                 detailsToDelete.add(detail);
                         } else {
                                 // 該商品存在，更新數量
-                                detail.setQuantity(incoming.getQuantity());
+                                detail.setQuantity(incoming.quantity());
                         }
                 }
 
@@ -194,7 +195,7 @@ public class OrderService {
                                                 OrderDetail.builder()
                                                                 .orderInfo(order) // 關聯到新訂單
                                                                 .productId(productId)
-                                                                .quantity(item.getQuantity())
+                                                                .quantity(item.quantity())
                                                                 .build());
                         }
                 }
@@ -203,7 +204,7 @@ public class OrderService {
                 batchUpdateProductStock(stockUpdates);
 
                 // 6. 更新訂單狀態並存檔
-                order.setStatus(request.getOrderStatus());
+                order.setStatus(request.orderStatus());
                 orderInfoRepository.save(order);
         }
 
@@ -238,7 +239,7 @@ public class OrderService {
                         Integer productId = detail.getProductId();
                         Integer quantityToRestore = detail.getQuantity();
                         GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-                        Integer currentStock = productDetail.getStockQty();
+                        Integer currentStock = productDetail.stockQty();
 
                         // 計算新庫存 (newQuantity 為 0)
                         Integer newStock = calculateNewStock(
@@ -367,10 +368,10 @@ public class OrderService {
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
                 for (Integer pid : allProductIds) {
                         int oldQty = existingMap.containsKey(pid) ? existingMap.get(pid).getQuantity() : 0;
-                        int newQty = incomingMap.containsKey(pid) ? incomingMap.get(pid).getQuantity() : 0;
+                        int newQty = incomingMap.containsKey(pid) ? incomingMap.get(pid).quantity() : 0;
 
                         if (oldQty != newQty) {
-                                int currentStock = productDetails.get(pid).getStockQty();
+                                int currentStock = productDetails.get(pid).stockQty();
                                 // 呼叫你原有的庫存計算邏輯
                                 stockUpdates.put(pid, calculateNewStock(pid, currentStock, oldQty, newQty));
                         }
@@ -394,7 +395,7 @@ public class OrderService {
                 for (OrderDetail detail : orderDetails) {
                         GetProductDetailResponse productDetail = productDetailsMap.get(detail.getProductId());
                         totalAmount = totalAmount.add(
-                                        productDetail.getPrice().multiply(BigDecimal.valueOf(detail.getQuantity())));
+                                        productDetail.price().multiply(BigDecimal.valueOf(detail.getQuantity())));
                 }
                 return totalAmount;
         }
@@ -439,17 +440,17 @@ public class OrderService {
 
                 Map<Integer, Integer> stockUpdates = new HashMap<>();
 
-                List<OrderDetail> orderDetails = createOrderRequest.getOrderDetails().stream()
-                                .filter(detailRequest -> productDetailsMap.containsKey(detailRequest.getProductId()))
+                List<OrderDetail> orderDetails = createOrderRequest.orderDetails().stream()
+                                .filter(detailRequest -> productDetailsMap.containsKey(detailRequest.productId()))
                                 .map(detailRequest -> {
-                                        Integer productId = detailRequest.getProductId();
-                                        Integer quantity = detailRequest.getQuantity();
+                                        Integer productId = detailRequest.productId();
+                                        Integer quantity = detailRequest.quantity();
                                         GetProductDetailResponse productDetail = productDetailsMap.get(productId);
 
                                         // 計算新庫存
                                         Integer newStock = calculateNewStock(
                                                         productId,
-                                                        productDetail.getStockQty(),
+                                                        productDetail.stockQty(),
                                                         0, // 新增時舊數量為0
                                                         quantity);
                                         stockUpdates.put(productId, newStock);

@@ -40,13 +40,13 @@ public class ProductService {
     @Transactional
     public Integer createProduct(CreateProductRequest product_DTO) {
         // 1. 驗證商品名稱是否已存在
-        String requestProductName = product_DTO.getName();        
+        String requestProductName = product_DTO.name();
         checkProductExistsByNameOrThrow(requestProductName);
         // 2. 建構商品實體
         Product newProduct = new Product();
         newProduct.setName(requestProductName);
-        newProduct.setPrice(product_DTO.getPrice());
-        newProduct.setStockQty(product_DTO.getStockQty());
+        newProduct.setPrice(product_DTO.price());
+        newProduct.setStockQty(product_DTO.stockQty());
         // 預設銷售狀態為 1001 (可銷售)
         newProduct.setSaleStatus(1001);
         // 3. 儲存商品資料
@@ -106,16 +106,16 @@ public class ProductService {
     @Transactional
     public void updateProduct(UpdateProductRequest updateProductRequestDto) {
         // 1. 取得商品實體並驗證帳戶是否存在否則拋出例外
-        Integer productId = updateProductRequestDto.getId();
+        Integer productId = updateProductRequestDto.id();
         Product existingProduct = findProductByIdOrThrow(productId);
         // 2. 驗證商品名稱是否已存在
-        String requestProductName = updateProductRequestDto.getName();
+        String requestProductName = updateProductRequestDto.name();
         checkProductExistsByNameOrThrow(requestProductName);
         // 3. 更新商品屬性
-        existingProduct.setName(updateProductRequestDto.getName());
-        existingProduct.setPrice(updateProductRequestDto.getPrice());
-        existingProduct.setSaleStatus(updateProductRequestDto.getSaleStatus());
-        existingProduct.setStockQty(updateProductRequestDto.getStockQty());
+        existingProduct.setName(updateProductRequestDto.name());
+        existingProduct.setPrice(updateProductRequestDto.price());
+        existingProduct.setSaleStatus(updateProductRequestDto.saleStatus());
+        existingProduct.setStockQty(updateProductRequestDto.stockQty());
         // 4. 儲存商品資料
         productRepository.save(existingProduct);
     }
@@ -129,7 +129,7 @@ public class ProductService {
     public void deleteProduct(Integer id) {
         Product existingProduct = findProductByIdOrThrow(id);
         // 將銷售狀態設為 1002 (不可銷售)
-        if(existingProduct.getSaleStatus() == 1002) {
+        if (existingProduct.getSaleStatus() == 1002) {
             throw new ResourceNotFoundException("Product not found with id: " + id);
         }
         existingProduct.setSaleStatus(1002);
@@ -162,7 +162,8 @@ public class ProductService {
             }
             if (newStock < 0) {
                 // 假設庫存不能為負
-                throw new InvalidRequestException("Stock quantity for product ID " + productId + " cannot be negative.");
+                throw new InvalidRequestException(
+                        "Stock quantity for product ID " + productId + " cannot be negative.");
             }
         }
 
@@ -175,7 +176,7 @@ public class ProductService {
             productIdsToUpdate.removeAll(foundProductIds); // 找出未找到的 ID
             throw new ResourceNotFoundException("Some products not found for IDs: " + productIdsToUpdate);
         }
-        
+
         for (Product product : products) {
             Integer newStock = stockUpdates.get(product.getId());
             product.setStockQty(newStock);
@@ -204,9 +205,9 @@ public class ProductService {
      * @param product 商品實體
      */
     // public void validateProductIsSellable(Product product) {
-    //     if (product.getSaleStatus() == 1002) {
-    //         throw new ProductInactiveException("商品id: " + product.getId() + " 不可銷售");
-    //     }
+    // if (product.getSaleStatus() == 1002) {
+    // throw new ProductInactiveException("商品id: " + product.getId() + " 不可銷售");
+    // }
     // }
 
     /**
@@ -215,9 +216,9 @@ public class ProductService {
      * @param products 商品實體列表
      */
     // public void validateProductsAreSellable(List<Product> products) {
-    //     for (Product product : products) {
-    //         validateProductIsSellable(product); // 直接呼叫，讓 ProductInactiveException 自然拋出
-    //     }
+    // for (Product product : products) {
+    // validateProductIsSellable(product); // 直接呼叫，讓 ProductInactiveException 自然拋出
+    // }
     // }
 
     /**
@@ -251,7 +252,7 @@ public class ProductService {
 
     // 根據商品名稱檢查商品是否已存在
     public void checkProductExistsByNameOrThrow(String productName) {
-        if(productRepository.existsByName(productName)){
+        if (productRepository.existsByName(productName)) {
             throw new ProductAlreadyExistException(productName + " already exists");
         }
     }

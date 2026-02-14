@@ -2,16 +2,11 @@ package com.ibm.demo.order.DTO;
 
 import java.math.BigDecimal;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Builder;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class GetOrderListResponse {
-    private Integer orderId;
-    private Integer status;
-    private BigDecimal totalAmount;
-
+@Builder
+public record GetOrderListResponse(
+        Integer orderId,
+        Integer status,
+        BigDecimal totalAmount) {
 }

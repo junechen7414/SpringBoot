@@ -7,22 +7,14 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Builder;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class CreateOrderRequest {
+@Builder
+public record CreateOrderRequest(
 
-    @NotNull(message = "Account ID is required")
-    @Digits(integer = 10, fraction = 0, message = "10 characters max")
-    @Positive(message = "Account ID must be positive")
-    private Integer accountId;
+        @NotNull(message = "Account ID is required") @Digits(integer = 10, fraction = 0, message = "10 characters max") @Positive(message = "Account ID must be positive") Integer accountId,
 
-    @Valid
-    @NotEmpty(message = "Order details are required")
-    private List<CreateOrderDetailRequest> orderDetails;
+        @Valid @NotEmpty(message = "Order details are required") List<CreateOrderDetailRequest> orderDetails
 
+) {
 }
