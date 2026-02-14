@@ -64,7 +64,7 @@ public class OrderService {
                 // 驗證帳戶存在且狀態為啟用
                 Integer accountId = createOrderRequest.accountId();
                 if (accountClient.getAccountDetail(accountId).status().equals(AccountStatus.INACTIVE.getCode())) {
-                        throw new AccountInactiveException("帳戶狀態停用");
+                        throw new AccountInactiveException("帳戶狀態:" + AccountStatus.INACTIVE.getDescription());
                 }
 
                 // 收集商品ID並批取商品資訊
