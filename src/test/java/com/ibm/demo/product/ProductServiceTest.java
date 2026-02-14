@@ -47,30 +47,33 @@ class ProductServiceTest {
     private static final Integer NON_EXISTENT_PRODUCT_ID = 999;
     private static final String NEW_PRODUCT_NAME = "New Product Name";
     private static final String OLD_PRODUCT_NAME = "Old Product Name";
-    
+
     private static Product inactiveProduct;
-    
 
     @BeforeAll
-    static void setUp() {        
-        inactiveProduct = createTestProduct(INACTIVE_PRODUCT_ID, INACTIVE_PRODUCT_NAME, new BigDecimal("20.00"), STATUS_NOT_SELLABLE, 0);        
+    static void setUp() {
+        inactiveProduct = createTestProduct(INACTIVE_PRODUCT_ID, INACTIVE_PRODUCT_NAME, new BigDecimal("20.00"),
+                STATUS_NOT_SELLABLE, 0);
     }
 
     @Test
     @DisplayName("建立產品時，若產品名稱已存在應拋出ProductAlreadyExistException")
     void createProduct_WhenNameAlreadyExists_ShouldThrowProductAlreadyExistException() {
         // Arrange
-        CreateProductRequest request = new CreateProductRequest();
-        request.setName(EXISTING_NAME_PRODUCT_NAME);
-        request.setPrice(DEFAULT_PRICE);
-        request.setStockQty(DEFAULT_STOCK);
+        CreateProductRequest request = CreateProductRequest.builder()
+                .name(EXISTING_NAME_PRODUCT_NAME)
+                .price(DEFAULT_PRICE)
+                .stockQty(DEFAULT_STOCK)
+                .build();
 
         // Simulate that EXISTING_NAME_PRODUCT_NAME is already taken
         when(productRepository.existsByName(EXISTING_NAME_PRODUCT_NAME)).thenReturn(true);
 
         // Act & Assert
         assertThrows(ProductAlreadyExistException.class, () -> productService.createProduct(request));
-        // assertEquals(EXISTING_NAME_PRODUCT_NAME + " already exists", exception.getMessage()); // Removed: Message assertion redundant with type check
+        // assertEquals(EXISTING_NAME_PRODUCT_NAME + " already exists",
+        // exception.getMessage()); // Removed: Message assertion redundant with type
+        // check
 
         // Verify
         verify(productRepository, times(1)).existsByName(EXISTING_NAME_PRODUCT_NAME);
@@ -79,45 +82,52 @@ class ProductServiceTest {
 
     // @Test
     // @DisplayName("獲取產品詳情時，若產品不存在應拋出ResourceNotFoundException")
-    // void getProductDetail_WhenProductNotFound_ShouldThrowResourceNotFoundException() {
-    //     // Arrange
-    //     when(productRepository.findById(NON_EXISTENT_PRODUCT_ID)).thenReturn(Optional.empty());
+    // void
+    // getProductDetail_WhenProductNotFound_ShouldThrowResourceNotFoundException() {
+    // // Arrange
+    // when(productRepository.findById(NON_EXISTENT_PRODUCT_ID)).thenReturn(Optional.empty());
 
-    //     // Act & Assert
-    //     ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
-    //             () -> productService.getProductDetail(NON_EXISTENT_PRODUCT_ID));
-    //     assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID, exception.getMessage());
+    // // Act & Assert
+    // ResourceNotFoundException exception =
+    // assertThrows(ResourceNotFoundException.class,
+    // () -> productService.getProductDetail(NON_EXISTENT_PRODUCT_ID));
+    // assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID,
+    // exception.getMessage());
 
-    //     // Verify
-    //     verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
+    // // Verify
+    // verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
     // }
 
     // @Test
     // @DisplayName("獲取多個產品詳情時，若ID集合為null應拋出InvalidRequestException")
     // void getProductDetails_WhenIdsIsNull_ShouldThrowInvalidRequestException() {
-    //     // Act & Assert
-    //     InvalidRequestException exception = assertThrows(InvalidRequestException.class,
-    //             () -> productService.getProductDetails(null));
-    //     assertEquals("Product IDs cannot be null or empty", exception.getMessage());
+    // // Act & Assert
+    // InvalidRequestException exception =
+    // assertThrows(InvalidRequestException.class,
+    // () -> productService.getProductDetails(null));
+    // assertEquals("Product IDs cannot be null or empty", exception.getMessage());
     // }
 
     @Test
     @DisplayName("更新產品時，若產品不存在應拋出ResourceNotFoundException")
     void updateProduct_WhenProductNotFound_ShouldThrowResourceNotFoundException() {
         // Arrange
-        UpdateProductRequest request = new UpdateProductRequest();
-        request.setId(NON_EXISTENT_PRODUCT_ID);
-        request.setName(NEW_PRODUCT_NAME);
-        request.setPrice(DEFAULT_PRICE);
-        request.setSaleStatus(STATUS_SELLABLE);
-        request.setStockQty(DEFAULT_STOCK);
+        UpdateProductRequest request = UpdateProductRequest.builder()
+                .id(NON_EXISTENT_PRODUCT_ID)
+                .name(NEW_PRODUCT_NAME)
+                .price(DEFAULT_PRICE)
+                .saleStatus(STATUS_SELLABLE)
+                .stockQty(DEFAULT_STOCK)
+                .build();
 
         // Simulate that the product with NON_EXISTENT_PRODUCT_ID does not exist
         when(productRepository.findById(NON_EXISTENT_PRODUCT_ID)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> productService.updateProduct(request));
-        // assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID, exception.getMessage()); // Removed: Message assertion redundant with type check
+        // assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID,
+        // exception.getMessage()); // Removed: Message assertion redundant with type
+        // check
 
         // Verify
         verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
@@ -129,15 +139,18 @@ class ProductServiceTest {
     @DisplayName("更新產品時，若新產品名稱已存在應拋出ProductAlreadyExistException")
     void updateProduct_WhenNewNameExists_ShouldThrowProductAlreadyExistException() {
         // Arrange
-        // Use activeProduct from setUp, but we'll try to update its name to one that already exists
-        Product productToUpdate = createTestProduct(ACTIVE_PRODUCT_ID, OLD_PRODUCT_NAME, DEFAULT_PRICE, STATUS_SELLABLE, DEFAULT_STOCK);
+        // Use activeProduct from setUp, but we'll try to update its name to one that
+        // already exists
+        Product productToUpdate = createTestProduct(ACTIVE_PRODUCT_ID, OLD_PRODUCT_NAME, DEFAULT_PRICE, STATUS_SELLABLE,
+                DEFAULT_STOCK);
 
-        UpdateProductRequest request = new UpdateProductRequest();
-        request.setId(ACTIVE_PRODUCT_ID);
-        request.setName(EXISTING_NAME_PRODUCT_NAME); // This name conflicts with 'productWithExistingName'
-        request.setPrice(BigDecimal.ONE);
-        request.setSaleStatus(STATUS_SELLABLE);
-        request.setStockQty(5);
+        UpdateProductRequest request = UpdateProductRequest.builder()
+                .id(ACTIVE_PRODUCT_ID)
+                .name(EXISTING_NAME_PRODUCT_NAME) // This name conflicts with 'productWithExistingName'
+                .price(BigDecimal.ONE)
+                .saleStatus(STATUS_SELLABLE)
+                .stockQty(5)
+                .build();
 
         when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(productToUpdate));
         // Simulate that EXISTING_NAME_PRODUCT_NAME is already taken
@@ -145,7 +158,9 @@ class ProductServiceTest {
 
         // Act & Assert
         assertThrows(ProductAlreadyExistException.class, () -> productService.updateProduct(request));
-        // assertEquals(EXISTING_NAME_PRODUCT_NAME + " already exists", exception.getMessage()); // Removed: Message assertion redundant with type check
+        // assertEquals(EXISTING_NAME_PRODUCT_NAME + " already exists",
+        // exception.getMessage()); // Removed: Message assertion redundant with type
+        // check
 
         // Verify
         verify(productRepository, times(1)).findById(ACTIVE_PRODUCT_ID);
@@ -162,7 +177,9 @@ class ProductServiceTest {
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> productService.deleteProduct(INACTIVE_PRODUCT_ID));
-        // assertEquals("Product not found with id: " + INACTIVE_PRODUCT_ID, exception.getMessage()); // Removed: Message assertion redundant with type check
+        // assertEquals("Product not found with id: " + INACTIVE_PRODUCT_ID,
+        // exception.getMessage()); // Removed: Message assertion redundant with type
+        // check
 
         // Verify findById was called once, but save should NOT be called
         verify(productRepository, times(1)).findById(INACTIVE_PRODUCT_ID);
@@ -177,7 +194,9 @@ class ProductServiceTest {
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> productService.deleteProduct(NON_EXISTENT_PRODUCT_ID));
-        // assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID, exception.getMessage()); // Removed: Message assertion redundant with type check
+        // assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID,
+        // exception.getMessage()); // Removed: Message assertion redundant with type
+        // check
 
         // Verify
         verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
@@ -186,29 +205,38 @@ class ProductServiceTest {
 
     // @Test
     // @DisplayName("批量更新庫存時，若stockUpdates為null應拋出InvalidRequestException")
-    // void updateProductsStock_WhenStockUpdatesIsNull_ShouldThrowInvalidRequestException() {
-    //     InvalidRequestException exception = assertThrows(InvalidRequestException.class,
-    //             () -> productService.updateProductsStock(null));
-    //     assertEquals("Stock updates cannot be null or empty", exception.getMessage());
-    //     verify(productRepository, never()).findAllById(any());
-    //     verify(productRepository, never()).saveAll(any());
+    // void
+    // updateProductsStock_WhenStockUpdatesIsNull_ShouldThrowInvalidRequestException()
+    // {
+    // InvalidRequestException exception =
+    // assertThrows(InvalidRequestException.class,
+    // () -> productService.updateProductsStock(null));
+    // assertEquals("Stock updates cannot be null or empty",
+    // exception.getMessage());
+    // verify(productRepository, never()).findAllById(any());
+    // verify(productRepository, never()).saveAll(any());
     // }
 
     // @Test
     // @DisplayName("批量更新庫存時，若stockUpdates為空Map應拋出InvalidRequestException")
-    // void updateProductsStock_WhenStockUpdatesIsEmpty_ShouldThrowInvalidRequestException() {
-    //     InvalidRequestException exception = assertThrows(InvalidRequestException.class,
-    //             () -> productService.updateProductsStock(new HashMap<>()));
-    //     assertEquals("Stock updates cannot be null or empty", exception.getMessage());
-    //     verify(productRepository, never()).findAllById(any());
-    //     verify(productRepository, never()).saveAll(any());
+    // void
+    // updateProductsStock_WhenStockUpdatesIsEmpty_ShouldThrowInvalidRequestException()
+    // {
+    // InvalidRequestException exception =
+    // assertThrows(InvalidRequestException.class,
+    // () -> productService.updateProductsStock(new HashMap<>()));
+    // assertEquals("Stock updates cannot be null or empty",
+    // exception.getMessage());
+    // verify(productRepository, never()).findAllById(any());
+    // verify(productRepository, never()).saveAll(any());
     // }
 
     // --- Helper Methods ---
     /**
      * Creates a Product instance for testing purposes.
      */
-    private static Product createTestProduct(Integer id, String name, BigDecimal price, Integer saleStatus, Integer stockQty) {
+    private static Product createTestProduct(Integer id, String name, BigDecimal price, Integer saleStatus,
+            Integer stockQty) {
         Product product = new Product();
         product.setId(id);
         product.setName(name);
@@ -219,5 +247,5 @@ class ProductServiceTest {
         // always needed here
         return product;
     }
-    
+
 }

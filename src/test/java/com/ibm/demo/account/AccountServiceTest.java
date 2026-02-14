@@ -75,10 +75,11 @@ public class AccountServiceTest {
     void updateAccount_whenAccountNotFound_shouldThrowResourceNotFoundException() {
         // Arrange
         Integer nonExistentAccountId = 999;
-        UpdateAccountRequest request = new UpdateAccountRequest();
-        request.setId(nonExistentAccountId);
-        request.setName("Any Name");
-        request.setStatus("Y");
+        UpdateAccountRequest request = UpdateAccountRequest.builder()
+                .id(nonExistentAccountId)
+                .name("Any Name")
+                .status("Y")
+                .build();
 
         when(accountRepository.findById(nonExistentAccountId)).thenReturn(Optional.empty());
 
@@ -92,16 +93,17 @@ public class AccountServiceTest {
         verify(orderClient, never()).accountIdIsInOrder(any(Integer.class));
         verify(accountRepository, never()).save(any(Account.class));
     }
-    
+
     @Test
     @DisplayName("更新帳戶狀態為N時，若有關聯訂單應拋出AccountStillHasOrderCanNotBeDeleteException")
     void updateAccount_whenStatusChangeToNAndHasOrder_shouldThrowException() {
         // Arrange
         // activeAccount is set up in @BeforeEach with status "Y" and id 1
-        UpdateAccountRequest request = new UpdateAccountRequest();
-        request.setId(activeAccount.getId());
-        request.setName("Updated Name");
-        request.setStatus("N");
+        UpdateAccountRequest request = UpdateAccountRequest.builder()
+                .id(activeAccount.getId())
+                .name(activeAccount.getName())
+                .status("N") // Change status to "N"
+                .build();
 
         // Mock the behavior of accountRepository and orderClient
         // to simulate the scenario where the account has an order
@@ -116,7 +118,7 @@ public class AccountServiceTest {
         verify(orderClient, times(1)).accountIdIsInOrder(activeAccount.getId());
         verify(accountRepository, never()).save(any(Account.class));
     }
-    
+
     @Test
     @DisplayName("刪除帳戶時，若帳戶ID不存在應拋出ResourceNotFoundException")
     void deleteAccount_whenAccountNotFoundInitially_shouldThrowResourceNotFoundException() {
