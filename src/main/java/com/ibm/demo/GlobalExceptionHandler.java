@@ -80,15 +80,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 // 用 StringBuilder 來組合多個錯誤訊息
                 StringBuilder errorMessage = new StringBuilder("Validation failed: ");
                 ex.getBindingResult().getFieldErrors().forEach(fieldError -> {
-                    errorMessage.append("[Field: '")
-                                .append(fieldError.getField())
-                                .append("', Message: '")
-                                .append(fieldError.getDefaultMessage())
-                                .append("']; ");
+                        errorMessage.append("[Field: '")
+                                        .append(fieldError.getField())
+                                        .append("', Message: '")
+                                        .append(fieldError.getDefaultMessage())
+                                        .append("']; ");
                 });
                 // 移除最後多餘的分號和空格
                 if (errorMessage.length() > "Validation failed: ".length()) {
-                    errorMessage.setLength(errorMessage.length() - 2);
+                        errorMessage.setLength(errorMessage.length() - 2);
                 }
 
                 ApiErrorResponse apiErrorResponse = new ApiErrorResponse(
