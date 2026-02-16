@@ -14,6 +14,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
+import com.ibm.demo.enums.AccountStatus;
+import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
@@ -28,12 +30,11 @@ import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
-import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
+import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
 
@@ -61,6 +62,7 @@ public class OrderService {
          */
         @Transactional
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
+                ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
                 // 驗證帳戶存在且狀態為啟用
                 Integer accountId = createOrderRequest.accountId();
                 if (accountClient.getAccountDetail(accountId).status().equals(AccountStatus.INACTIVE.getCode())) {
@@ -91,6 +93,7 @@ public class OrderService {
         }
 
         public List<GetOrderListResponse> getOrderListByAccountId(Integer accountId) {
+                ServiceValidator.validateNotNull(accountId, "Account ID");
                 List<OrderInfo> orderInfoList = orderInfoRepository.findByAccountId(accountId);
                 if (orderInfoList == null || orderInfoList.isEmpty()) {
                         return new ArrayList<>();
@@ -152,6 +155,7 @@ public class OrderService {
          */
         @Transactional
         public void updateOrder(UpdateOrderRequest request) {
+                ServiceValidator.validateNotNull(request, "Update order request");
                 // 1. 獲取現有訂單
                 OrderInfo order = findByOrderIdOrThrow(request.orderId());
 
@@ -215,6 +219,7 @@ public class OrderService {
          */
         @Transactional
         public void deleteOrder(Integer orderId) {
+                ServiceValidator.validateNotNull(orderId, "Order ID");
                 // 1. 獲取訂單資訊
                 OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
                                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -280,6 +285,7 @@ public class OrderService {
          * @param stockUpdates
          */
         private void batchUpdateProductStock(Map<Integer, Integer> stockUpdates) {
+                ServiceValidator.validateNotNull(stockUpdates, "Stock updates map");
                 if (!stockUpdates.isEmpty()) {
                         productClient.updateProductsStock(stockUpdates);
                         // logger.info("批量更新商品庫存成功");
@@ -300,10 +306,11 @@ public class OrderService {
         private Integer calculateNewStock(Integer productId, Integer currentStock, Integer originalQuantity,
                         Integer requestQuantity) {
                 // 基本驗證
-                if (productId == null || currentStock == null || originalQuantity == null || requestQuantity == null) {
-                        throw new InvalidRequestException(
-                                        "Product ID, current stock, old quantity, and new quantity cannot be null.");
-                }
+                ServiceValidator.validateNotNull(productId, "Product ID");
+                ServiceValidator.validateNotNull(currentStock, "Current stock");
+                ServiceValidator.validateNotNull(originalQuantity, "Old quantity");
+                ServiceValidator.validateNotNull(requestQuantity, "New quantity");
+
                 if (originalQuantity < 0 || requestQuantity < 0) {
                         throw new InvalidRequestException(
                                         "Order quantities cannot be negative for product ID: " + productId);
@@ -393,6 +400,7 @@ public class OrderService {
         }
 
         public OrderInfo findByOrderIdOrThrow(Integer orderId) {
+                ServiceValidator.validateNotNull(orderId, "Order ID");
                 return orderInfoRepository.findById(orderId).orElseThrow(
                                 () -> new ResourceNotFoundException("Order not found with ID: " + orderId));
         }
@@ -403,6 +411,7 @@ public class OrderService {
          */
         // 驗證帳戶ID有無關聯的訂單
         public boolean ActiveAccountIdIsInOrder(Integer accountId) {
+                ServiceValidator.validateNotNull(accountId, "Account ID");
                 if (!orderInfoRepository.findByAccountId(accountId).isEmpty()) {
                         return true;
                 }

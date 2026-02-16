@@ -16,6 +16,7 @@ import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
+import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
 
@@ -40,6 +41,7 @@ public class ProductService {
      */
     @Transactional
     public Integer createProduct(CreateProductRequest product_DTO) {
+        ServiceValidator.validateNotNull(product_DTO, "Create product request");
         // 1. 驗證商品名稱是否已存在
         String requestProductName = product_DTO.name();
         checkProductExistsByNameOrThrow(requestProductName);
@@ -102,6 +104,7 @@ public class ProductService {
      */
     @Transactional
     public void updateProduct(UpdateProductRequest updateProductRequestDto) {
+        ServiceValidator.validateNotNull(updateProductRequestDto, "Update product request");
         // 1. 取得商品實體並驗證帳戶是否存在否則拋出例外
         Integer productId = updateProductRequestDto.id();
         Product existingProduct = findProductByIdOrThrow(productId);
@@ -140,8 +143,9 @@ public class ProductService {
      */
     @Transactional
     public void updateProductsStock(Map<Integer, Integer> stockUpdates) {
-        if (stockUpdates == null || stockUpdates.isEmpty()) {
-            throw new InvalidRequestException("Stock updates cannot be null or empty");
+        ServiceValidator.validateNotNull(stockUpdates, "Stock updates map");
+        if (stockUpdates.isEmpty()) {
+            throw new InvalidRequestException("Stock updates cannot be empty");
         }
 
         // 驗證 stockUpdates 中的值不能為 null，且不能為負數 (如果這是業務需求)
@@ -149,14 +153,9 @@ public class ProductService {
             Integer productId = entry.getKey();
             Integer newStock = entry.getValue();
 
-            if (productId == null) {
-                // 理論上，JSON key 反序列化為 Integer key 時，key 不會是 null
-                // 但為求完整性，可以加上此判斷
-                throw new InvalidRequestException("Product ID in stock updates cannot be null.");
-            }
-            if (newStock == null) {
-                throw new InvalidRequestException("Stock quantity for product ID " + productId + " cannot be null.");
-            }
+            ServiceValidator.validateNotNull(productId, "Product ID in stock updates");
+            ServiceValidator.validateNotNull(newStock, "Stock quantity for product ID " + productId);
+
             if (newStock < 0) {
                 // 假設庫存不能為負
                 throw new InvalidRequestException(
@@ -214,9 +213,7 @@ public class ProductService {
      * @return 包含查詢到的商品實體的列表
      */
     public List<Product> findProductsByIds(Set<Integer> productIds) {
-        if (productIds == null) {
-            throw new InvalidRequestException("Product IDs cannot be null or empty");
-        }
+        ServiceValidator.validateNotNull(productIds, "Product IDs");
         List<Product> products = productRepository.findAllById(productIds);
         return products;
     }
@@ -238,6 +235,7 @@ public class ProductService {
 
     // 根據商品名稱檢查商品是否已存在
     public void checkProductExistsByNameOrThrow(String productName) {
+        ServiceValidator.validateNotNull(productName, "Product name");
         if (productRepository.existsByName(productName)) {
             throw new ProductAlreadyExistException(productName + " already exists");
         }
@@ -250,6 +248,7 @@ public class ProductService {
      * @return 找到的商品實體
      */
     public Product findProductByIdOrThrow(Integer productId) {
+        ServiceValidator.validateNotNull(productId, "Product ID");
         Product result = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
         return result;
