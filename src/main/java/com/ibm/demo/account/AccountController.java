@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ibm.demo.account.DTO.CreateAccountRequest;
@@ -39,8 +38,8 @@ public class AccountController {
 
     // Read Account List
     @GetMapping("/getList")
-    public ResponseEntity<List<GetAccountListResponse>> getAccountList(@RequestParam(required = false) String status) {
-        List<GetAccountListResponse> accountList = accountService.getAccountList(status);
+    public ResponseEntity<List<GetAccountListResponse>> getAccountList() {
+        List<GetAccountListResponse> accountList = accountService.getAccountList();
         return ResponseEntity.ok(accountList);
     }
 
