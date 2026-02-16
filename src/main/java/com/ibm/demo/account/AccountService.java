@@ -12,6 +12,7 @@ import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.order.OrderClient;
+import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
 
@@ -31,6 +32,7 @@ public class AccountService {
      */
     @Transactional
     public Integer createAccount(CreateAccountRequest account_DTO) {
+        ServiceValidator.validateNotNull(account_DTO, "Create account request");
         Account newAccount = new Account();
         newAccount.setName(account_DTO.name());
         // 預設帳戶狀態為Y，啟用
@@ -63,6 +65,7 @@ public class AccountService {
      */
     @Transactional
     public void updateAccount(UpdateAccountRequest updateAccountRequestDto) {
+        ServiceValidator.validateNotNull(updateAccountRequestDto, "Update account request");
         // 1. 取得帳戶實體並驗證帳戶是否存在否則拋出例外
         Integer accountId = updateAccountRequestDto.id();
         Account existingAccount = findAccountByIdOrThrow(accountId);
@@ -114,6 +117,7 @@ public class AccountService {
      * Finds an account by its ID or throws AccountNotFoundException if not found.
      */
     private Account findAccountByIdOrThrow(Integer accountId) {
+        ServiceValidator.validateNotNull(accountId, "Account ID");
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + accountId));
     }
@@ -123,6 +127,7 @@ public class AccountService {
      * AccountStillHasOrderCanNotBeDeleteException if orders exist.
      */
     private void checkAccountHasNoOrdersOrThrow(Integer accountId) {
+        ServiceValidator.validateNotNull(accountId, "Account ID");
         if (orderClient.accountIdIsInOrder(accountId)) {
             throw new AccountStillHasOrderCanNotBeDeleteException(
                     "Account with id: " + accountId + " has associated orders and cannot be set to deactivate.");
