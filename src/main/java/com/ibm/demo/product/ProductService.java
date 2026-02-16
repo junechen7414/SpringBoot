@@ -1,6 +1,5 @@
 package com.ibm.demo.product;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -225,16 +224,12 @@ public class ProductService {
      * @return 以商品 ID 為鍵，商品詳細資訊 DTO 為值的 Map
      */
     public Map<Integer, GetProductDetailResponse> mapProductsToDetailResponses(List<Product> products) {
-        Map<Integer, GetProductDetailResponse> productDetailsMap = new HashMap<>();
-        for (Product product : products) {
-            GetProductDetailResponse detailResponse = mapProductToDetailResponse(product);
-            productDetailsMap.put(product.getId(), detailResponse);
-        }
-        return productDetailsMap;
+        return products.stream()
+                .collect(Collectors.toMap(Product::getId, this::mapProductToDetailResponse));
     }
 
     // 根據商品名稱檢查商品是否已存在
-    public void checkProductExistsByNameOrThrow(String productName) {
+    private void checkProductExistsByNameOrThrow(String productName) {
         ServiceValidator.validateNotNull(productName, "Product name");
         if (productRepository.existsByName(productName)) {
             throw new ProductAlreadyExistException(productName + " already exists");
