@@ -40,8 +40,6 @@ import jakarta.transaction.Transactional;
 
 @Service
 public class OrderService {
-        // private static final Logger logger =
-        // LoggerFactory.getLogger(OrderService.class);
         private OrderInfoRepository orderInfoRepository;
         private OrderDetailRepository orderDetailRepository;
         private final AccountClient accountClient;
@@ -116,7 +114,7 @@ public class OrderService {
          */
         public GetOrderDetailResponse getOrderDetailByOrderId(Integer orderId) {
                 // 1. 獲取訂單主檔（找不到直接噴 404）
-                OrderInfo orderInfo = findByOrderIdOrThrow(orderId);
+                OrderInfo orderInfo = findOrderByIdOrThrow(orderId);
                 List<OrderDetail> details = orderInfo.getOrderDetails();
 
                 // 2. 批量獲取商品資訊（先收集 ID 再一次查詢，避免 N+1 問題）
@@ -157,7 +155,7 @@ public class OrderService {
         public void updateOrder(UpdateOrderRequest request) {
                 ServiceValidator.validateNotNull(request, "Update order request");
                 // 1. 獲取現有訂單
-                OrderInfo order = findByOrderIdOrThrow(request.orderId());
+                OrderInfo order = findOrderByIdOrThrow(request.orderId());
 
                 // 2. 準備 Map 以便比對
                 Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
@@ -255,8 +253,6 @@ public class OrderService {
                                         quantityToRestore, // oldQuantity is the quantity being restored
                                         0); // newQuantity is 0
                         stockUpdates.put(productId, newStock);
-
-                        // logger.info("訂單取消歸還庫存：商品ID {}，歸還數量 {}", productId, quantityToRestore);
                 }
 
                 // 5. 批量更新商品庫存
@@ -288,7 +284,6 @@ public class OrderService {
                 ServiceValidator.validateNotNull(stockUpdates, "Stock updates map");
                 if (!stockUpdates.isEmpty()) {
                         productClient.updateProductsStock(stockUpdates);
-                        // logger.info("批量更新商品庫存成功");
                 }
         }
 
@@ -317,11 +312,6 @@ public class OrderService {
                 }
                 if (currentStock < 0) {
                         // 理論上 currentStock 不應為負，但加上just in case
-                        // logger.warn("Current stock is negative for product ID: {}. Stock: {}",
-                        // productId, currentStock);
-                        // 或者根據業務規則拋出例外
-                        // throw new IllegalStateException("Current stock cannot be negative for product
-                        // ID: " + productId);
                 }
 
                 // 計算庫存的淨變化量 (從庫存中"拿出"多少)
@@ -334,20 +324,11 @@ public class OrderService {
 
                 // 驗證：新庫存不能小於 0
                 if (newQuantity < 0) {
-                        // logger.error("Stock insufficient for product ID: {}. Current: {}, Old Qty:
-                        // {}, New Qty: {}, Required Change: {}, Potential New Stock: {}",
-                        // productId, currentStock, originalQuantity, requestQuantity, netChange,
-                        // newQuantity);
                         // 拋出更詳細的錯誤訊息
                         throw new ProductStockNotEnoughException(String.format(
                                         "商品 %d 庫存不足。目前庫存: %d, 訂單原數量: %d, 訂單新數量: %d。需要額外 %d 個，但庫存不足。",
                                         productId, currentStock, originalQuantity, requestQuantity, netChange));
                 }
-
-                // logger.debug("Calculated stock for product ID: {}. Current: {}, Old Qty: {},
-                // New Qty: {}, Net Change Required: {}, New Stock: {}",
-                // productId, currentStock, originalQuantity, requestQuantity, netChange,
-                // newQuantity);
 
                 return newQuantity;
         }
@@ -399,7 +380,7 @@ public class OrderService {
                 return totalAmount;
         }
 
-        public OrderInfo findByOrderIdOrThrow(Integer orderId) {
+        public OrderInfo findOrderByIdOrThrow(Integer orderId) {
                 ServiceValidator.validateNotNull(orderId, "Order ID");
                 return orderInfoRepository.findById(orderId).orElseThrow(
                                 () -> new ResourceNotFoundException("Order not found with ID: " + orderId));

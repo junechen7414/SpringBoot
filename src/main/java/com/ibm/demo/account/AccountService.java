@@ -55,9 +55,7 @@ public class AccountService {
      */
     public GetAccountDetailResponse getAccountDetail(Integer id) {
         Account existingAccount = findAccountByIdOrThrow(id);
-        GetAccountDetailResponse accountDetailResponseDTO = new GetAccountDetailResponse(existingAccount.getName(),
-                existingAccount.getStatus());
-        return accountDetailResponseDTO;
+        return mapAccountToDetailResponse(existingAccount);
     }
 
     /**
@@ -102,6 +100,10 @@ public class AccountService {
     }
 
     // --- Private Helper Methods ---
+
+    private GetAccountDetailResponse mapAccountToDetailResponse(Account account) {
+        return new GetAccountDetailResponse(account.getName(), account.getStatus());
+    }
 
     // validateAccount
     // @Transactional
