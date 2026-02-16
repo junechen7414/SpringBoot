@@ -38,7 +38,6 @@ import lombok.ToString;
 @Entity
 @SQLDelete(sql = "UPDATE ORDER_INFO SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP,STATUS = 1003 WHERE ID = ?")
 @SQLRestriction("DELETED = 0 AND STATUS=1001") // 只選擇未刪除的資料
-@Builder
 @Table(name = "ORDER_INFO") // 指定對應的資料表名稱
 @Schema(description = "訂單資訊")
 public class OrderInfo {
@@ -72,12 +71,18 @@ public class OrderInfo {
 
     @Column(name = "DELETED", columnDefinition = "NUMBER(1)", nullable = false)
     @Schema(description = "是否刪除", example = "false")
-    @Builder.Default
     private Boolean deleted = false;
 
     @Column(name = "DELETED_AT", columnDefinition = "TIMESTAMP")
     @Schema(description = "刪除時間", example = "2024-06-01T12:00:00")
     private LocalDateTime deletedAt;
+
+    @Builder
+    public OrderInfo(Integer accountId, Integer status) {
+        this.accountId = accountId;
+        this.status = status;
+        this.deleted = false; // 預設為未刪除
+    }
 
     public void restore() {
         this.deleted = false;
