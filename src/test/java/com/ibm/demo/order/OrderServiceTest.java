@@ -11,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -114,14 +113,16 @@ class OrderServiceTest {
         orderInfo.setId(orderId);
         orderInfo.setAccountId(accountId);
         orderInfo.setStatus(status);
-        orderInfo.setCreateDate(LocalDate.now().minusDays(1)); // Simulate existing order
-        orderInfo.setModifiedDate(LocalDate.now().minusDays(1));
         orderInfo.setOrderDetails(new ArrayList<>()); // Initialize detail list
         return orderInfo;
     }
 
     private static OrderDetail createTestOrderDetail(OrderInfo orderInfo, Integer productId, Integer quantity) {
-        OrderDetail detail = new OrderDetail(orderInfo, productId, quantity);
+        OrderDetail detail = OrderDetail.builder()
+                .orderInfo(orderInfo)
+                .productId(productId)
+                .quantity(quantity)
+                .build();
         // Assuming OrderDetail might have an ID after saving, but not needed for most
         // tests here
         orderInfo.getOrderDetails().add(detail); // Link back to order info
