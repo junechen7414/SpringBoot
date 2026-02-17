@@ -1,15 +1,13 @@
 package com.ibm.demo.order.Entity;
 
-import java.time.LocalDateTime;
-
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import com.ibm.demo.util.BaseEntity;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -19,23 +17,23 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@EntityListeners(AuditingEntityListener.class)
+@SuperBuilder
 @Table(name = "ORDER_PRODUCT_DETAIL")
 @SQLDelete(sql = "UPDATE ORDER_PRODUCT_DETAIL SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP WHERE ID = ?")
 @SQLRestriction("DELETED = 0") // 只選擇未刪除的資料
 @Schema(description = "訂單產品明細")
-public class OrderDetail {
+public class OrderDetail extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_detail_seq_gen")
@@ -59,35 +57,8 @@ public class OrderDetail {
     @Schema(description = "數量", example = "5")
     private Integer quantity;
 
-    @org.springframework.data.annotation.CreatedDate
-    @Column(name = "CREATED_AT", updatable = false)
-    @Schema(description = "創建時間", example = "2024-06-01T12:00:00")
-    private LocalDateTime createdAt;
-
-    @org.springframework.data.annotation.LastModifiedDate
-    @Column(name = "UPDATED_AT")
-    @Schema(description = "更新時間", example = "2024-06-01T12:00:00")
-    private LocalDateTime updatedAt;
-
-    @Column(name = "DELETED", columnDefinition = "NUMBER(1)", nullable = false)
-    @Schema(description = "是否刪除", example = "false")
-    private Boolean deleted = false;
-
-    @Column(name = "DELETED_AT", columnDefinition = "TIMESTAMP")
-    @Schema(description = "刪除時間", example = "2024-06-01T12:00:00")
-    private LocalDateTime deletedAt;
-
-    // constructor
-    @Builder
-    public OrderDetail(OrderInfo orderInfo, Integer productId, Integer quantity) {
-        this.orderInfo = orderInfo;
-        this.productId = productId;
-        this.quantity = quantity;
-        this.deleted = false; // 預設為未刪除
-    }
-
     public void restore() {
-        this.deleted = false;
-        this.deletedAt = null;
+        this.setDeleted(false);
+        this.setDeletedAt(null);
     }
 }
