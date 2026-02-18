@@ -33,10 +33,11 @@ public class AccountService {
     @Transactional
     public Integer createAccount(CreateAccountRequest account_DTO) {
         ServiceValidator.validateNotNull(account_DTO, "Create account request");
-        Account newAccount = new Account();
-        newAccount.setName(account_DTO.name());
-        // 預設帳戶狀態為Y，啟用
-        newAccount.setStatus(AccountStatus.ACTIVE.getCode());
+
+        Account newAccount = Account.builder()
+                .name(account_DTO.name())
+                .status(AccountStatus.ACTIVE.getCode())
+                .build();
 
         Account savedAccount = accountRepository.save(newAccount);
         return savedAccount.getId();
@@ -91,12 +92,9 @@ public class AccountService {
     @Transactional
     public void deleteAccount(Integer accountId) {
         Account existingAccount = findAccountByIdOrThrow(accountId);
-        if (existingAccount.getStatus().equals(AccountStatus.INACTIVE.getCode())) {
-            throw new ResourceNotFoundException("Account not found with ID: " + accountId);
-        }
         checkAccountHasNoOrdersOrThrow(accountId);
-        existingAccount.setStatus(AccountStatus.INACTIVE.getCode());
-        accountRepository.save(existingAccount);
+        // 使用 delete() 觸發 @SQLDelete，執行軟刪除邏輯
+        accountRepository.delete(existingAccount);
     }
 
     // --- Private Helper Methods ---
