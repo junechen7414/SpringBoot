@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.MappedSuperclass;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -34,7 +35,8 @@ public abstract class BaseEntity {
 
     @Column(name = "DELETED", columnDefinition = "NUMBER(1)")
     @Schema(description = "是否刪除", example = "false")
-    private Boolean deleted;
+    @Builder.Default
+    private Boolean deleted = false;
 
     @Column(name = "DELETED_AT", columnDefinition = "TIMESTAMP")
     @Schema(description = "刪除時間", example = "2024-06-01T12:00:00")
