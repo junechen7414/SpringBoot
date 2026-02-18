@@ -28,7 +28,7 @@ import lombok.NoArgsConstructor;
 // })
 @Table(name = "PRODUCT")
 @Schema(description = "商品資訊")
-public class Product {
+public class Product extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "product_seq_gen") // 使用 Sequence 生成主鍵
     @SequenceGenerator(name = "product_seq_gen", sequenceName = "product_id_seq", allocationSize = 1) // 定義 Sequence
@@ -52,32 +52,8 @@ public class Product {
     @Schema(description = "庫存量", example = "10")
     private Integer stockQty;
 
-    @Temporal(TemporalType.DATE) // 指定一個日期時間欄位在對應到資料庫時，應該使用的資料類型。
-    @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
-    private LocalDate createDate;
-
-    @Temporal(TemporalType.DATE) // 指定日期時間類型
-    @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    private LocalDate modifiedDate;
-
-    @PrePersist // 在實體被持久化（新增）之前觸發
-    public void prePersist() {
-        this.createDate = LocalDate.now();
-        this.modifiedDate = null; // 新增時不設置修改日期
+    public void restore() {
+        this.setDeleted(false);
+        this.setSaleStatus(ProductStatus.AVAILABLE.getCode()); // 恢復銷售狀態為可銷售
     }
-
-    @PreUpdate // 在實體被更新（修改）之前觸發
-    public void preUpdate() {
-        this.modifiedDate = LocalDate.now(); // 僅在更新時設置修改日期
-    }
-
-    // constructors
-
-    public Product(String name, BigDecimal price, Integer saleStatus, Integer stockQty) {
-        this.name = name;
-        this.price = price;
-        this.saleStatus = saleStatus;
-        this.stockQty = stockQty;
-    }
-
 }
