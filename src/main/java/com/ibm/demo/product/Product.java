@@ -1,7 +1,12 @@
 package com.ibm.demo.product;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
+import com.ibm.demo.enums.ProductStatus;
+import com.ibm.demo.util.BaseEntity;
 
 import io.swagger.v3.oas.annotations.media.Schema; // Import Swagger schema annotation
 import jakarta.persistence.Column;
@@ -9,23 +14,27 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
 // @Table(name = "PRODUCT", indexes = {
 // @Index(name = "pk_PRODUCT", columnList = "ID", unique = true) // 同@Id的效用
 // })
+@SuperBuilder
+@SQLDelete(sql = "UPDATE PRODUCT SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP,SALE_STATUS = 1002 WHERE ID = ?") // 軟刪除，將
+                                                                                                                  // SALE_STATUS
+                                                                                                                  // 設為不可銷售
+@SQLRestriction("DELETED = 0 AND SALE_STATUS = 1001") // 只選擇未刪除且可銷售的資料
 @Table(name = "PRODUCT")
 @Schema(description = "商品資訊")
 public class Product extends BaseEntity {
