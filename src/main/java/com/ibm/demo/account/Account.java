@@ -24,7 +24,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "ACCOUNT") // 指定對應的資料表名稱
 @Schema(description = "帳號資訊")
-public class Account {
+public class Account extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "account_seq_gen")
@@ -41,29 +41,8 @@ public class Account {
     @Schema(description = "啟用狀態", example = "Y")
     private String status;
 
-    @Temporal(TemporalType.DATE) // 指定日期時間類型
-    @Column(name = "CREATE_DATE", columnDefinition = "DATE", nullable = false)
-    private LocalDate createDate;
-
-    @Temporal(TemporalType.DATE) // 指定日期時間類型
-    @Column(name = "MODIFIED_DATE", columnDefinition = "DATE", nullable = true)
-    private LocalDate modifiedDate;
-
-    @PrePersist
-    public void prePersist() {
-        this.createDate = LocalDate.now();
-        this.modifiedDate = null; // 新增時不設置修改日期
+    public void restore() {
+        this.setDeleted(false);
+        this.setStatus(AccountStatus.ACTIVE.getCode());
     }
-
-    @PreUpdate
-    public void preUpdate() {
-        this.modifiedDate = LocalDate.now(); // 僅在更新時設置修改日期
-    }
-    // constructors
-
-    public Account(String name, String status) {
-        this.name = name;
-        this.status = status;
-    }
-
 }
