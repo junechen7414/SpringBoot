@@ -13,4 +13,13 @@ public class ServiceValidator {
             throw new InvalidRequestException(parameterName + " cannot be null.");
         }
     }
+
+    public static void validateNotEmpty(Object object, String parameterName) {
+        if (object instanceof String str && str.isEmpty()) {
+            throw new InvalidRequestException(parameterName + " cannot be empty.");
+        }
+        if (object instanceof Iterable<?> iterable && !iterable.iterator().hasNext()) {
+            throw new InvalidRequestException(parameterName + " cannot be empty.");
+        }
+    }
 }
