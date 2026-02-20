@@ -1,5 +1,6 @@
 package com.ibm.demo.product;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -11,10 +12,12 @@ import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
+import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
+import com.ibm.demo.util.OrderItemRequest;
 import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
@@ -140,9 +143,6 @@ public class ProductService {
     @Transactional
     public void updateProductsStock(Map<Integer, Integer> stockUpdates) {
         ServiceValidator.validateNotNull(stockUpdates, "Stock updates map");
-        if (stockUpdates.isEmpty()) {
-            throw new InvalidRequestException("Stock updates cannot be empty");
-        }
 
         // 驗證 stockUpdates 中的值不能為 null，且不能為負數 (如果這是業務需求)
         for (Map.Entry<Integer, Integer> entry : stockUpdates.entrySet()) {
@@ -175,6 +175,48 @@ public class ProductService {
         }
 
         productRepository.saveAll(products);
+    }
+
+    @Transactional
+    public void processOrderItems(Set<OrderItemRequest> originalItems, Set<OrderItemRequest> updatedItems) {
+        // 0. 驗證輸入的訂單商品明細集合是否為空
+        ServiceValidator.validateNotNull(originalItems, "Original order items");
+        ServiceValidator.validateNotNull(updatedItems, "Updated order items");
+        // 1. 將新舊項目轉成 Map，方便快速比對 (Key: ProductId, Value: Quantity)
+        Map<Integer, Integer> oldMap = originalItems.stream()
+                .collect(Collectors.toMap(OrderItemRequest::productId, OrderItemRequest::quantity));
+        Map<Integer, Integer> newMap = updatedItems.stream()
+                .collect(Collectors.toMap(OrderItemRequest::productId, OrderItemRequest::quantity));
+
+        // 2. 獲取所有涉及到的 Product ID (聯集)
+        Set<Integer> allProductIds = new HashSet<>();
+        allProductIds.addAll(oldMap.keySet());
+        allProductIds.addAll(newMap.keySet());
+
+        // 3. 統一計算差值並處理
+        for (Integer productId : allProductIds) {
+            int oldQty = oldMap.getOrDefault(productId, 0);
+            int newQty = newMap.getOrDefault(productId, 0);
+
+            int diff = newQty - oldQty;
+
+            if (diff > 0) {
+                // 需要更多庫存
+                int rowsAffected = productRepository.reserveProduct(productId, diff);
+                if (rowsAffected == 0) {
+                    throw new ProductStockNotEnoughException("商品 ID " + productId + " 庫存不足，無法預留");
+                }
+            } else if (diff == 0) {
+                // 數量沒變不處理
+                continue;
+            } else if (diff < 0) {
+                // 釋放多餘庫存
+                int rowsAffected = productRepository.releaseProduct(productId, Math.abs(diff));
+                if (rowsAffected == 0) {
+                    throw new ProductStockNotEnoughException("商品 ID " + productId + " 預留的庫存不足，無法釋放");
+                }
+            }
+        }
     }
 
     /**
