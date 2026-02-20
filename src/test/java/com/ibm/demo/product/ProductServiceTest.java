@@ -1,23 +1,26 @@
 package com.ibm.demo.product;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
@@ -29,213 +32,171 @@ class ProductServiceTest {
     @Mock
     private ProductRepository productRepository;
 
-    @InjectMocks
+    // 建議點：明確建立 SUT，讓依賴關係顯性且易於理解
     private ProductService productService;
 
-    // --- Constants for Test Data ---
-    private static final Integer ACTIVE_PRODUCT_ID = 1;
-    private static final BigDecimal DEFAULT_PRICE = new BigDecimal("10.00");
-    private static final Integer DEFAULT_STOCK = 100;
-    private static final Integer STATUS_SELLABLE = 1001;
-    private static final Integer STATUS_NOT_SELLABLE = 1002;
+    // 測試資料常數
+    private final Integer ACTIVE_PRODUCT_ID = 1;
+    private final BigDecimal DEFAULT_PRICE = new BigDecimal("10.00");
+    private final Integer DEFAULT_STOCK = 100;
+    private final Integer STATUS_SELLABLE = ProductStatus.AVAILABLE.getCode();
+    private final String EXISTING_NAME = "Existing Product Name";
+    private final String NEW_PRODUCT_NAME = "New Product Name";
 
-    private static final Integer INACTIVE_PRODUCT_ID = 2;
-    private static final String INACTIVE_PRODUCT_NAME = "Inactive Product";
-
-    private static final String EXISTING_NAME_PRODUCT_NAME = "Existing Product Name";
-
-    private static final Integer NON_EXISTENT_PRODUCT_ID = 999;
-    private static final String NEW_PRODUCT_NAME = "New Product Name";
-    private static final String OLD_PRODUCT_NAME = "Old Product Name";
-
-    private static Product inactiveProduct;
-
-    @BeforeAll
-    static void setUp() {
-        inactiveProduct = createTestProduct(INACTIVE_PRODUCT_ID, INACTIVE_PRODUCT_NAME, new BigDecimal("20.00"),
-                STATUS_NOT_SELLABLE, 0);
+    @BeforeEach
+    void setUp() {
+        // 手動建立物件，確保測試不受 Mockito 自動注入行為的靜默錯誤影響
+        productService = new ProductService(productRepository);
     }
 
-    @Test
-    @DisplayName("建立產品時，若產品名稱已存在應拋出ProductAlreadyExistException")
-    void createProduct_WhenNameAlreadyExists_ShouldThrowProductAlreadyExistException() {
-        // Arrange
-        CreateProductRequest request = CreateProductRequest.builder()
-                .name(EXISTING_NAME_PRODUCT_NAME)
-                .price(DEFAULT_PRICE)
-                .available(DEFAULT_STOCK)
-                .build();
+    @Nested
+    @DisplayName("建立產品成功流程")
+    class CreateProductSuccessTests {
 
-        // Simulate that EXISTING_NAME_PRODUCT_NAME is already taken
-        when(productRepository.existsByName(EXISTING_NAME_PRODUCT_NAME)).thenReturn(true);
+        @Test
+        @DisplayName("當輸入資料合法時，應成功儲存產品並回傳 ID")
+        void createProduct_Success() {
+            // Arrange
+            CreateProductRequest request = CreateProductRequest.builder()
+                    .name("New Product")
+                    .price(new BigDecimal("100"))
+                    .available(10)
+                    .build();
 
-        // Act & Assert
-        assertThrows(ProductAlreadyExistException.class, () -> productService.createProduct(request));
-        // assertEquals(EXISTING_NAME_PRODUCT_NAME + " already exists",
-        // exception.getMessage()); // Removed: Message assertion redundant with type
-        // check
+            when(productRepository.existsByName("New Product")).thenReturn(false);
 
-        // Verify
-        verify(productRepository, times(1)).existsByName(EXISTING_NAME_PRODUCT_NAME);
-        verify(productRepository, never()).save(any(Product.class));
+            // 模擬儲存後會產生 ID
+            Product savedProduct = new Product();
+            savedProduct.setId(100);
+            when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
+
+            // Act
+            Integer resultId = productService.createProduct(request);
+
+            // Assert
+            assertThat(resultId).isEqualTo(100);
+
+            // 驗證是否有執行 save 動作
+            verify(productRepository, times(1)).save(any(Product.class));
+        }
     }
 
-    // @Test
-    // @DisplayName("獲取產品詳情時，若產品不存在應拋出ResourceNotFoundException")
-    // void
-    // getProductDetail_WhenProductNotFound_ShouldThrowResourceNotFoundException() {
-    // // Arrange
-    // when(productRepository.findById(NON_EXISTENT_PRODUCT_ID)).thenReturn(Optional.empty());
+    @Nested
+    @DisplayName("建立產品業務邏輯")
+    class CreateProductTests {
 
-    // // Act & Assert
-    // ResourceNotFoundException exception =
-    // assertThrows(ResourceNotFoundException.class,
-    // () -> productService.getProductDetail(NON_EXISTENT_PRODUCT_ID));
-    // assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID,
-    // exception.getMessage());
+        @Test
+        @DisplayName("建立產品時，若名稱已存在應拋出異常")
+        void createProduct_WhenNameAlreadyExists_ShouldThrowException() {
+            // Arrange
+            CreateProductRequest request = CreateProductRequest.builder()
+                    .name(EXISTING_NAME)
+                    .price(DEFAULT_PRICE)
+                    .available(DEFAULT_STOCK)
+                    .build();
 
-    // // Verify
-    // verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
-    // }
+            when(productRepository.existsByName(EXISTING_NAME)).thenReturn(true);
 
-    // @Test
-    // @DisplayName("獲取多個產品詳情時，若ID集合為null應拋出InvalidRequestException")
-    // void getProductDetails_WhenIdsIsNull_ShouldThrowInvalidRequestException() {
-    // // Act & Assert
-    // InvalidRequestException exception =
-    // assertThrows(InvalidRequestException.class,
-    // () -> productService.getProductDetails(null));
-    // assertEquals("Product IDs cannot be null or empty", exception.getMessage());
-    // }
+            // Act & Assert (建議點：使用 AssertJ 提升可讀性)
+            assertThatThrownBy(() -> productService.createProduct(request))
+                    .isInstanceOf(ProductAlreadyExistException.class);
 
-    @Test
-    @DisplayName("更新產品時，若產品不存在應拋出ResourceNotFoundException")
-    void updateProduct_WhenProductNotFound_ShouldThrowResourceNotFoundException() {
-        // Arrange
-        UpdateProductRequest request = UpdateProductRequest.builder()
-                .id(NON_EXISTENT_PRODUCT_ID)
-                .name(NEW_PRODUCT_NAME)
-                .price(DEFAULT_PRICE)
-                .saleStatus(STATUS_SELLABLE)
-                .available(DEFAULT_STOCK)
-                .build();
-
-        // Simulate that the product with NON_EXISTENT_PRODUCT_ID does not exist
-        when(productRepository.findById(NON_EXISTENT_PRODUCT_ID)).thenReturn(Optional.empty());
-
-        // Act & Assert
-        assertThrows(ResourceNotFoundException.class, () -> productService.updateProduct(request));
-        // assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID,
-        // exception.getMessage()); // Removed: Message assertion redundant with type
-        // check
-
-        // Verify
-        verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
-        verify(productRepository, never()).existsByName(any(String.class));
-        verify(productRepository, never()).save(any(Product.class));
+            // Verify
+            verify(productRepository, never()).save(any(Product.class));
+            verifyNoMoreInteractions(productRepository);
+        }
     }
 
-    @Test
-    @DisplayName("更新產品時，若新產品名稱已存在應拋出ProductAlreadyExistException")
-    void updateProduct_WhenNewNameExists_ShouldThrowProductAlreadyExistException() {
-        // Arrange
-        // Use activeProduct from setUp, but we'll try to update its name to one that
-        // already exists
-        Product productToUpdate = createTestProduct(ACTIVE_PRODUCT_ID, OLD_PRODUCT_NAME, DEFAULT_PRICE, STATUS_SELLABLE,
-                DEFAULT_STOCK);
+    @Nested
+    @DisplayName("查詢產品業務邏輯")
+    class GetProductTests {
 
-        UpdateProductRequest request = UpdateProductRequest.builder()
-                .id(ACTIVE_PRODUCT_ID)
-                .name(EXISTING_NAME_PRODUCT_NAME) // This name conflicts with 'productWithExistingName'
-                .price(BigDecimal.ONE)
-                .saleStatus(STATUS_SELLABLE)
-                .available(5)
-                .build();
+        @Test
+        @DisplayName("查詢不存在的產品應拋出 ResourceNotFoundException")
+        void getProductDetail_WhenNotFound_ShouldThrowException() {
+            Integer nonExistentId = 999;
+            when(productRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
-        when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(productToUpdate));
-        // Simulate that EXISTING_NAME_PRODUCT_NAME is already taken
-        when(productRepository.existsByName(EXISTING_NAME_PRODUCT_NAME)).thenReturn(true);
-
-        // Act & Assert
-        assertThrows(ProductAlreadyExistException.class, () -> productService.updateProduct(request));
-        // assertEquals(EXISTING_NAME_PRODUCT_NAME + " already exists",
-        // exception.getMessage()); // Removed: Message assertion redundant with type
-        // check
-
-        // Verify
-        verify(productRepository, times(1)).findById(ACTIVE_PRODUCT_ID);
-        verify(productRepository, times(1)).existsByName(EXISTING_NAME_PRODUCT_NAME);
-        verify(productRepository, never()).save(any(Product.class));
+            assertThatThrownBy(() -> productService.getProductDetail(nonExistentId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
     }
 
-    @Test
-    @DisplayName("刪除產品時，若產品已不可銷售應拋出ResourceNotFoundException")
-    void testDeleteProduct_ThrowsResourceNotFoundException_WhenProductAlreadyInactive() {
-        // Arrange
-        // Use the inactiveProduct from setUp
-        when(productRepository.findById(INACTIVE_PRODUCT_ID)).thenReturn(Optional.of(inactiveProduct));
+    @Nested
+    @DisplayName("更新產品業務邏輯")
+    class UpdateProductTests {
 
-        // Act & Assert
-        assertThrows(ResourceNotFoundException.class, () -> productService.deleteProduct(INACTIVE_PRODUCT_ID));
-        // assertEquals("Product not found with id: " + INACTIVE_PRODUCT_ID,
-        // exception.getMessage()); // Removed: Message assertion redundant with type
-        // check
+        @Test
+        @DisplayName("更新不存在的產品應拋出 ResourceNotFoundException")
+        void updateProduct_WhenNotFound_ShouldThrowException() {
+            UpdateProductRequest request = UpdateProductRequest.builder()
+                    .id(999).name(NEW_PRODUCT_NAME).build();
 
-        // Verify findById was called once, but save should NOT be called
-        verify(productRepository, times(1)).findById(INACTIVE_PRODUCT_ID);
-        verify(productRepository, never()).save(any(Product.class));
+            when(productRepository.findById(999)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> productService.updateProduct(request))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(productRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("更新產品名稱時，若新名稱已被其他產品佔用應拋出異常")
+        void updateProduct_WhenNewNameExists_ShouldThrowException() {
+            // Arrange (建議點：在每個測試內建立獨立實例，確保隔離性)
+            Product existingProduct = createTestProduct(ACTIVE_PRODUCT_ID, "Old Name", DEFAULT_PRICE, STATUS_SELLABLE,
+                    DEFAULT_STOCK);
+            UpdateProductRequest request = UpdateProductRequest.builder()
+                    .id(ACTIVE_PRODUCT_ID)
+                    .name(EXISTING_NAME)
+                    .build();
+
+            when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(existingProduct));
+            when(productRepository.existsByName(EXISTING_NAME)).thenReturn(true);
+
+            // Act & Assert
+            assertThatThrownBy(() -> productService.updateProduct(request))
+                    .isInstanceOf(ProductAlreadyExistException.class);
+
+            verify(productRepository, never()).save(any());
+        }
     }
 
-    @Test
-    @DisplayName("刪除產品時，若產品ID不存在應拋出ResourceNotFoundException")
-    void deleteProduct_WhenProductNotFoundInitially_ShouldThrowResourceNotFoundException() {
-        // Arrange
-        when(productRepository.findById(NON_EXISTENT_PRODUCT_ID)).thenReturn(Optional.empty());
+    @Nested
+    @DisplayName("刪除產品業務邏輯")
+    class DeleteProductTests {
 
-        // Act & Assert
-        assertThrows(ResourceNotFoundException.class, () -> productService.deleteProduct(NON_EXISTENT_PRODUCT_ID));
-        // assertEquals("Product not found with id: " + NON_EXISTENT_PRODUCT_ID,
-        // exception.getMessage()); // Removed: Message assertion redundant with type
-        // check
+        @Test
+        @DisplayName("刪除時若產品已是停效狀態，應拋出 ResourceNotFoundException")
+        void deleteProduct_WhenAlreadyInactive_ShouldThrowException() {
+            // Arrange
+            Integer id = 99;
 
-        // Verify
-        verify(productRepository, times(1)).findById(NON_EXISTENT_PRODUCT_ID);
-        verify(productRepository, never()).save(any(Product.class));
+            // 關鍵擊破點：模擬 Repository 因為 @SQLRestriction
+            // 而無法在資料庫中找到非啟用(Y)狀態的產品
+            when(productRepository.findById(id)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> productService.deleteProduct(id))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            // 驗證：既然第一步就找不到，就不應該呼叫到 repository.delete
+            verify(productRepository, never()).delete(any());
+        }
+
+        @Test
+        @DisplayName("刪除不存在的 ID 應拋出 ResourceNotFoundException")
+        void deleteProduct_WhenIdNotFound_ShouldThrowException() {
+            Integer nonExistentId = 888;
+            when(productRepository.findById(nonExistentId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> productService.deleteProduct(nonExistentId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
     }
-
-    // @Test
-    // @DisplayName("批量更新庫存時，若stockUpdates為null應拋出InvalidRequestException")
-    // void
-    // updateProductsStock_WhenStockUpdatesIsNull_ShouldThrowInvalidRequestException()
-    // {
-    // InvalidRequestException exception =
-    // assertThrows(InvalidRequestException.class,
-    // () -> productService.updateProductsStock(null));
-    // assertEquals("Stock updates cannot be null or empty",
-    // exception.getMessage());
-    // verify(productRepository, never()).findAllById(any());
-    // verify(productRepository, never()).saveAll(any());
-    // }
-
-    // @Test
-    // @DisplayName("批量更新庫存時，若stockUpdates為空Map應拋出InvalidRequestException")
-    // void
-    // updateProductsStock_WhenStockUpdatesIsEmpty_ShouldThrowInvalidRequestException()
-    // {
-    // InvalidRequestException exception =
-    // assertThrows(InvalidRequestException.class,
-    // () -> productService.updateProductsStock(new HashMap<>()));
-    // assertEquals("Stock updates cannot be null or empty",
-    // exception.getMessage());
-    // verify(productRepository, never()).findAllById(any());
-    // verify(productRepository, never()).saveAll(any());
-    // }
 
     // --- Helper Methods ---
-    /**
-     * Creates a Product instance for testing purposes.
-     */
-    private static Product createTestProduct(Integer id, String name, BigDecimal price, Integer saleStatus,
+    private Product createTestProduct(Integer id, String name, BigDecimal price, Integer saleStatus,
             Integer available) {
         Product product = new Product();
         product.setId(id);
@@ -243,9 +204,6 @@ class ProductServiceTest {
         product.setPrice(price);
         product.setSaleStatus(saleStatus);
         product.setAvailable(available);
-        // Dates are often set by @PrePersist/@PreUpdate or returned by DB, so not
-        // always needed here
         return product;
     }
-
 }
