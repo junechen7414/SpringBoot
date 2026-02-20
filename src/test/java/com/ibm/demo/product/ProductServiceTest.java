@@ -63,7 +63,7 @@ class ProductServiceTest {
         CreateProductRequest request = CreateProductRequest.builder()
                 .name(EXISTING_NAME_PRODUCT_NAME)
                 .price(DEFAULT_PRICE)
-                .stockQty(DEFAULT_STOCK)
+                .available(DEFAULT_STOCK)
                 .build();
 
         // Simulate that EXISTING_NAME_PRODUCT_NAME is already taken
@@ -117,7 +117,7 @@ class ProductServiceTest {
                 .name(NEW_PRODUCT_NAME)
                 .price(DEFAULT_PRICE)
                 .saleStatus(STATUS_SELLABLE)
-                .stockQty(DEFAULT_STOCK)
+                .available(DEFAULT_STOCK)
                 .build();
 
         // Simulate that the product with NON_EXISTENT_PRODUCT_ID does not exist
@@ -149,7 +149,7 @@ class ProductServiceTest {
                 .name(EXISTING_NAME_PRODUCT_NAME) // This name conflicts with 'productWithExistingName'
                 .price(BigDecimal.ONE)
                 .saleStatus(STATUS_SELLABLE)
-                .stockQty(5)
+                .available(5)
                 .build();
 
         when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(productToUpdate));
@@ -236,13 +236,13 @@ class ProductServiceTest {
      * Creates a Product instance for testing purposes.
      */
     private static Product createTestProduct(Integer id, String name, BigDecimal price, Integer saleStatus,
-            Integer stockQty) {
+            Integer available) {
         Product product = new Product();
         product.setId(id);
         product.setName(name);
         product.setPrice(price);
         product.setSaleStatus(saleStatus);
-        product.setStockQty(stockQty);
+        product.setAvailable(available);
         // Dates are often set by @PrePersist/@PreUpdate or returned by DB, so not
         // always needed here
         return product;
