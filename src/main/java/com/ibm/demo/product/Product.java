@@ -17,6 +17,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -57,9 +58,15 @@ public class Product extends BaseEntity {
     @Schema(description = "銷售狀態", example = "1001")
     private Integer saleStatus;
 
-    @Column(name = "STOCK_QTY", columnDefinition = "NUMBER(10)", nullable = false)
+    @Column(name = "AVAILABLE", columnDefinition = "NUMBER(10)", nullable = false)
     @Schema(description = "庫存量", example = "10")
-    private Integer stockQty;
+    @Builder.Default
+    private Integer available = 0;
+
+    @Column(name = "RESERVED", columnDefinition = "NUMBER(10)", nullable = false)
+    @Schema(description = "預留庫存量", example = "5")
+    @Builder.Default
+    private Integer reserved = 0;
 
     public void restore() {
         this.setDeleted(false);
