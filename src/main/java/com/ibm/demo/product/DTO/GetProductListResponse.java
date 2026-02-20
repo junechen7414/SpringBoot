@@ -7,5 +7,5 @@ public record GetProductListResponse(
                 String name,
                 BigDecimal price,
                 Integer saleStatus,
-                Integer stockQty) {
+                Integer available) {
 }

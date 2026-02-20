@@ -16,5 +16,5 @@ public record CreateProductRequest(
 
                 @NotNull(message = "Price is required") @Digits(integer = 8, fraction = 4) @Positive(message = "Price must be positive") BigDecimal price,
 
-                @NotNull(message = "Stock Qty is required") @Digits(integer = 10, fraction = 0) @PositiveOrZero(message = "Stock Qty must not be negative") Integer stockQty) {
+                @NotNull(message = "Stock Qty is required") @Digits(integer = 10, fraction = 0) @PositiveOrZero(message = "Stock Qty must not be negative") Integer available) {
 }

@@ -19,5 +19,5 @@ public record UpdateProductRequest(
 
                 @NotNull(message = "Sale Status is required") @Digits(integer = 4, fraction = 0) Integer saleStatus,
 
-                @NotNull(message = "Stock Qty is required") @Digits(integer = 10, fraction = 0) Integer stockQty) {
+                @NotNull(message = "Stock Qty is required") @Digits(integer = 10, fraction = 0) Integer available) {
 }

@@ -9,5 +9,5 @@ public record GetProductDetailResponse(
                 String name,
                 BigDecimal price,
                 Integer saleStatus,
-                Integer stockQty) {
+                Integer available) {
 }
