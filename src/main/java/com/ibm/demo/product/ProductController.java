@@ -19,6 +19,7 @@ import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
+import com.ibm.demo.util.ProcessOrderItemsRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -87,6 +88,12 @@ public class ProductController {
     @PutMapping("/batchUpdateStockQuantity")
     public void updateProductsStock(@RequestBody Map<Integer, Integer> stockUpdates) {
         productService.updateProductsStock(stockUpdates);
+    }
+
+    @Operation(summary = "處理訂單中的商品", description = "處理訂單中的商品資訊")
+    @PostMapping("/processOrderItems")
+    public void processOrderItems(@RequestBody ProcessOrderItemsRequest request) {
+        productService.processOrderItems(request.originalItems(), request.updatedItems());
     }
 
 }
