@@ -1,23 +1,21 @@
 package com.ibm.demo.account;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
+import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.order.OrderClient;
@@ -31,144 +29,154 @@ public class AccountServiceTest {
     @Mock
     private OrderClient orderClient;
 
-    @InjectMocks
+    // 顯性建立被測物件 (SUT)
     private AccountService accountService;
 
-    private static Account activeAccount;
-    private static Account inactiveAccount;
-
-    @BeforeAll
-    static void setUp() {
-        activeAccount = new Account();
-        activeAccount.setId(1);
-        activeAccount.setName("Test Account Active");
-        activeAccount.setStatus("Y");
-
-        inactiveAccount = new Account();
-        inactiveAccount.setId(2);
-        inactiveAccount.setName("Test Account Inactive");
-        inactiveAccount.setStatus("N");
+    @BeforeEach
+    void setUp() {
+        // 手動注入 Mock 依賴，結構清晰且易於維護
+        accountService = new AccountService(accountRepository, orderClient);
     }
 
-    // @Test
-    // @DisplayName("獲取帳戶詳情時，若帳戶不存在應拋出ResourceNotFoundException")
-    // void
-    // getAccountDetail_whenAccountNotFound_shouldThrowResourceNotFoundException() {
-    // // Arrange
-    // Integer nonExistentAccountId = 999;
-    // when(accountRepository.findById(nonExistentAccountId)).thenReturn(Optional.empty());
+    @Nested
+    @DisplayName("查詢帳戶業務邏輯")
+    class GetAccountTests {
 
-    // // Act & Assert
-    // ResourceNotFoundException exception =
-    // assertThrows(ResourceNotFoundException.class, () -> {
-    // accountService.getAccountDetail(nonExistentAccountId);
-    // });
-    // assertEquals("Account not found with id: " + nonExistentAccountId,
-    // exception.getMessage());
+        @Test
+        @DisplayName("查詢時若 ID 不存在，應拋出 ResourceNotFoundException")
+        void getAccountDetail_WhenNotFound_ShouldThrowException() {
+            Integer nonExistentId = 999;
+            when(accountRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
-    // // Verify
-    // verify(accountRepository, times(1)).findById(nonExistentAccountId);
-    // }
+            assertThatThrownBy(() -> accountService.getAccountDetail(nonExistentId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+    }
 
-    @Test
-    @DisplayName("更新帳戶時，若帳戶不存在應拋出ResourceNotFoundException")
-    void updateAccount_whenAccountNotFound_shouldThrowResourceNotFoundException() {
-        // Arrange
-        Integer nonExistentAccountId = 999;
-        UpdateAccountRequest request = UpdateAccountRequest.builder()
-                .id(nonExistentAccountId)
-                .name("Any Name")
-                .status("Y")
-                .build();
+    @Nested
+    @DisplayName("更新帳戶成功流程")
+    class UpdateAccountSuccessTests {
 
-        when(accountRepository.findById(nonExistentAccountId)).thenReturn(Optional.empty());
+        @Test
+        @DisplayName("將帳戶狀態從 N 更新為 Y 時，應直接儲存而不檢查訂單")
+        void updateAccount_StatusFromNToY_Success() {
+            // Arrange
+            Integer accountId = 1;
+            Account inactiveAccount = createTestAccount(accountId, "User", AccountStatus.INACTIVE.getCode());
+            UpdateAccountRequest request = UpdateAccountRequest.builder()
+                    .id(accountId).status(AccountStatus.ACTIVE.getCode()).build();
 
-        // Act & Assert
-        assertThrows(ResourceNotFoundException.class, () -> {
+            when(accountRepository.findById(accountId)).thenReturn(Optional.of(inactiveAccount));
+
+            // Act
             accountService.updateAccount(request);
-        });
 
-        // Verify
-        verify(accountRepository, times(1)).findById(nonExistentAccountId);
-        verify(orderClient, never()).accountIdIsInOrder(any(Integer.class));
-        verify(accountRepository, never()).save(any(Account.class));
+            // Assert
+            verify(accountRepository).save(any(Account.class));
+            // 重要驗證：確保沒有呼叫 orderClient（因為是啟用帳戶）
+            verifyNoInteractions(orderClient);
+        }
     }
 
-    @Test
-    @DisplayName("更新帳戶狀態為N時，若有關聯訂單應拋出AccountStillHasOrderCanNotBeDeleteException")
-    void updateAccount_whenStatusChangeToNAndHasOrder_shouldThrowException() {
-        // Arrange
-        // activeAccount is set up in @BeforeEach with status "Y" and id 1
-        UpdateAccountRequest request = UpdateAccountRequest.builder()
-                .id(activeAccount.getId())
-                .name(activeAccount.getName())
-                .status("N") // Change status to "N"
-                .build();
+    @Nested
+    @DisplayName("更新帳戶業務邏輯")
+    class UpdateAccountTests {
 
-        // Mock the behavior of accountRepository and orderClient
-        // to simulate the scenario where the account has an order
-        when(accountRepository.findById(activeAccount.getId())).thenReturn(Optional.of(activeAccount));
-        when(orderClient.accountIdIsInOrder(activeAccount.getId())).thenReturn(true);
+        @Test
+        @DisplayName("更新時若帳戶不存在，應拋出 ResourceNotFoundException")
+        void updateAccount_WhenNotFound_ShouldThrowException() {
+            Integer id = 999;
+            UpdateAccountRequest request = UpdateAccountRequest.builder()
+                    .id(id).name("Any Name").status(AccountStatus.ACTIVE.getCode()).build();
 
-        // Act & Assert
-        assertThrows(AccountStillHasOrderCanNotBeDeleteException.class, () -> accountService.updateAccount(request));
+            when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
-        // Verify
-        verify(accountRepository, times(1)).findById(activeAccount.getId());
-        verify(orderClient, times(1)).accountIdIsInOrder(activeAccount.getId());
-        verify(accountRepository, never()).save(any(Account.class));
+            assertThatThrownBy(() -> accountService.updateAccount(request))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(accountRepository, never()).save(any());
+            verifyNoInteractions(orderClient);
+        }
+
+        @Test
+        @DisplayName("帳戶改為停效(N)時，若仍有關聯訂單應拋出異常")
+        void updateAccount_WhenStatusChangeToInactiveAndHasOrder_ShouldThrowException() {
+            // Arrange: 建立獨立測試物件，確保隔離性
+            Integer accountId = 1;
+            Account activeAccount = createTestAccount(accountId, "Active User", AccountStatus.ACTIVE.getCode());
+
+            UpdateAccountRequest request = UpdateAccountRequest.builder()
+                    .id(accountId)
+                    .status(AccountStatus.INACTIVE.getCode())
+                    .build();
+
+            when(accountRepository.findById(accountId)).thenReturn(Optional.of(activeAccount));
+            when(orderClient.accountIdIsInOrder(accountId)).thenReturn(true);
+
+            // Act & Assert: 使用 AssertJ 斷言
+            assertThatThrownBy(() -> accountService.updateAccount(request))
+                    .isInstanceOf(AccountStillHasOrderCanNotBeDeleteException.class);
+
+            verify(accountRepository, never()).save(any());
+        }
     }
 
-    @Test
-    @DisplayName("刪除帳戶時，若帳戶ID不存在應拋出ResourceNotFoundException")
-    void deleteAccount_whenAccountNotFoundInitially_shouldThrowResourceNotFoundException() {
-        // Arrange
-        Integer nonExistentAccountId = 999;
-        when(accountRepository.findById(nonExistentAccountId)).thenReturn(Optional.empty());
+    @Nested
+    @DisplayName("刪除帳戶業務邏輯")
+    class DeleteAccountTests {
 
-        // Act & Assert
-        assertThrows(ResourceNotFoundException.class, () -> {
-            accountService.deleteAccount(nonExistentAccountId);
-        });
+        @Test
+        @DisplayName("刪除時若 ID 不存在，應拋出 ResourceNotFoundException")
+        void deleteAccount_WhenNotFound_ShouldThrowException() {
+            Integer id = 888;
+            when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
-        // Verify
-        verify(accountRepository, times(1)).findById(nonExistentAccountId);
-        verify(orderClient, never()).accountIdIsInOrder(any(Integer.class));
-        verify(accountRepository, never()).save(any(Account.class));
+            assertThatThrownBy(() -> accountService.deleteAccount(id))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            verifyNoInteractions(orderClient);
+        }
+
+        @Test
+        @DisplayName("刪除時若帳戶已是停效狀態，應拋出 ResourceNotFoundException")
+        void deleteAccount_WhenAccountAlreadyInactive_shouldThrowResourceNotFoundException() {
+            // Arrange
+            Integer id = 2;
+            // 在真實情況下，@SQLRestriction 會導致 findById 查不到 STATUS='N' 的資料
+            // 因此模擬 Repository 回傳 Optional.empty()
+            when(accountRepository.findById(id)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> {
+                accountService.deleteAccount(id);
+            }).isInstanceOf(ResourceNotFoundException.class);
+
+            // 驗證流程在第一步就斷了，沒有去查訂單
+            verify(orderClient, never()).accountIdIsInOrder(any());
+        }
+
+        @Test
+        @DisplayName("刪除時若仍有關聯訂單，應拋出異常")
+        void deleteAccount_WhenHasOrder_ShouldThrowException() {
+            Integer id = 1;
+            Account activeAccount = createTestAccount(id, "Active User", AccountStatus.ACTIVE.getCode());
+
+            when(accountRepository.findById(id)).thenReturn(Optional.of(activeAccount));
+            when(orderClient.accountIdIsInOrder(id)).thenReturn(true);
+
+            assertThatThrownBy(() -> accountService.deleteAccount(id))
+                    .isInstanceOf(AccountStillHasOrderCanNotBeDeleteException.class);
+
+            verify(accountRepository, never()).save(any());
+        }
     }
 
-    @Test
-    @DisplayName("刪除帳戶時，若帳戶已為非活躍狀態(N)應拋出ResourceNotFoundException")
-    void deleteAccount_whenAccountAlreadyInactive_shouldThrowResourceNotFoundException() {
-        // Arrange
-        // inactiveAccount is set up in @BeforeEach with status "N" and id 2
-        when(accountRepository.findById(inactiveAccount.getId())).thenReturn(Optional.of(inactiveAccount));
-
-        // Act & Assert
-        assertThrows(ResourceNotFoundException.class, () -> {
-            accountService.deleteAccount(inactiveAccount.getId());
-        });
-
-        // Verify
-        verify(accountRepository, times(1)).findById(inactiveAccount.getId());
-        verify(orderClient, never()).accountIdIsInOrder(any(Integer.class));
-        verify(accountRepository, never()).save(any(Account.class));
-    }
-
-    @Test
-    @DisplayName("刪除帳戶時，若有關聯訂單應拋出AccountStillHasOrderCanNotBeDeleteException")
-    void deleteAccount_whenHasOrder_shouldThrowException() {
-        // Arrange
-        when(accountRepository.findById(activeAccount.getId())).thenReturn(Optional.of(activeAccount));
-        when(orderClient.accountIdIsInOrder(activeAccount.getId())).thenReturn(true);
-
-        // Act & Assert
-        assertThrows(AccountStillHasOrderCanNotBeDeleteException.class,
-                () -> accountService.deleteAccount(activeAccount.getId()));
-
-        // Verify
-        verify(accountRepository, times(1)).findById(activeAccount.getId());
-        verify(orderClient, times(1)).accountIdIsInOrder(activeAccount.getId());
-        verify(accountRepository, never()).save(any(Account.class));
+    // --- Helper Methods ---
+    private Account createTestAccount(Integer id, String name, String status) {
+        Account account = new Account();
+        account.setId(id);
+        account.setName(name);
+        account.setStatus(status);
+        return account;
     }
 }

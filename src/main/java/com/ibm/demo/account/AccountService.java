@@ -103,16 +103,6 @@ public class AccountService {
         return new GetAccountDetailResponse(account.getName(), account.getStatus());
     }
 
-    // validateAccount
-    // @Transactional
-    // public void validateAccount(Integer accountId) {
-    // Account existingAccount = findAccountByIdOrThrow(accountId);
-    // if (existingAccount.getStatus().equals("N")){
-    // throw new AccountInactiveException("Account is inactive with id: " +
-    // accountId);
-    // }
-    // }
-
     /**
      * Finds an account by its ID or throws AccountNotFoundException if not found.
      */
