@@ -3,8 +3,6 @@ package com.ibm.demo.order;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,20 +18,14 @@ import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
-import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
-import com.ibm.demo.order.DTO.CreateOrderRequest;
-import com.ibm.demo.order.DTO.GetOrderDetailResponse;
-import com.ibm.demo.order.DTO.GetOrderListResponse;
-import com.ibm.demo.order.DTO.OrderItemDTO;
-import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
-import com.ibm.demo.order.DTO.UpdateOrderRequest;
+import com.ibm.demo.order.DTO.*;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
+import com.ibm.demo.util.OrderItemRequest;
 import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
@@ -69,12 +61,20 @@ public class OrderService {
                         throw new AccountInactiveException("帳戶狀態:" + AccountStatus.INACTIVE.getDescription());
                 }
 
-                // 收集商品ID並批取商品資訊
-                Set<Integer> productIds = createOrderRequest.orderDetails().stream()
-                                .map(CreateOrderDetailRequest::productId)
+                // 使用 Set 來過濾重複的商品ID，避免同一訂單中同一商品多筆明細造成的庫存計算錯誤
+                // 如果有重複商品ID，直接丟出錯誤，要求前端修正訂單明細，因為同一訂單中同一商品多筆明細在業務上通常是不合理的
+                Set<OrderItemRequest> uniqueItems = createOrderRequest.orderDetails().stream()
+                                .map(detail -> OrderItemRequest.builder()
+                                                .productId(detail.productId())
+                                                .quantity(detail.quantity())
+                                                .build())
                                 .collect(Collectors.toSet());
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(
-                                productIds);
+                if (uniqueItems.size() != createOrderRequest.orderDetails().size()) {
+                        throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
+                }
+
+                // 處理庫存預留
+                productClient.processOrderItems(Collections.emptySet(), uniqueItems);
 
                 // 建立新訂單
                 OrderInfo newOrderInfo = OrderInfo.builder()
@@ -82,13 +82,20 @@ public class OrderService {
                                 .status(OrderStatus.CREATED.getCode())
                                 .build();
 
-                // 處理訂單明細與庫存更新
-                var result = processOrderDetails(createOrderRequest, newOrderInfo, productDetailsMap);
-
-                // 更新庫存並儲存訂單
-                batchUpdateProductStock(result.stockUpdates());
                 OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
-                orderDetailRepository.saveAll(result.orderDetails());
+                List<OrderDetail> orderDetails = createOrderRequest.orderDetails().stream()
+                                .map(detailRequest -> {
+                                        Integer productId = detailRequest.productId();
+                                        Integer quantity = detailRequest.quantity();
+                                        // 建立訂單明細
+                                        return OrderDetail.builder()
+                                                        .orderInfo(newOrderInfo)
+                                                        .productId(productId)
+                                                        .quantity(quantity)
+                                                        .build();
+                                })
+                                .collect(Collectors.toList());
+                orderDetailRepository.saveAll(orderDetails);
                 return savedOrderInfo.getId();
         }
 
@@ -161,6 +168,26 @@ public class OrderService {
                 ServiceValidator.validateNotEmpty(request.items(), "Update order items");
                 // 1. 獲取現有訂單
                 OrderInfo order = findOrderByIdOrThrow(request.orderId());
+                Set<OrderItemRequest> originalItems = order.getOrderDetails().stream()
+                                .map(detail -> OrderItemRequest.builder()
+                                                .productId(detail.getProductId())
+                                                .quantity(detail.getQuantity())
+                                                .build())
+                                .collect(Collectors.toSet());
+
+                // 使用 Set 來過濾重複的商品ID，避免同一訂單中同一商品多筆明細造成的庫存計算錯誤
+                // 如果有重複商品ID，直接丟出錯誤，要求前端修正訂單明細，因為同一訂單中同一商品多筆明細在業務上通常是不合理的
+                Set<OrderItemRequest> uniqueItems = request.items().stream()
+                                .map(detail -> OrderItemRequest.builder()
+                                                .productId(detail.productId())
+                                                .quantity(detail.quantity())
+                                                .build())
+                                .collect(Collectors.toSet());
+                if (uniqueItems.size() != request.items().size()) {
+                        throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
+                }
+
+                productClient.processOrderItems(originalItems, uniqueItems);
 
                 // 2. 準備 Map 以便比對
                 Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
@@ -168,49 +195,28 @@ public class OrderService {
                 Map<Integer, UpdateOrderDetailRequest> incomingMap = request.items().stream()
                                 .collect(Collectors.toMap(UpdateOrderDetailRequest::productId, Function.identity()));
 
-                // 3. 計算庫存 Delta (實務建議：計算「異動量」而非直接算「新庫存」，這對併發處理較友善)
-                // 但根據你的 batchUpdateProductStock 邏輯，我們維持計算最終 stock 的做法
-                Map<Integer, Integer> stockUpdates = calculateStockUpdates(existingMap, incomingMap);
+                // 3. 同步 Entity 集合
+                // 3A. 處理更新與刪除
+                List<OrderDetail> detailsToRemove = order.getOrderDetails().stream()
+                                .filter(detail -> !incomingMap.containsKey(detail.getProductId()))
+                                .collect(Collectors.toList());
+                
+                order.getOrderDetails().removeAll(detailsToRemove);
 
-                // 4. 同步 Entity 集合 (解決 ObjectDeletedException 的核心)
-                // 4A. 遍歷"現有"：辨別更新和刪除
-                // 4B. 執行刪除（依賴 Orphan Removal）
-                // 4C. 遍歷"新請求"：辨別新增
-                // 4A. 分類：哪些要刪除、哪些要更新
-                List<OrderDetail> detailsToDelete = new ArrayList<>();
-
-                for (OrderDetail detail : order.getOrderDetails()) {
+                order.getOrderDetails().forEach(detail -> {
                         UpdateOrderDetailRequest incoming = incomingMap.get(detail.getProductId());
-                        if (incoming == null) {
-                                // 該商品在新請求中不存在，標記為刪除
-                                detailsToDelete.add(detail);
-                        } else {
-                                // 該商品存在，更新數量
-                                detail.setQuantity(incoming.quantity());
-                        }
-                }
+                        detail.setQuantity(incoming.quantity());
+                });
 
-                // 4B. 從內存集合中刪除 (Orphan Removal 會在 save 時自動刪除資料庫記錄)
-                order.getOrderDetails().removeAll(detailsToDelete);
-
-                // 4C. 處理新增項目
-                for (Map.Entry<Integer, UpdateOrderDetailRequest> entry : incomingMap.entrySet()) {
-                        Integer productId = entry.getKey();
-                        UpdateOrderDetailRequest item = entry.getValue();
-
-                        if (!existingMap.containsKey(productId)) {
-                                // 新商品，加入訂單
-                                order.getOrderDetails().add(
+                // 3B. 處理新增
+                request.items().stream()
+                                .filter(item -> !existingMap.containsKey(item.productId()))
+                                .forEach(item -> order.getOrderDetails().add(
                                                 OrderDetail.builder()
-                                                                .orderInfo(order) // 關聯到新訂單
-                                                                .productId(productId)
+                                                                .orderInfo(order)
+                                                                .productId(item.productId())
                                                                 .quantity(item.quantity())
-                                                                .build());
-                        }
-                }
-
-                // 5. 執行遠端/批量庫存更新
-                batchUpdateProductStock(stockUpdates);
+                                                                .build()));
 
                 // 6. 更新訂單狀態並存檔
                 order.setStatus(request.orderStatus());
@@ -229,39 +235,19 @@ public class OrderService {
                                                 "Order not found with ID: " + orderId));
 
                 // 2. 驗證訂單狀態
-                if (existingOrderInfo.getStatus() == OrderStatus.CANCELLED.getCode()) {
-                        throw new ResourceNotFoundException("Order not found with ID: " + orderId);
-                }
                 if (existingOrderInfo.getStatus() != OrderStatus.CREATED.getCode()) {
                         throw new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + existingOrderInfo.getStatus());
                 }
 
                 // 3. 收集所有商品ID並取得商品資訊
-                Set<Integer> productIds = existingOrderInfo.getOrderDetails().stream()
-                                .map(OrderDetail::getProductId)
+                Set<OrderItemRequest> originalItems = existingOrderInfo.getOrderDetails().stream()
+                                .map(detail -> OrderItemRequest.builder()
+                                                .productId(detail.getProductId())
+                                                .quantity(detail.getQuantity())
+                                                .build())
                                 .collect(Collectors.toSet());
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(
-                                productIds);
 
-                // 4. 計算需要歸還的庫存
-                Map<Integer, Integer> stockUpdates = new HashMap<>();
-                for (OrderDetail detail : existingOrderInfo.getOrderDetails()) {
-                        Integer productId = detail.getProductId();
-                        Integer quantityToRestore = detail.getQuantity();
-                        GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-                        Integer currentStock = productDetail.stockQty();
-
-                        // 計算新庫存 (newQuantity 為 0)
-                        Integer newStock = calculateNewStock(
-                                        productId,
-                                        currentStock,
-                                        quantityToRestore, // oldQuantity is the quantity being restored
-                                        0); // newQuantity is 0
-                        stockUpdates.put(productId, newStock);
-                }
-
-                // 5. 批量更新商品庫存
-                batchUpdateProductStock(stockUpdates);
+                productClient.processOrderItems(originalItems, Collections.emptySet());
 
                 // 6. 刪除訂單，連鎖刪除訂單明細
                 orderInfoRepository.delete(existingOrderInfo);
@@ -280,88 +266,6 @@ public class OrderService {
 
                 // 不應該 Throw Exception，除非歷史訂單也不准看停售商品
                 return productMap;
-        }
-
-        /**
-         * @param stockUpdates
-         */
-        private void batchUpdateProductStock(Map<Integer, Integer> stockUpdates) {
-                ServiceValidator.validateNotNull(stockUpdates, "Stock updates map");
-                if (!stockUpdates.isEmpty()) {
-                        productClient.updateProductsStock(stockUpdates);
-                }
-        }
-
-        /**
-         * 計算單一商品基於舊數量和新數量變更後的新庫存。
-         * 這個方法封裝了庫存增減的邏輯和驗證。
-         *
-         * @param productId        商品 ID
-         * @param currentStock     該商品目前的庫存 (從 Product Service 獲取)
-         * @param originalQuantity 訂單中該商品的原始數量 (新增時為 0, 刪除時為原數量)
-         * @param requestQuantity  訂單中該商品要求的數量 (刪除時為 0)
-         * @return 計算後的新庫存數量
-         * @throws IllegalArgumentException 如果請求數量為負數，或導致庫存變為負數
-         */
-        private Integer calculateNewStock(Integer productId, Integer currentStock, Integer originalQuantity,
-                        Integer requestQuantity) {
-                // 基本驗證
-                ServiceValidator.validateNotNull(productId, "Product ID");
-                ServiceValidator.validateNotNull(currentStock, "Current stock");
-                ServiceValidator.validateNotNull(originalQuantity, "Old quantity");
-                ServiceValidator.validateNotNull(requestQuantity, "New quantity");
-
-                if (originalQuantity < 0 || requestQuantity < 0) {
-                        throw new InvalidRequestException(
-                                        "Order quantities cannot be negative for product ID: " + productId);
-                }
-                if (currentStock < 0) {
-                        // 理論上 currentStock 不應為負，但加上just in case
-                }
-
-                // 計算庫存的淨變化量 (從庫存中"拿出"多少)
-                // netChange > 0 表示庫存減少 (拿出更多)
-                // netChange < 0 表示庫存增加 (放回一些)
-                int netChange = requestQuantity - originalQuantity;
-
-                // 計算變更後的新庫存
-                int newQuantity = currentStock - netChange;
-
-                // 驗證：新庫存不能小於 0
-                if (newQuantity < 0) {
-                        // 拋出更詳細的錯誤訊息
-                        throw new ProductStockNotEnoughException(String.format(
-                                        "商品 %d 庫存不足。目前庫存: %d, 訂單原數量: %d, 訂單新數量: %d。需要額外 %d 個，但庫存不足。",
-                                        productId, currentStock, originalQuantity, requestQuantity, netChange));
-                }
-
-                return newQuantity;
-        }
-
-        private Map<Integer, Integer> calculateStockUpdates(
-                        Map<Integer, OrderDetail> existingMap,
-                        Map<Integer, UpdateOrderDetailRequest> incomingMap) {
-
-                // 取得所有涉及的 Product ID
-                Set<Integer> allProductIds = new HashSet<>(existingMap.keySet());
-                allProductIds.addAll(incomingMap.keySet());
-
-                // 批次獲取商品資訊 (減少 IO 次數，符合你之前的實務做法)
-                Map<Integer, GetProductDetailResponse> productDetails = batchGetProductDetails(
-                                allProductIds);
-
-                Map<Integer, Integer> stockUpdates = new HashMap<>();
-                for (Integer pid : allProductIds) {
-                        int oldQty = existingMap.containsKey(pid) ? existingMap.get(pid).getQuantity() : 0;
-                        int newQty = incomingMap.containsKey(pid) ? incomingMap.get(pid).quantity() : 0;
-
-                        if (oldQty != newQty) {
-                                int currentStock = productDetails.get(pid).stockQty();
-                                // 呼叫你原有的庫存計算邏輯
-                                stockUpdates.put(pid, calculateNewStock(pid, currentStock, oldQty, newQty));
-                        }
-                }
-                return stockUpdates;
         }
 
         /**
@@ -404,53 +308,4 @@ public class OrderService {
                 return false;
         }
 
-        /**
-         * 內部record用於封裝訂單明細處理結果
-         */
-        private record OrderProcessResult(
-                        List<OrderDetail> orderDetails,
-                        Map<Integer, Integer> stockUpdates) {
-        }
-
-        /**
-         * 處理訂單明細：計算庫存變更並建立訂單明細物件
-         *
-         * @param createOrderRequest 訂單建立請求
-         * @param orderInfo          訂單主表
-         * @param productDetailsMap  商品詳細資訊Map
-         * @return OrderProcessResult 包含訂單明細和庫存更新
-         */
-        private OrderProcessResult processOrderDetails(
-                        CreateOrderRequest createOrderRequest,
-                        OrderInfo orderInfo,
-                        Map<Integer, GetProductDetailResponse> productDetailsMap) {
-
-                Map<Integer, Integer> stockUpdates = new HashMap<>();
-
-                List<OrderDetail> orderDetails = createOrderRequest.orderDetails().stream()
-                                .filter(detailRequest -> productDetailsMap.containsKey(detailRequest.productId()))
-                                .map(detailRequest -> {
-                                        Integer productId = detailRequest.productId();
-                                        Integer quantity = detailRequest.quantity();
-                                        GetProductDetailResponse productDetail = productDetailsMap.get(productId);
-
-                                        // 計算新庫存
-                                        Integer newStock = calculateNewStock(
-                                                        productId,
-                                                        productDetail.stockQty(),
-                                                        0, // 新增時舊數量為0
-                                                        quantity);
-                                        stockUpdates.put(productId, newStock);
-
-                                        // 建立訂單明細
-                                        return OrderDetail.builder()
-                                                        .orderInfo(orderInfo)
-                                                        .productId(productId)
-                                                        .quantity(quantity)
-                                                        .build();
-                                })
-                                .collect(Collectors.toList());
-
-                return new OrderProcessResult(orderDetails, stockUpdates);
-        }
 }

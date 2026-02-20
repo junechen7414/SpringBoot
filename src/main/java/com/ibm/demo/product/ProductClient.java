@@ -14,6 +14,8 @@ import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
+import com.ibm.demo.util.OrderItemRequest;
+import com.ibm.demo.util.ProcessOrderItemsRequest;
 
 @Component
 public class ProductClient {
@@ -48,33 +50,30 @@ public class ProductClient {
             }
             throw new RuntimeException("呼叫商品服務失敗: " + errorMessage, ex);
         }
-    }
+    }    
 
-    /**
-     * 批量更新商品庫存
-     *
-     * @param stockUpdates Map<商品ID, 新庫存數量>
-     */
-    public void updateProductsStock(Map<Integer, Integer> stockUpdates) {
+    public void processOrderItems(Set<OrderItemRequest> orderItems,Set<OrderItemRequest> updatedItems) {
         try {
-            webClient.put()
+            
+            webClient.post()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/batchUpdateStockQuantity")
+                            .path("/processOrderItems")
                             .build())
-                    .bodyValue(stockUpdates)
+                    .bodyValue(ProcessOrderItemsRequest.builder()
+                            .originalItems(orderItems)
+                            .updatedItems(updatedItems)
+                            .build())
                     .retrieve()
                     .toBodilessEntity()
                     .block();
         } catch (WebClientResponseException ex) {
-            String errorMessage = extractErrorMessage(ex, "更新商品庫存失敗");
+            String errorMessage = extractErrorMessage(ex, "處理訂單商品庫存失敗");
             if (ex.getStatusCode() == HttpStatusCode.valueOf(404)) {
-                // 如果更新時發現商品不存在
                 throw new ResourceNotFoundException(errorMessage);
             } else if (ex.getStatusCode() == HttpStatusCode.valueOf(400)) {
-                // 可能是請求格式錯誤或其他業務驗證失敗
                 throw new InvalidRequestException(errorMessage);
             }
-            throw new RuntimeException("呼叫商品服務更新庫存失敗: " + errorMessage, ex);
+            throw new RuntimeException("呼叫商品服務處理訂單商品庫存失敗: " + errorMessage, ex);
         }
     }
 
