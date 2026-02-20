@@ -3,7 +3,6 @@ package com.ibm.demo.order;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -135,7 +134,7 @@ class OrderServiceTest {
         GetProductDetailResponse dto = GetProductDetailResponse.builder()
                 .name(name)
                 .price(price)
-                .stockQty(stock)
+                .available(stock)
                 .saleStatus(PRODUCT_STATUS_SELLABLE) // Assume sellable
                 .build();
         return dto;
@@ -199,7 +198,7 @@ class OrderServiceTest {
         // Verify no persistence occurred
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
         verify(orderDetailRepository, never()).saveAll(anyList());
-        verify(productClient, never()).updateProductsStock(anyMap()); // Stock update should not happen
+        verify(productClient, never()).processOrderItems(anySet(), anySet()); // Stock update should not happen
     }
 
     @Test
@@ -228,7 +227,7 @@ class OrderServiceTest {
         // Verify no persistence occurred
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
         verify(orderDetailRepository, never()).saveAll(anyList());
-        verify(productClient, never()).updateProductsStock(anyMap()); // Stock update should not happen
+        verify(productClient, never()).processOrderItems(anySet(), anySet()); // Stock update should not happen
     }
 
     @Test
@@ -282,7 +281,7 @@ class OrderServiceTest {
         // Verify no persistence occurred beyond finding the initial order
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
-        verify(productClient, never()).updateProductsStock(anyMap());
+        verify(productClient, never()).processOrderItems(anySet(), anySet());
     }
 
     @Test
@@ -312,7 +311,7 @@ class OrderServiceTest {
         // Verify no persistence occurred beyond finding the initial order
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(orderInfoRepository, never()).save(any(OrderInfo.class));
-        verify(productClient, never()).updateProductsStock(anyMap());
+        verify(productClient, never()).processOrderItems(anySet(), anySet());
     }
 
     @Test
@@ -329,7 +328,7 @@ class OrderServiceTest {
         // Verify findById was called, but no further processing occurred
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(productClient, never()).getProductDetails(anySet());
-        verify(productClient, never()).updateProductsStock(anyMap());
+        verify(productClient, never()).processOrderItems(anySet(), anySet());
         verify(orderInfoRepository, never()).save(any(OrderInfo.class)); // Save should not be called
     }
 
@@ -353,7 +352,7 @@ class OrderServiceTest {
         // Verify findById was called, but no further processing occurred
         verify(orderInfoRepository, times(1)).findById(EXISTING_ORDER_ID);
         verify(productClient, never()).getProductDetails(anySet());
-        verify(productClient, never()).updateProductsStock(anyMap());
+        verify(productClient, never()).processOrderItems(anySet(), anySet());
         verify(orderInfoRepository, never()).save(any(OrderInfo.class)); // Save should not be called
     }
 }
