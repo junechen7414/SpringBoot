@@ -48,7 +48,7 @@ public class ProductService {
         Product newProduct = Product.builder()
                 .name(requestProductName)
                 .price(product_DTO.price())
-                .stockQty(product_DTO.stockQty())
+                .available(product_DTO.available())
                 .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .build();
         // 3. 儲存商品資料
@@ -115,7 +115,7 @@ public class ProductService {
         existingProduct.setName(updateProductRequestDto.name());
         existingProduct.setPrice(updateProductRequestDto.price());
         existingProduct.setSaleStatus(updateProductRequestDto.saleStatus());
-        existingProduct.setStockQty(updateProductRequestDto.stockQty());
+        existingProduct.setAvailable(updateProductRequestDto.available());
         // 4. 儲存商品資料
         productRepository.save(existingProduct);
     }
@@ -171,7 +171,7 @@ public class ProductService {
 
         for (Product product : products) {
             Integer newStock = stockUpdates.get(product.getId());
-            product.setStockQty(newStock);
+            product.setAvailable(newStock);
         }
 
         productRepository.saveAll(products);
@@ -188,7 +188,7 @@ public class ProductService {
                 product.getName(),
                 product.getPrice(),
                 product.getSaleStatus(),
-                product.getStockQty());
+                product.getAvailable());
     }
 
     /**
