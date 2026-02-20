@@ -61,6 +61,8 @@ public class OrderService {
         @Transactional
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
+                ServiceValidator.validateNotNull(createOrderRequest.accountId(), "Account ID");
+                ServiceValidator.validateNotEmpty(createOrderRequest.orderDetails(), "Order details");
                 // 驗證帳戶存在且狀態為啟用
                 Integer accountId = createOrderRequest.accountId();
                 if (accountClient.getAccountDetail(accountId).status().equals(AccountStatus.INACTIVE.getCode())) {
@@ -154,6 +156,9 @@ public class OrderService {
         @Transactional
         public void updateOrder(UpdateOrderRequest request) {
                 ServiceValidator.validateNotNull(request, "Update order request");
+                ServiceValidator.validateNotNull(request.orderId(), "Update order id");
+                ServiceValidator.validateNotEmpty(request.orderStatus(), "Update order status");
+                ServiceValidator.validateNotEmpty(request.items(), "Update order items");
                 // 1. 獲取現有訂單
                 OrderInfo order = findOrderByIdOrThrow(request.orderId());
 
