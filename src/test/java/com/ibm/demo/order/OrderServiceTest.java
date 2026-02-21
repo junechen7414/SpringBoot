@@ -21,6 +21,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -57,10 +60,10 @@ class OrderServiceTest {
     private OrderService orderService;
 
     // 測試常數
-    private final int ORDER_STATUS_PENDING = OrderStatus.CREATED.getCode();
-    private final int ORDER_STATUS_CANCELLED = OrderStatus.CANCELLED.getCode();
-    private final String ACCOUNT_STATUS_ACTIVE = AccountStatus.ACTIVE.getCode();
-    private final String ACCOUNT_STATUS_INACTIVE = AccountStatus.INACTIVE.getCode();
+    private final Integer STATUS_CREATED = OrderStatus.CREATED.getCode();
+    private final Integer STATUS_CANCELLED = OrderStatus.CANCELLED.getCode();
+    private final String STATUS_ACTIVE = AccountStatus.ACTIVE.getCode();
+    private final String STATUS_INACTIVE = AccountStatus.INACTIVE.getCode();
     private final Integer ACTIVE_ACCOUNT_ID = 1;
     private final Integer SELLABLE_PRODUCT_ID = 1;
     private final Integer EXISTING_ORDER_ID = 101;
@@ -79,21 +82,16 @@ class OrderServiceTest {
         @DisplayName("建立訂單完整流程：校驗帳號、商品、庫存後，成功存檔並扣庫存")
         void createOrder_FullProcess_Success() {
             // Arrange
-            Integer productId = 1;
             CreateOrderRequest request = CreateOrderRequest.builder()
                     .accountId(ACTIVE_ACCOUNT_ID)
-                    .orderDetails(List.of(new CreateOrderDetailRequest(productId, 2)))
+                    .orderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
                     .build();
 
-            // 1. 模擬帳號校驗 (Service 確實有呼叫)
+            // 1. 模擬帳號校驗
             when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
-                    .thenReturn(GetAccountDetailResponse.builder().status(ACCOUNT_STATUS_ACTIVE).build());
+                    .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
 
-            // 2. 移除原本的 getProductDetails (因為 Service 沒呼叫)
-            // 如果 processOrderItems 是 void，我們甚至不需要寫 when，只需後續 verify
-            // 如果它有回傳值，才需要 when(...)
-
-            // 3. 模擬儲存 OrderInfo
+            // 2. 模擬儲存 OrderInfo
             OrderInfo savedInfo = new OrderInfo();
             savedInfo.setId(888);
             when(orderInfoRepository.save(any(OrderInfo.class))).thenReturn(savedInfo);
@@ -104,10 +102,15 @@ class OrderServiceTest {
             // Assert
             assertThat(orderId).isEqualTo(888);
 
-            // Verify: 驗證真正被呼叫到的方法
+            // Verify: 使用 ArgumentCaptor 驗證 OrderInfo 內容
+            ArgumentCaptor<OrderInfo> infoCaptor = ArgumentCaptor.forClass(OrderInfo.class);
+            verify(orderInfoRepository).save(infoCaptor.capture());
+            assertThat(infoCaptor.getValue())
+                    .hasFieldOrPropertyWithValue("accountId", ACTIVE_ACCOUNT_ID)
+                    .hasFieldOrPropertyWithValue("status", STATUS_CREATED);
+
             verify(accountClient).getAccountDetail(ACTIVE_ACCOUNT_ID);
-            verify(productClient).processOrderItems(anySet(), anySet()); // 這是 Service 實際呼叫的方法
-            verify(orderInfoRepository).save(any(OrderInfo.class));
+            verify(productClient).processOrderItems(anySet(), anySet());
             verify(orderDetailRepository).saveAll(anyList());
         }
     }
@@ -127,12 +130,13 @@ class OrderServiceTest {
                     .build();
 
             GetAccountDetailResponse inactiveResponse = GetAccountDetailResponse.builder()
-                    .status(ACCOUNT_STATUS_INACTIVE).build();
+                    .status(STATUS_INACTIVE).build();
             when(accountClient.getAccountDetail(inactiveId)).thenReturn(inactiveResponse);
 
             // Act & Assert
             assertThatThrownBy(() -> orderService.createOrder(request))
-                    .isInstanceOf(AccountInactiveException.class);
+                    .isInstanceOf(AccountInactiveException.class)
+                    .hasMessageContaining("帳戶狀態");
 
             verify(orderInfoRepository, never()).save(any());
             verifyNoMoreInteractions(orderInfoRepository);
@@ -149,7 +153,7 @@ class OrderServiceTest {
 
             // 模擬帳戶正常
             when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
-                    .thenReturn(GetAccountDetailResponse.builder().status(ACCOUNT_STATUS_ACTIVE).build());
+                    .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
 
             // 關鍵：模擬 processOrderItems 發現商品不可售並拋出異常
             doThrow(new ProductInactiveException("商品不可銷售"))
@@ -157,7 +161,8 @@ class OrderServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> orderService.createOrder(request))
-                    .isInstanceOf(ProductInactiveException.class);
+                    .isInstanceOf(ProductInactiveException.class)
+                    .hasMessageContaining("商品不可銷售");
 
             // 驗證：既然拋異常了，後面的 save 絕對不該執行
             verify(orderInfoRepository, never()).save(any());
@@ -173,7 +178,7 @@ class OrderServiceTest {
                     .build();
 
             when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
-                    .thenReturn(GetAccountDetailResponse.builder().status(ACCOUNT_STATUS_ACTIVE).build());
+                    .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
 
             // 關鍵：模擬 processOrderItems 發現庫存不足
             doThrow(new ProductStockNotEnoughException("庫存不足"))
@@ -181,9 +186,38 @@ class OrderServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> orderService.createOrder(request))
-                    .isInstanceOf(ProductStockNotEnoughException.class);
+                    .isInstanceOf(ProductStockNotEnoughException.class)
+                    .hasMessageContaining("庫存不足");
 
             verify(orderInfoRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("更新訂單成功流程")
+    class UpdateOrderSuccessTests {
+
+        @Test
+        @DisplayName("更新訂單狀態與商品明細，應成功儲存並同步庫存")
+        void updateOrder_Success() {
+            // Arrange
+            OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED);
+            UpdateOrderRequest request = new UpdateOrderRequest(
+                    EXISTING_ORDER_ID,
+                    STATUS_CREATED,
+                    List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
+
+            when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
+
+            // Act
+            orderService.updateOrder(request);
+
+            // Assert
+            ArgumentCaptor<OrderInfo> captor = ArgumentCaptor.forClass(OrderInfo.class);
+            verify(orderInfoRepository).save(captor.capture());
+            assertThat(captor.getValue().getStatus()).isEqualTo(STATUS_CREATED);
+
+            verify(productClient).processOrderItems(anySet(), anySet());
         }
     }
 
@@ -191,28 +225,31 @@ class OrderServiceTest {
     @DisplayName("更新訂單業務邏輯")
     class UpdateOrderTests {
 
-        @Test
+        @ParameterizedTest
+        @ValueSource(ints = {999, 888})
         @DisplayName("更新時若訂單 ID 不存在，應拋出 ResourceNotFoundException")
-        void updateOrder_WhenOrderNotFound_ShouldThrowException() {
-            // Arrange: 必須提供 items，否則會死在 ServiceValidator
+        void updateOrder_WhenOrderNotFound_ShouldThrowException(Integer nonExistentId) {
+            // Arrange
             UpdateOrderRequest request = new UpdateOrderRequest(
-                    EXISTING_ORDER_ID,
-                    ORDER_STATUS_PENDING,
+                    nonExistentId,
+                    STATUS_CREATED,
                     List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)));
 
-            when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.empty());
+            when(orderInfoRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
             // Act & Assert
             assertThatThrownBy(() -> orderService.updateOrder(request))
-                    .isInstanceOf(ResourceNotFoundException.class);
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("Order not found")
+                    .hasMessageContaining(String.valueOf(nonExistentId));
         }
 
         @Test
         @DisplayName("更新時若包含庫存不足的商品，應拋出 ProductStockNotEnoughException")
         void updateOrder_WhenInsufficientStock_ShouldThrowException() {
             // Arrange
-            OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, ORDER_STATUS_PENDING);
-            UpdateOrderRequest request = new UpdateOrderRequest(EXISTING_ORDER_ID, ORDER_STATUS_PENDING,
+            OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED);
+            UpdateOrderRequest request = new UpdateOrderRequest(EXISTING_ORDER_ID, STATUS_CREATED,
                     List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)));
 
             when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
@@ -223,7 +260,8 @@ class OrderServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> orderService.updateOrder(request))
-                    .isInstanceOf(ProductStockNotEnoughException.class);
+                    .isInstanceOf(ProductStockNotEnoughException.class)
+                    .hasMessageContaining("庫存不足");
 
             // 驗證流程在拋出異常後中斷，沒有執行存檔
             verify(orderInfoRepository, never()).save(any());
@@ -231,28 +269,50 @@ class OrderServiceTest {
     }
 
     @Nested
+    @DisplayName("刪除訂單成功流程")
+    class DeleteOrderSuccessTests {
+
+        @Test
+        @DisplayName("刪除存在的 CREATED 訂單應成功並釋放庫存")
+        void deleteOrder_Success() {
+            // Arrange
+            OrderInfo order = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED);
+            when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(order));
+
+            // Act
+            orderService.deleteOrder(EXISTING_ORDER_ID);
+
+            // Assert
+            verify(orderInfoRepository).delete(order);
+            verify(productClient).processOrderItems(anySet(), anySet());
+        }
+    }
+
+    @Nested
     @DisplayName("刪除訂單業務邏輯")
     class DeleteOrderTests {
 
-        @Test
+        @ParameterizedTest
+        @ValueSource(ints = {999, 888})
         @DisplayName("刪除時若訂單不存在，應拋出 ResourceNotFoundException")
-        void deleteOrder_WhenNotFound_ShouldThrowException() {
-            when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.empty());
+        void deleteOrder_WhenNotFound_ShouldThrowException(Integer nonExistentId) {
+            when(orderInfoRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> orderService.deleteOrder(EXISTING_ORDER_ID))
-                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> orderService.deleteOrder(nonExistentId))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("Order not found")
+                    .hasMessageContaining(String.valueOf(nonExistentId));
         }
 
         @Test
-        @DisplayName("刪除時若訂單狀態非 PENDING (例如已取消)，應拋出 OrderStatusInvalidException")
+        @DisplayName("刪除時若訂單狀態非 CREATED (例如已取消)，應拋出 OrderStatusInvalidException")
         void deleteOrder_WhenStatusNotPending_ShouldThrowOrderStatusInvalidException() {
             // Arrange
             OrderInfo cancelledOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID,
-                    ORDER_STATUS_CANCELLED);
+                    STATUS_CANCELLED);
             when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(cancelledOrder));
 
             // Act & Assert
-            // 將預期的 Exception 改為實際拋出的 OrderStatusInvalidException
             assertThatThrownBy(() -> orderService.deleteOrder(EXISTING_ORDER_ID))
                     .isInstanceOf(OrderStatusInvalidException.class)
                     .hasMessageContaining("訂單狀態不允許刪除");
