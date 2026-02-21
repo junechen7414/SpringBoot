@@ -104,7 +104,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         @ExceptionHandler(Exception.class)
         public ResponseEntity<ApiErrorResponse> handleGenericException(
                         Exception ex, WebRequest request) {
-                logger.error("未預期的錯誤發生: ", ex);
+                logger.error("未預期的錯誤發生: Path=" + request.getDescription(false), ex);
 
                 ApiErrorResponse apiErrorResponse = new ApiErrorResponse(
                                 LocalDateTime.now(),
