@@ -18,7 +18,12 @@ import com.ibm.demo.exception.InvalidRequestException;
 import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
-import com.ibm.demo.order.DTO.*;
+import com.ibm.demo.order.DTO.CreateOrderRequest;
+import com.ibm.demo.order.DTO.GetOrderDetailResponse;
+import com.ibm.demo.order.DTO.GetOrderListResponse;
+import com.ibm.demo.order.DTO.OrderItemDTO;
+import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
+import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
@@ -26,6 +31,7 @@ import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.util.OrderItemRequest;
+import com.ibm.demo.util.ProcessOrderItemsRequest;
 import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
@@ -73,8 +79,12 @@ public class OrderService {
                         throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
                 }
 
-                // 處理庫存預留
-                productClient.processOrderItems(Collections.emptySet(), uniqueItems);
+                ProcessOrderItemsRequest request = ProcessOrderItemsRequest.builder()
+                                .originalItems(Collections.emptySet())
+                                .updatedItems(uniqueItems)
+                                .build();
+
+                productClient.processOrderItems(request);
 
                 // 建立新訂單
                 OrderInfo newOrderInfo = OrderInfo.builder()
@@ -187,7 +197,12 @@ public class OrderService {
                         throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
                 }
 
-                productClient.processOrderItems(originalItems, uniqueItems);
+                ProcessOrderItemsRequest processRequest = ProcessOrderItemsRequest.builder()
+                                .originalItems(originalItems)
+                                .updatedItems(uniqueItems)
+                                .build();
+
+                productClient.processOrderItems(processRequest);
 
                 // 2. 準備 Map 以便比對
                 Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
@@ -200,7 +215,7 @@ public class OrderService {
                 List<OrderDetail> detailsToRemove = order.getOrderDetails().stream()
                                 .filter(detail -> !incomingMap.containsKey(detail.getProductId()))
                                 .collect(Collectors.toList());
-                
+
                 order.getOrderDetails().removeAll(detailsToRemove);
 
                 order.getOrderDetails().forEach(detail -> {
@@ -247,7 +262,13 @@ public class OrderService {
                                                 .build())
                                 .collect(Collectors.toSet());
 
-                productClient.processOrderItems(originalItems, Collections.emptySet());
+                                
+                ProcessOrderItemsRequest processRequest = ProcessOrderItemsRequest.builder()
+                                .originalItems(originalItems)
+                                .updatedItems(Collections.emptySet())
+                                .build();
+
+                productClient.processOrderItems(processRequest);
 
                 // 6. 刪除訂單，連鎖刪除訂單明細
                 orderInfoRepository.delete(existingOrderInfo);
