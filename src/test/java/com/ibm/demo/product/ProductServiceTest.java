@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -55,10 +54,10 @@ class ProductServiceTest {
     @DisplayName("建立產品成功流程")
     class CreateProductSuccessTests {
 
-        @ParameterizedTest
+        @ParameterizedTest(name = "{0}")
         @CsvSource({
-            "New Product, 100, 10",
-            "Another Product, 50, 100"
+                "New Product, 100, 10",
+                "Another Product, 50, 100"
         })
         @DisplayName("當輸入資料合法時，應成功儲存產品並回傳 ID")
         void createProduct_Success(String name, BigDecimal price, int available) {
@@ -97,8 +96,11 @@ class ProductServiceTest {
     @DisplayName("建立產品業務邏輯")
     class CreateProductTests {
 
-        @ParameterizedTest
-        @ValueSource(strings = {"Existing Product Name", "Duplicate Name"})
+        @ParameterizedTest(name = "{0}")
+        @CsvSource({
+                "已存在產品名稱1, Existing Product Name",
+                "已存在產品名稱2, Duplicate Name"
+        })
         @DisplayName("建立產品時，若名稱已存在應拋出異常")
         void createProduct_WhenNameAlreadyExists_ShouldThrowException(String existingName) {
             // Arrange
@@ -126,10 +128,10 @@ class ProductServiceTest {
     @DisplayName("查詢產品成功流程")
     class GetProductSuccessTests {
 
-        @ParameterizedTest
+        @ParameterizedTest(name = "{0}")
         @CsvSource({
-            "1, Laptop, 10.00, 100",
-            "2, Mouse, 5.00, 50"
+                "1, Laptop, 10.00, 100",
+                "2, Mouse, 5.00, 50"
         })
         @DisplayName("查詢存在的產品應成功回傳詳細資訊")
         void getProductDetail_WhenExists_Success(Integer id, String name, BigDecimal price, int available) {
@@ -156,8 +158,11 @@ class ProductServiceTest {
     @DisplayName("查詢產品業務邏輯")
     class GetProductTests {
 
-        @ParameterizedTest
-        @ValueSource(ints = {999, 888})
+        @ParameterizedTest(name = "{0}")
+        @CsvSource({
+                "測試不存在ID1, 999",
+                "測試無效ID, -1"
+        })
         @DisplayName("查詢不存在的產品應拋出 ResourceNotFoundException")
         void getProductDetail_WhenNotFound_ShouldThrowException(Integer nonExistentId) {
             when(productRepository.findById(nonExistentId)).thenReturn(Optional.empty());
@@ -173,13 +178,14 @@ class ProductServiceTest {
     @DisplayName("更新產品成功流程")
     class UpdateProductSuccessTests {
 
-        @ParameterizedTest
+        @ParameterizedTest(name = "{1} -> 更新為 {3}")
         @CsvSource({
-            "1, Old Name, 50.00, New Product Name, 99.99, 200",
-            "2, Product X, 10.00, Product Y, 20.00, 10"
+                "1, Old Name, 50.00, New Product Name, 99.99, 200",
+                "2, Product X, 10.00, Product Y, 20.00, 10"
         })
         @DisplayName("更新產品所有欄位應成功儲存")
-        void updateProduct_AllFields_Success(Integer id, String oldName, BigDecimal oldPrice, String newName, BigDecimal newPrice, int newAvailable) {
+        void updateProduct_AllFields_Success(Integer id, String oldName, BigDecimal oldPrice, String newName,
+                BigDecimal newPrice, int newAvailable) {
             // Arrange
             Product existingProduct = createTestProduct(id, oldName, oldPrice,
                     STATUS_SELLABLE, 50);
@@ -255,10 +261,10 @@ class ProductServiceTest {
             verify(productRepository, never()).save(any());
         }
 
-        @ParameterizedTest
+        @ParameterizedTest(name = "{1} -> 嘗試更新為 {2}")
         @CsvSource({
-            "1, Old Name, Existing Name",
-            "2, Product A, Duplicate Name"
+                "1, Old Name, Existing Name",
+                "2, Product A, Duplicate Name"
         })
         @DisplayName("更新產品名稱時，若新名稱已被其他產品佔用應拋出異常")
         void updateProduct_WhenNewNameExists_ShouldThrowException(Integer id, String oldName, String newName) {
@@ -331,8 +337,11 @@ class ProductServiceTest {
             verify(productRepository, never()).delete(any());
         }
 
-        @ParameterizedTest
-        @ValueSource(ints = {888, 777})
+        @ParameterizedTest(name = "{0}")
+        @CsvSource({
+                "測試不存在ID1, 999",
+                "測試無效ID, -1"
+        })
         @DisplayName("刪除不存在的 ID 應拋出 ResourceNotFoundException")
         void deleteProduct_WhenIdNotFound_ShouldThrowException(Integer nonExistentId) {
             when(productRepository.findById(nonExistentId)).thenReturn(Optional.empty());

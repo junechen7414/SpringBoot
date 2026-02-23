@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -22,7 +21,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -112,10 +111,7 @@ class OrderServiceTest {
                                         .hasFieldOrPropertyWithValue("status", STATUS_CREATED);
 
                         verify(accountClient).getAccountDetail(ACTIVE_ACCOUNT_ID);
-                        verify(productClient).processOrderItems(ProcessOrderItemsRequest.builder()
-                                        .originalItems(anySet())
-                                        .updatedItems(anySet())
-                                        .build());
+                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
                         verify(orderDetailRepository).saveAll(anyList());
                 }
         }
@@ -162,10 +158,8 @@ class OrderServiceTest {
 
                         // 關鍵：模擬 processOrderItems 發現商品不可售並拋出異常
                         doThrow(new ProductInactiveException("商品不可銷售"))
-                                        .when(productClient).processOrderItems(ProcessOrderItemsRequest.builder()
-                                                        .originalItems(anySet())
-                                                        .updatedItems(anySet())
-                                                        .build());
+                                        .when(productClient)
+                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
@@ -190,10 +184,8 @@ class OrderServiceTest {
 
                         // 關鍵：模擬 processOrderItems 發現庫存不足
                         doThrow(new ProductStockNotEnoughException("庫存不足"))
-                                        .when(productClient).processOrderItems(ProcessOrderItemsRequest.builder()
-                                                        .originalItems(anySet())
-                                                        .updatedItems(anySet())
-                                                        .build());
+                                        .when(productClient)
+                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
@@ -229,10 +221,7 @@ class OrderServiceTest {
                         verify(orderInfoRepository).save(captor.capture());
                         assertThat(captor.getValue().getStatus()).isEqualTo(STATUS_CREATED);
 
-                        verify(productClient).processOrderItems(ProcessOrderItemsRequest.builder()
-                                        .originalItems(anySet())
-                                        .updatedItems(anySet())
-                                        .build());
+                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
                 }
         }
 
@@ -240,11 +229,15 @@ class OrderServiceTest {
         @DisplayName("更新訂單業務邏輯")
         class UpdateOrderTests {
 
-                @ParameterizedTest
-                @ValueSource(ints = { 999, 888 })
+                @ParameterizedTest(name = "[{index}] {0} (ID: {1})")
+                @CsvSource({
+                                "測試一般不存在ID, 888",
+                                "測試負數非法ID, -1"
+                })
                 @DisplayName("更新時若訂單 ID 不存在，應拋出 ResourceNotFoundException")
-                void updateOrder_WhenOrderNotFound_ShouldThrowException(Integer nonExistentId) {
+                void updateOrder_WhenOrderNotFound_ShouldThrowException(String scenario, Integer nonExistentId) {
                         // Arrange
+                        // 關鍵修正：增加 String scenario 參數來接收 @CsvSource 的第一欄文字
                         UpdateOrderRequest request = new UpdateOrderRequest(
                                         nonExistentId,
                                         STATUS_CREATED,
@@ -257,6 +250,10 @@ class OrderServiceTest {
                                         .isInstanceOf(ResourceNotFoundException.class)
                                         .hasMessageContaining("Order not found")
                                         .hasMessageContaining(String.valueOf(nonExistentId));
+
+                        // 實務建議：驗證後續的 Repository 或 Client 動作都不應該被執行
+                        verify(orderInfoRepository, never()).save(any());
+                        verifyNoInteractions(productClient);
                 }
 
                 @Test
@@ -272,10 +269,8 @@ class OrderServiceTest {
 
                         // 關鍵：模擬 processOrderItems 拋出庫存不足異常
                         doThrow(new ProductStockNotEnoughException("庫存不足"))
-                                        .when(productClient).processOrderItems(ProcessOrderItemsRequest.builder()
-                                                        .originalItems(anySet())
-                                                        .updatedItems(anySet())
-                                                        .build());
+                                        .when(productClient)
+                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.updateOrder(request))
@@ -303,10 +298,7 @@ class OrderServiceTest {
 
                         // Assert
                         verify(orderInfoRepository).delete(order);
-                        verify(productClient).processOrderItems(ProcessOrderItemsRequest.builder()
-                                        .originalItems(anySet())
-                                        .updatedItems(anySet())
-                                        .build());
+                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
                 }
         }
 
@@ -314,16 +306,27 @@ class OrderServiceTest {
         @DisplayName("刪除訂單業務邏輯")
         class DeleteOrderTests {
 
-                @ParameterizedTest
-                @ValueSource(ints = { 999, 888 })
+                @ParameterizedTest(name = "[{index}] {0} (ID: {1})")
+                @CsvSource({
+                                "測試一般不存在ID, 888",
+                                "測試負數非法ID, -1"
+                })
                 @DisplayName("刪除時若訂單不存在，應拋出 ResourceNotFoundException")
-                void deleteOrder_WhenNotFound_ShouldThrowException(Integer nonExistentId) {
+                void deleteOrder_WhenNotFound_ShouldThrowException(String scenario, Integer nonExistentId) {
+                        // Arrange
+                        // 關鍵修正：增加 String scenario 參數來接收 @CsvSource 的第一欄文字
                         when(orderInfoRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
+                        // Act & Assert
                         assertThatThrownBy(() -> orderService.deleteOrder(nonExistentId))
                                         .isInstanceOf(ResourceNotFoundException.class)
                                         .hasMessageContaining("Order not found")
                                         .hasMessageContaining(String.valueOf(nonExistentId));
+
+                        // Verify: 實務防禦性驗證
+                        // 確保沒有呼叫刪除動作，且沒有與庫存服務進行任何交互
+                        verify(orderInfoRepository, never()).delete(any());
+                        verifyNoInteractions(productClient);
                 }
 
                 @Test

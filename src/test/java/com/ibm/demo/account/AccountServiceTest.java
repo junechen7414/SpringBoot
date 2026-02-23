@@ -3,7 +3,10 @@ package com.ibm.demo.account;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,7 +17,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -60,7 +63,7 @@ public class AccountServiceTest {
         void createAccount_Success() {
             // Arrange
             CreateAccountRequest request = new CreateAccountRequest(DEFAULT_NAME);
-            
+
             Account savedAccount = new Account();
             savedAccount.setId(100);
             when(accountRepository.save(any(Account.class))).thenReturn(savedAccount);
@@ -88,9 +91,8 @@ public class AccountServiceTest {
         void getAccountList_Success() {
             // Arrange
             List<GetAccountListResponse> expectedList = List.of(
-                new GetAccountListResponse(1, "User1", STATUS_ACTIVE),
-                new GetAccountListResponse(2, "User2", STATUS_INACTIVE)
-            );
+                    new GetAccountListResponse(1, "User1", STATUS_ACTIVE),
+                    new GetAccountListResponse(2, "User2", STATUS_INACTIVE));
             when(accountRepository.findAllAccount()).thenReturn(expectedList);
 
             // Act
@@ -124,16 +126,24 @@ public class AccountServiceTest {
     @DisplayName("查詢帳戶業務邏輯")
     class GetAccountTests {
 
-        @ParameterizedTest
-        @ValueSource(ints = {999, 888})
+        @ParameterizedTest(name = "[{index}] {0} (ID: {1})")
+        @CsvSource({
+                "測試一般不存在ID, 888",
+                "測試負數非法ID, -1"
+        })
         @DisplayName("查詢時若 ID 不存在，應拋出 ResourceNotFoundException")
-        void getAccountDetail_WhenNotFound_ShouldThrowException(Integer nonExistentId) {
-            when(accountRepository.findById(nonExistentId)).thenReturn(Optional.empty());
+        void getAccountDetail_WhenNotFound_ShouldThrowException(String scenario, Integer id) {
+            // Arrange
+            when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> accountService.getAccountDetail(nonExistentId))
+            // Act & Assert
+            assertThatThrownBy(() -> accountService.getAccountDetail(id))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("not found")
-                    .hasMessageContaining(String.valueOf(nonExistentId));
+                    .hasMessageContaining(String.valueOf(id));
+
+            // Verify
+            verifyNoInteractions(orderClient); // 確保未發起跨服務調用
         }
     }
 
@@ -163,7 +173,7 @@ public class AccountServiceTest {
             assertThat(captor.getValue())
                     .hasFieldOrPropertyWithValue("name", "Updated Name")
                     .hasFieldOrPropertyWithValue("status", STATUS_ACTIVE);
-            
+
             // 重要驗證：確保沒有呼叫 orderClient（因為是啟用帳戶）
             verifyNoInteractions(orderClient);
         }
@@ -259,18 +269,28 @@ public class AccountServiceTest {
     @DisplayName("刪除帳戶業務邏輯")
     class DeleteAccountTests {
 
-        @ParameterizedTest
-        @ValueSource(ints = {888, 777})
+        @ParameterizedTest(name = "[{index}] {0} (ID: {1})")
+        @CsvSource({
+                "測試一般不存在ID, 888",
+                "測試負數非法ID, -1"
+        })
         @DisplayName("刪除時若 ID 不存在，應拋出 ResourceNotFoundException")
-        void deleteAccount_WhenNotFound_ShouldThrowException(Integer id) {
+        void deleteAccount_WhenNotFound_ShouldThrowException(String scenario, Integer id) {
+            // Arrange: 模擬資料不存在
+            // 關鍵修正：增加 String scenario 參數以對應 @CsvSource 的第一欄
             when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
+            // Act & Assert: 執行並驗證異常
             assertThatThrownBy(() -> accountService.deleteAccount(id))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("not found")
                     .hasMessageContaining(String.valueOf(id));
 
+            // Verify: 驗證副作用
             verifyNoInteractions(orderClient);
+
+            // 實務建議：明確驗證 delete 動作未執行，增加測試嚴謹度
+            verify(accountRepository, never()).delete(any());
         }
 
         @Test
