@@ -35,23 +35,33 @@ import com.ibm.demo.util.ProcessOrderItemsRequest;
 import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class OrderService {
-        private OrderInfoRepository orderInfoRepository;
-        private OrderDetailRepository orderDetailRepository;
+        private final OrderInfoRepository orderInfoRepository;
+        private final OrderDetailRepository orderDetailRepository;
         private final AccountClient accountClient;
         private final ProductClient productClient;
 
-        public OrderService(OrderInfoRepository orderInfoRepository,
-                        OrderDetailRepository orderDetailRepository,
-                        AccountClient accountClient,
-                        ProductClient productClient) {
-                this.orderInfoRepository = orderInfoRepository;
-                this.orderDetailRepository = orderDetailRepository;
-                this.accountClient = accountClient;
-                this.productClient = productClient;
-        }
+
+        /**
+         * 注入Repository和Client，已用lombok註解RequiredArgsConstructor定義建構子。
+         * @param orderInfoRepository 訂單主檔資料庫存取介面
+         * @param orderDetailRepository 訂單明細資料庫存取介面
+         * @param accountClient 帳戶服務的Client，用於驗證帳戶狀態
+         * @param productClient 商品服務的Client，用於驗證商品庫存和獲取商品資訊
+         */
+        // public OrderService(OrderInfoRepository orderInfoRepository,
+        //                 OrderDetailRepository orderDetailRepository,
+        //                 AccountClient accountClient,
+        //                 ProductClient productClient) {
+        //         this.orderInfoRepository = orderInfoRepository;
+        //         this.orderDetailRepository = orderDetailRepository;
+        //         this.accountClient = accountClient;
+        //         this.productClient = productClient;
+        // }
 
         /**
          * @param createOrderRequest

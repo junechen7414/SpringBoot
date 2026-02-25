@@ -20,19 +20,21 @@ import com.ibm.demo.util.OrderItemRequest;
 import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class ProductService {
     private final ProductRepository productRepository;
 
     /**
-     * 建構子，注入 ProductRepository。
+     * 建構子，注入 Repository，已用lombok註解RequiredArgsConstructor定義。
      *
      * @param productRepository 商品資料庫存取介面
      */
-    public ProductService(ProductRepository productRepository) {
-        this.productRepository = productRepository;
-    }
+    // public ProductService(ProductRepository productRepository) {
+    //     this.productRepository = productRepository;
+    // }
 
     /**
      * 建立新商品。
