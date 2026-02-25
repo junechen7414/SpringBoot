@@ -15,16 +15,23 @@ import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class AccountService {
     private final AccountRepository accountRepository;
     private final OrderClient orderClient;
 
-    public AccountService(AccountRepository accountRepository, OrderClient orderClient) {
-        this.accountRepository = accountRepository;
-        this.orderClient = orderClient;
-    }
+    /**
+     * 注入Repository和Client，已用lombok註解RequiredArgsConstructor定義建構子。
+     * @param accountRepository
+     * @param orderClient
+     */
+    // public AccountService(AccountRepository accountRepository, OrderClient orderClient) {
+    //     this.accountRepository = accountRepository;
+    //     this.orderClient = orderClient;
+    // }
 
     /**
      * @param account_DTO
