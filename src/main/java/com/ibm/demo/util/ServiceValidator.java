@@ -1,6 +1,6 @@
 package com.ibm.demo.util;
 
-import com.ibm.demo.exception.InvalidRequestException;
+import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
 
 public class ServiceValidator {
     // 私有建構子，防止這個工具類別被執行實例化

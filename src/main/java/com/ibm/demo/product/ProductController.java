@@ -79,17 +79,6 @@ public class ProductController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * 批量更新商品庫存
-     *
-     * @param stockUpdates Map<商品ID, 新庫存數量>
-     */
-    @Operation(summary = "批量更新商品庫存", description = "傳入key是id value是要更新的庫存量之 Map，檢核有value = null 和傳入空列表時拋出例外")
-    @PutMapping("/batchUpdateStockQuantity")
-    public void updateProductsStock(@RequestBody Map<Integer, Integer> stockUpdates) {
-        productService.updateProductsStock(stockUpdates);
-    }
-
     @Operation(summary = "處理訂單中的商品", description = "處理訂單中的商品資訊")
     @PostMapping("/processOrderItems")
     public void processOrderItems(@RequestBody ProcessOrderItemsRequest request) {
