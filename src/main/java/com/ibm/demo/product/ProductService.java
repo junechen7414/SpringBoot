@@ -135,48 +135,6 @@ public class ProductService {
         productRepository.delete(existingProduct);
     }
 
-    /**
-     * 批量更新商品庫存。
-     * 
-     * @param stockUpdates Map<商品ID, 新庫存數量>
-     */
-    @Transactional
-    public void updateProductsStock(Map<Integer, Integer> stockUpdates) {
-        ServiceValidator.validateNotNull(stockUpdates, "Stock updates map");
-
-        // 驗證 stockUpdates 中的值不能為 null，且不能為負數 (如果這是業務需求)
-        for (Map.Entry<Integer, Integer> entry : stockUpdates.entrySet()) {
-            Integer productId = entry.getKey();
-            Integer newStock = entry.getValue();
-
-            ServiceValidator.validateNotNull(productId, "Product ID in stock updates");
-            ServiceValidator.validateNotNull(newStock, "Stock quantity for product ID " + productId);
-
-            if (newStock < 0) {
-                // 假設庫存不能為負
-                throw new InvalidRequestException(
-                        "Stock quantity for product ID " + productId + " cannot be negative.");
-            }
-        }
-
-        Set<Integer> productIdsToUpdate = stockUpdates.keySet();
-        List<Product> products = findProductsByIds(productIdsToUpdate);
-
-        // 確保請求中的所有 ID 都找到了對應的商品，如果需要嚴格檢查
-        if (products.size() != productIdsToUpdate.size()) {
-            Set<Integer> foundProductIds = products.stream().map(Product::getId).collect(Collectors.toSet());
-            productIdsToUpdate.removeAll(foundProductIds); // 找出未找到的 ID
-            throw new ResourceNotFoundException("Some products not found for IDs: " + productIdsToUpdate);
-        }
-
-        for (Product product : products) {
-            Integer newStock = stockUpdates.get(product.getId());
-            product.setAvailable(newStock);
-        }
-
-        productRepository.saveAll(products);
-    }
-
     @Transactional
     public void processOrderItems(Set<OrderItemRequest> originalItems, Set<OrderItemRequest> updatedItems) {
         // 0. 驗證輸入的訂單商品明細集合是否為空

@@ -12,8 +12,8 @@ import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.exception.ApiErrorResponse;
-import com.ibm.demo.exception.InvalidRequestException;
-import com.ibm.demo.exception.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
+import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.product.ProductClient;
 
@@ -41,8 +41,8 @@ public class RestClientConfig {
                     } catch (Exception e) {
                     }
 
-                    String msg = (error != null && error.getMessage() != null)
-                            ? error.getMessage()
+                    String msg = (error != null && error.message() != null)
+                            ? error.message()
                             : response.getStatusText();
 
                     if (response.getStatusCode() == HttpStatus.NOT_FOUND) {

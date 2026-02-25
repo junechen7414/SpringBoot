@@ -100,20 +100,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
         }
 
-        // 修改：處理所有其他未捕捉的 RuntimeException
-        @ExceptionHandler(Exception.class)
-        public ResponseEntity<ApiErrorResponse> handleGenericException(
-                        Exception ex, WebRequest request) {
-                logger.error("未預期的錯誤發生: Path=" + request.getDescription(false), ex);
-
-                ApiErrorResponse apiErrorResponse = new ApiErrorResponse(
-                                LocalDateTime.now(),
-                                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                                "Internal Server Error",
-                                "發生未預期的錯誤。"
-                // ,request.getDescription(false).replace("uri=", "")
-                );
-
-                return new ResponseEntity<>(apiErrorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+    private ResponseEntity<ApiErrorResponse> createResponseEntity(HttpStatus status, String errorType, String message) {
+        ApiErrorResponse apiErrorResponse = ApiErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(status.value())
+                .error(errorType)
+                .message(message)
+                .build();
+        return new ResponseEntity<>(apiErrorResponse, status);
+    }
 }
