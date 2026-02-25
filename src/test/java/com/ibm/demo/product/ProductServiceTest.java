@@ -24,8 +24,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.enums.ProductStatus;
-import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
+import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 
