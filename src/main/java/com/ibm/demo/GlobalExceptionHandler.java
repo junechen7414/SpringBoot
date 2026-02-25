@@ -33,7 +33,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * 優化：使用 Stream API 提升可讀性處理參數校驗
+     * 優化：MethodArgumentNotValidException包含過多不必要資訊也會有回應格式的不一致性前端必須寫2套邏輯來處理錯誤，因此改為統一格式回應給前端，并且將錯誤訊息格式化為更易讀的形式。
+     * 例如：參數驗證失敗: [field1: must not be null]; [field2: must be positive]
      */
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
