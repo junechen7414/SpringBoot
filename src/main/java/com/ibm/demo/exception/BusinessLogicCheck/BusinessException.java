@@ -1,7 +1,20 @@
 package com.ibm.demo.exception.BusinessLogicCheck;
 
+import com.ibm.demo.util.ErrorCode;
+
+import lombok.Getter;
+
+@Getter
 public abstract class BusinessException extends RuntimeException {
-    public BusinessException(String message) {
+    private final ErrorCode errorCode;
+
+    public BusinessException(ErrorCode errorCode) {
+        super(errorCode.getMessage());
+        this.errorCode = errorCode;
+    }
+
+    public BusinessException(ErrorCode errorCode, String message) {
         super(message);
+        this.errorCode = errorCode;
     }
 }
