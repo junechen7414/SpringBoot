@@ -9,10 +9,9 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.enums.ProductStatus;
-import com.ibm.demo.exception.InvalidRequestException;
-import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
+import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
@@ -137,9 +136,24 @@ public class ProductService {
 
     @Transactional
     public void processOrderItems(Set<OrderItemRequest> originalItems, Set<OrderItemRequest> updatedItems) {
-        // 0. 驗證輸入的訂單商品明細集合是否為空
+        // 0. 驗證輸入的訂單商品明細集合是否為空，且updatedItems中productId要存在，否則拋出ResourceNotFound
         ServiceValidator.validateNotNull(originalItems, "Original order items");
         ServiceValidator.validateNotNull(updatedItems, "Updated order items");
+
+        Set<Integer> updatedProductIds = updatedItems.stream()
+                .map(OrderItemRequest::productId)
+                .collect(Collectors.toSet());
+
+        if (!updatedProductIds.isEmpty()) {
+            List<Product> foundProducts = productRepository.findAllById(updatedProductIds);
+            if (foundProducts.size() != updatedProductIds.size()) {
+                Set<Integer> foundIds = foundProducts.stream().map(Product::getId).collect(Collectors.toSet());
+                String missingIds = updatedProductIds.stream().filter(id -> !foundIds.contains(id))
+                        .map(String::valueOf).collect(Collectors.joining(", "));
+                throw new ResourceNotFoundException("Products not found with IDs: " + missingIds);
+            }
+        }
+
         // 1. 將新舊項目轉成 Map，方便快速比對 (Key: ProductId, Value: Quantity)
         Map<Integer, Integer> oldMap = originalItems.stream()
                 .collect(Collectors.toMap(OrderItemRequest::productId, OrderItemRequest::quantity));
