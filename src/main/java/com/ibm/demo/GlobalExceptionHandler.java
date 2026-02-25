@@ -1,104 +1,62 @@
 package com.ibm.demo;
 
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import com.ibm.demo.exception.ApiErrorResponse;
-import com.ibm.demo.exception.InvalidRequestException;
-import com.ibm.demo.exception.ResourceNotFoundException;
 import com.ibm.demo.exception.BusinessLogicCheck.BusinessException;
+import com.ibm.demo.util.ErrorCode;
 
-@ControllerAdvice
+@RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
-        // 處理 ResourceNotFoundException
-        @ExceptionHandler(ResourceNotFoundException.class)
-        public ResponseEntity<ApiErrorResponse> handleResourceNotFoundException(
-                        ResourceNotFoundException ex, WebRequest request) {
+    /**
+     * 優化：利用 BusinessException 帶出來的狀態碼動態處理
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException ex) {
+        ErrorCode errorCode = ex.getErrorCode();
+        HttpStatus status = (errorCode != null) ? errorCode.getStatus() : HttpStatus.BAD_REQUEST;
+        String errorType = (errorCode != null) ? errorCode.getMessage() : "Business Error";
 
-                ApiErrorResponse apiErrorResponse = new ApiErrorResponse(
-                                LocalDateTime.now(),
-                                HttpStatus.NOT_FOUND.value(),
-                                "Not Found",
-                                ex.getMessage()
-                // ,request.getDescription(false) //參數includeClientInfo false表示不包含客戶端資訊session
-                // id 和 username
-                // .replace("uri=", "")
-                );
+        return createResponseEntity(status, errorType, ex.getMessage());
+    }
 
-                // 找不到資源時，回傳 404 NOT FOUND
-                return new ResponseEntity<>(apiErrorResponse, HttpStatus.NOT_FOUND);
-        }
+    /**
+     * 優化：使用 Stream API 提升可讀性處理參數校驗
+     */
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(
+            MethodArgumentNotValidException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
 
-        // 處理 BusinessException
-        @ExceptionHandler(BusinessException.class)
-        public ResponseEntity<ApiErrorResponse> handleBusinessException(
-                        BusinessException ex, WebRequest request) {
-                ApiErrorResponse apiErrorResponse = new ApiErrorResponse(
-                                LocalDateTime.now(),
-                                HttpStatus.BAD_REQUEST.value(),
-                                "Bad Request",
-                                ex.getMessage()
-                // ,request.getDescription(false).replace("uri=", "")
-                );
-                return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
-        }
+        String detailedMessage = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(error -> String.format("[%s: %s]", error.getField(), error.getDefaultMessage()))
+                .collect(Collectors.joining("; "));
 
-        // 修改：處理 InvalidRequestException
-        @ExceptionHandler(InvalidRequestException.class)
-        public ResponseEntity<ApiErrorResponse> handleInvalidRequestException(
-                        InvalidRequestException ex, WebRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(status.value())
+                .error("Validation Error")
+                .message("參數驗證失敗: " + detailedMessage)
+                .build();
 
-                ApiErrorResponse apiErrorResponse = new ApiErrorResponse(
-                                LocalDateTime.now(),
-                                HttpStatus.BAD_REQUEST.value(),
-                                "Bad Request",
-                                ex.getMessage()
-                // ,request.getDescription(false).replace("uri=", "")
-                );
-
-                return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
-        }
-
-        // 處理MethodArgumentNotValidException
-        @Override
-        // 移除 @ExceptionHandler(MethodArgumentNotValidException.class) 因為繼承的方法已有
-        protected ResponseEntity<Object> handleMethodArgumentNotValid(
-                        MethodArgumentNotValidException ex,
-                        org.springframework.http.HttpHeaders headers, // 修正 import
-                        HttpStatusCode status, // 使用 HttpStatusCode
-                        WebRequest request) {
-
-                // 用 StringBuilder 來組合多個錯誤訊息
-                StringBuilder errorMessage = new StringBuilder("Validation failed: ");
-                ex.getBindingResult().getFieldErrors().forEach(fieldError -> {
-                        errorMessage.append("[Field: '")
-                                        .append(fieldError.getField())
-                                        .append("', Message: '")
-                                        .append(fieldError.getDefaultMessage())
-                                        .append("']; ");
-                });
-                // 移除最後多餘的分號和空格
-                if (errorMessage.length() > "Validation failed: ".length()) {
-                        errorMessage.setLength(errorMessage.length() - 2);
-                }
-
-                ApiErrorResponse apiErrorResponse = new ApiErrorResponse(
-                                LocalDateTime.now(),
-                                HttpStatus.BAD_REQUEST.value(),
-                                "Validation Error", // 可以給一個更明確的錯誤類型
-                                errorMessage.toString() // 使用組合後的訊息
-                );
-                return new ResponseEntity<>(apiErrorResponse, HttpStatus.BAD_REQUEST);
-        }
+        return new ResponseEntity<>(response, status);
+    }
 
     private ResponseEntity<ApiErrorResponse> createResponseEntity(HttpStatus status, String errorType, String message) {
         ApiErrorResponse apiErrorResponse = ApiErrorResponse.builder()
