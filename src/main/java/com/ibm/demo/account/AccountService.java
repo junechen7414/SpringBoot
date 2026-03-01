@@ -3,6 +3,7 @@ package com.ibm.demo.account;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
@@ -14,7 +15,6 @@ import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.util.ServiceValidator;
 
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -75,18 +75,12 @@ public class AccountService {
         // 1. 取得帳戶實體並驗證帳戶是否存在否則拋出例外
         Integer accountId = updateAccountRequestDto.id();
         Account existingAccount = findAccountByIdOrThrow(accountId);
-        // 2. 宣告和初始化帳戶更新前後的狀態
-        String originalStatus = existingAccount.getStatus();
-        String newStatus = updateAccountRequestDto.status();
 
-        // 3. 設定帳戶實體的物件
+        // 2. 更新帳戶名稱
         existingAccount.setName(updateAccountRequestDto.name());
 
-        // 4. 驗證帳戶狀態是否更新，若有更新且要更新為N需檢核是否該帳戶仍有關聯的訂單，若仍有關聯的訂單不可更改狀態為N
-        if (!originalStatus.equals(newStatus) && AccountStatus.INACTIVE.getCode().equals(newStatus)) {
-            checkAccountHasNoOrdersOrThrow(accountId);
-        }
-        existingAccount.setStatus(newStatus);
+        // 3. 更新帳戶狀態 (包含業務邏輯檢查)
+        updateAccountStatus(existingAccount, updateAccountRequestDto.status());
 
         // 5. 儲存帳戶實體
         accountRepository.save(existingAccount);
@@ -107,7 +101,10 @@ public class AccountService {
     // --- Private Helper Methods ---
 
     private GetAccountDetailResponse mapAccountToDetailResponse(Account account) {
-        return new GetAccountDetailResponse(account.getName(), account.getStatus());
+        return GetAccountDetailResponse.builder()
+                .name(account.getName())
+                .status(account.getStatus())
+                .build();
     }
 
     /**
@@ -129,5 +126,18 @@ public class AccountService {
             throw new AccountStillHasOrderCanNotBeDeleteException(
                     "Account with id: " + accountId + " has associated orders and cannot be set to deactivate.");
         }
+    }
+
+    /**
+     * 更新帳戶狀態，並在需要時執行業務邏輯檢查。
+     * 如果狀態從啟用變為停用，會檢查帳戶是否仍有關聯訂單。
+     * @param account 要更新的帳戶實體
+     * @param newStatus 新的狀態碼
+     */
+    private void updateAccountStatus(Account account, String newStatus) {
+        if (!account.getStatus().equals(newStatus) && AccountStatus.INACTIVE.getCode().equals(newStatus)) {
+            checkAccountHasNoOrdersOrThrow(account.getId());
+        }
+        account.setStatus(newStatus);
     }
 }
