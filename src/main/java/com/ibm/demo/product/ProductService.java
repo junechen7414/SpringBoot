@@ -200,11 +200,12 @@ public class ProductService {
      * @return 商品詳細資訊 DTO
      */
     private GetProductDetailResponse mapProductToDetailResponse(Product product) {
-        return new GetProductDetailResponse(
-                product.getName(),
-                product.getPrice(),
-                product.getSaleStatus(),
-                product.getAvailable());
+        return GetProductDetailResponse.builder()
+                .name(product.getName())
+                .price(product.getPrice())
+                .saleStatus(product.getSaleStatus())
+                .available(product.getAvailable())
+                .build();
     }
 
     /**
@@ -213,7 +214,7 @@ public class ProductService {
      * @param productIds 商品 ID 集合
      * @return 包含查詢到的商品實體的列表
      */
-    public List<Product> findProductsByIds(Set<Integer> productIds) {
+    private List<Product> findProductsByIds(Set<Integer> productIds) {
         ServiceValidator.validateNotNull(productIds, "Product IDs");
         List<Product> products = productRepository.findAllById(productIds);
         return products;
@@ -225,7 +226,7 @@ public class ProductService {
      * @param products 商品實體列表
      * @return 以商品 ID 為鍵，商品詳細資訊 DTO 為值的 Map
      */
-    public Map<Integer, GetProductDetailResponse> mapProductsToDetailResponses(List<Product> products) {
+    private Map<Integer, GetProductDetailResponse> mapProductsToDetailResponses(List<Product> products) {
         return products.stream()
                 .collect(Collectors.toMap(Product::getId, this::mapProductToDetailResponse));
     }
@@ -244,7 +245,7 @@ public class ProductService {
      * @param productId 商品 ID
      * @return 找到的商品實體
      */
-    public Product findProductByIdOrThrow(Integer productId) {
+    private Product findProductByIdOrThrow(Integer productId) {
         ServiceValidator.validateNotNull(productId, "Product ID");
         Product result = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
