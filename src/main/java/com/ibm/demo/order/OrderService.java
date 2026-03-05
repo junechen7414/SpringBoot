@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -22,11 +21,9 @@ import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.order.DTO.OrderItemDTO;
-import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
-import com.ibm.demo.order.Repository.OrderDetailRepository;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
@@ -34,39 +31,37 @@ import com.ibm.demo.util.OrderItemRequest;
 import com.ibm.demo.util.ProcessOrderItemsRequest;
 import com.ibm.demo.util.ServiceValidator;
 
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class OrderService {
         private final OrderInfoRepository orderInfoRepository;
-        private final OrderDetailRepository orderDetailRepository;
         private final AccountClient accountClient;
         private final ProductClient productClient;
-
+        private final OrderTransactionalService orderTransactionalService;
 
         /**
          * 注入Repository和Client，已用lombok註解RequiredArgsConstructor定義建構子。
-         * @param orderInfoRepository 訂單主檔資料庫存取介面
+         * 
+         * @param orderInfoRepository   訂單主檔資料庫存取介面
          * @param orderDetailRepository 訂單明細資料庫存取介面
-         * @param accountClient 帳戶服務的Client，用於驗證帳戶狀態
-         * @param productClient 商品服務的Client，用於驗證商品庫存和獲取商品資訊
+         * @param accountClient         帳戶服務的Client，用於驗證帳戶狀態
+         * @param productClient         商品服務的Client，用於驗證商品庫存和獲取商品資訊
          */
         // public OrderService(OrderInfoRepository orderInfoRepository,
-        //                 OrderDetailRepository orderDetailRepository,
-        //                 AccountClient accountClient,
-        //                 ProductClient productClient) {
-        //         this.orderInfoRepository = orderInfoRepository;
-        //         this.orderDetailRepository = orderDetailRepository;
-        //         this.accountClient = accountClient;
-        //         this.productClient = productClient;
+        // OrderDetailRepository orderDetailRepository,
+        // AccountClient accountClient,
+        // ProductClient productClient) {
+        // this.orderInfoRepository = orderInfoRepository;
+        // this.orderDetailRepository = orderDetailRepository;
+        // this.accountClient = accountClient;
+        // this.productClient = productClient;
         // }
 
         /**
          * @param createOrderRequest
          */
-        @Transactional
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
                 ServiceValidator.validateNotNull(createOrderRequest.accountId(), "Account ID");
@@ -96,27 +91,8 @@ public class OrderService {
 
                 productClient.processOrderItems(request);
 
-                // 建立新訂單
-                OrderInfo newOrderInfo = OrderInfo.builder()
-                                .accountId(accountId)
-                                .status(OrderStatus.CREATED.getCode())
-                                .build();
-
-                OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
-                List<OrderDetail> orderDetails = createOrderRequest.orderDetails().stream()
-                                .map(detailRequest -> {
-                                        Integer productId = detailRequest.productId();
-                                        Integer quantity = detailRequest.quantity();
-                                        // 建立訂單明細
-                                        return OrderDetail.builder()
-                                                        .orderInfo(newOrderInfo)
-                                                        .productId(productId)
-                                                        .quantity(quantity)
-                                                        .build();
-                                })
-                                .collect(Collectors.toList());
-                orderDetailRepository.saveAll(orderDetails);
-                return savedOrderInfo.getId();
+                // 將資料庫操作委派給交易服務
+                return orderTransactionalService.createOrder(createOrderRequest);
         }
 
         public List<GetOrderListResponse> getOrderListByAccountId(Integer accountId) {
@@ -180,7 +156,6 @@ public class OrderService {
          * @param updateOrderRequest
          * @return UpdateOrderResponse
          */
-        @Transactional
         public void updateOrder(UpdateOrderRequest request) {
                 ServiceValidator.validateNotNull(request, "Update order request");
                 ServiceValidator.validateNotNull(request.orderId(), "Update order id");
@@ -214,44 +189,13 @@ public class OrderService {
 
                 productClient.processOrderItems(processRequest);
 
-                // 2. 準備 Map 以便比對
-                Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
-                                .collect(Collectors.toMap(OrderDetail::getProductId, Function.identity()));
-                Map<Integer, UpdateOrderDetailRequest> incomingMap = request.items().stream()
-                                .collect(Collectors.toMap(UpdateOrderDetailRequest::productId, Function.identity()));
-
-                // 3. 同步 Entity 集合
-                // 3A. 處理更新與刪除
-                List<OrderDetail> detailsToRemove = order.getOrderDetails().stream()
-                                .filter(detail -> !incomingMap.containsKey(detail.getProductId()))
-                                .collect(Collectors.toList());
-
-                order.getOrderDetails().removeAll(detailsToRemove);
-
-                order.getOrderDetails().forEach(detail -> {
-                        UpdateOrderDetailRequest incoming = incomingMap.get(detail.getProductId());
-                        detail.setQuantity(incoming.quantity());
-                });
-
-                // 3B. 處理新增
-                request.items().stream()
-                                .filter(item -> !existingMap.containsKey(item.productId()))
-                                .forEach(item -> order.getOrderDetails().add(
-                                                OrderDetail.builder()
-                                                                .orderInfo(order)
-                                                                .productId(item.productId())
-                                                                .quantity(item.quantity())
-                                                                .build()));
-
-                // 6. 更新訂單狀態並存檔
-                order.setStatus(request.orderStatus());
-                orderInfoRepository.save(order);
+                // 將資料庫操作委派給交易服務
+                orderTransactionalService.updateOrder(request, order);
         }
 
         /**
          * @param orderId
          */
-        @Transactional
         public void deleteOrder(Integer orderId) {
                 ServiceValidator.validateNotNull(orderId, "Order ID");
                 // 1. 獲取訂單資訊
@@ -272,7 +216,6 @@ public class OrderService {
                                                 .build())
                                 .collect(Collectors.toSet());
 
-                                
                 ProcessOrderItemsRequest processRequest = ProcessOrderItemsRequest.builder()
                                 .originalItems(originalItems)
                                 .updatedItems(Collections.emptySet())
@@ -280,8 +223,8 @@ public class OrderService {
 
                 productClient.processOrderItems(processRequest);
 
-                // 6. 刪除訂單，連鎖刪除訂單明細
-                orderInfoRepository.delete(existingOrderInfo);
+                // 將資料庫操作委派給交易服務
+                orderTransactionalService.deleteOrder(existingOrderInfo);
         }
 
         /**
