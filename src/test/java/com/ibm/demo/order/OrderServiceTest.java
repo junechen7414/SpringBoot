@@ -61,6 +61,8 @@ class OrderServiceTest {
 
         private OrderService orderService;
 
+        private OrderTransactionalService orderTransactionalService;
+
         // 測試常數
         private final Integer STATUS_CREATED = OrderStatus.CREATED.getCode();
         private final Integer STATUS_CANCELLED = OrderStatus.CANCELLED.getCode();
@@ -73,8 +75,9 @@ class OrderServiceTest {
         @BeforeEach
         void setUp() {
                 // 顯性建立 SUT
-                orderService = new OrderService(orderInfoRepository, orderDetailRepository, accountClient,
-                                productClient);
+                orderTransactionalService = new OrderTransactionalService(orderInfoRepository, orderDetailRepository);
+                orderService = new OrderService(orderInfoRepository, accountClient,
+                                productClient, orderTransactionalService);
         }
 
         @Nested
@@ -129,7 +132,10 @@ class OrderServiceTest {
                         Integer inactiveId = 2;
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(inactiveId)
-                                        .orderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)))
+                                        .orderDetails(List.of(CreateOrderDetailRequest.builder()
+                                                        .productId(SELLABLE_PRODUCT_ID)
+                                                        .quantity(1)
+                                                        .build()))
                                         .build();
 
                         GetAccountDetailResponse inactiveResponse = GetAccountDetailResponse.builder()
