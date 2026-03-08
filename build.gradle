@@ -31,6 +31,7 @@ dependencies {
 	developmentOnly "org.springframework.boot:spring-boot-devtools"
 	implementation 'org.springframework.boot:spring-boot-starter-aop'
 	implementation 'org.apache.httpcomponents.client5:httpclient5'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 }
 
 tasks.named('test') {
