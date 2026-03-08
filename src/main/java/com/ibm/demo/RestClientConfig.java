@@ -21,20 +21,23 @@ import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.product.ProductClient;
 
 @Configuration
-@EnableConfigurationProperties(AppProperties.class)
+@EnableConfigurationProperties({AppProperties.class, HttpClientProperties.class})
 public class RestClientConfig {
 
     private final AppProperties appProperties;
+    private final HttpClientProperties httpClientProperties;
 
     // 透過建構子注入，這是最現代化的做法
-    public RestClientConfig(AppProperties appProperties) {
+    public RestClientConfig(AppProperties appProperties, HttpClientProperties httpClientProperties) {
         this.appProperties = appProperties;
+        this.httpClientProperties = httpClientProperties;
     }
 
+    // 建立一個自訂的 ClientHttpRequestFactory，使用 Apache HttpClient 並配置連線池和超時
     private ClientHttpRequestFactory clientHttpRequestFactory() {
         PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
-        connectionManager.setMaxTotal(2000); // 總連線池上限
-        connectionManager.setDefaultMaxPerRoute(1500); // 每個單一服務 (如 Account) 的上限
+        connectionManager.setMaxTotal(httpClientProperties.getMaxTotal()); // 總連線池上限
+        connectionManager.setDefaultMaxPerRoute(httpClientProperties.getDefaultMaxPerRoute()); // 每個單一服務 (如 Account) 的上限
 
         HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory();
 
@@ -42,16 +45,19 @@ public class RestClientConfig {
                 .setConnectionManager(connectionManager)
                 // 關鍵：給予虛擬執行緒足夠的排隊時間，不要一拿不到連線就斷開
                 .setDefaultRequestConfig(RequestConfig.custom()
-                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)) // 從池中拿連線可以等 5 秒
-                        .setResponseTimeout(Timeout.ofSeconds(10)) // 等待 API 回傳可等 10 秒
+                        // 從池中拿連線可以等 5 秒
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(httpClientProperties.getConnectionRequestTimeout()))
+                        // 等待 API 回傳可等 10 秒
+                        .setResponseTimeout(Timeout.ofSeconds(httpClientProperties.getResponseTimeout()))
                         .build())
-                .evictIdleConnections(TimeValue.ofSeconds(30))
+                .evictIdleConnections(TimeValue.ofSeconds(httpClientProperties.getEvictIdleConnectionsPeriod()))
                 .build();
 
         factory.setHttpClient(httpClient);
         return factory;
     }
 
+    // 建立 HttpServiceProxyFactory，並將自訂的 ClientHttpRequestFactory 注入 RestClient
     @Bean
     public HttpServiceProxyFactory httpServiceProxyFactory(RestClient.Builder builder,
             RestClientErrorHandler errorHandler) {
