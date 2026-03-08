@@ -30,7 +30,7 @@ public class TestDataService {
             products.add(Product.builder()
                     .name("Product " + i)
                     .price(BigDecimal.valueOf((long) i * i))
-                    .available(i * i +888)
+                    .available(i * i +888888888)
                     .saleStatus(ProductStatus.AVAILABLE.getCode())
                     .build());
             accounts.add(Account.builder()

@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Getter
+// @Setter is needed for @ConfigurationProperties to work, because Spring needs to set the properties
 @Setter
 @Validated
 @ConfigurationProperties(prefix = "app")
