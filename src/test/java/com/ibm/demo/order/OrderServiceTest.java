@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -53,15 +52,13 @@ class OrderServiceTest {
         @Mock
         private OrderInfoRepository orderInfoRepository;
         @Mock
-        private OrderDetailRepository orderDetailRepository;
-        @Mock
         private AccountClient accountClient;
         @Mock
         private ProductClient productClient;
+        @Mock
+        private OrderTransactionalService orderTransactionalService;
 
         private OrderService orderService;
-
-        private OrderTransactionalService orderTransactionalService;
 
         // 測試常數
         private final Integer STATUS_CREATED = OrderStatus.CREATED.getCode();
@@ -74,8 +71,7 @@ class OrderServiceTest {
 
         @BeforeEach
         void setUp() {
-                // 顯性建立 SUT
-                orderTransactionalService = new OrderTransactionalService(orderInfoRepository, orderDetailRepository);
+                // 顯性建立 SUT (System Under Test)
                 orderService = new OrderService(orderInfoRepository, accountClient,
                                 productClient, orderTransactionalService);
         }
@@ -97,10 +93,10 @@ class OrderServiceTest {
                         when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
                                         .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
 
-                        // 2. 模擬儲存 OrderInfo
+                        // 2. 模擬交易服務層的行為
                         OrderInfo savedInfo = new OrderInfo();
                         savedInfo.setId(888);
-                        when(orderInfoRepository.save(any(OrderInfo.class))).thenReturn(savedInfo);
+                        when(orderTransactionalService.createOrderAndDetails(any(OrderInfo.class), anyList())).thenReturn(savedInfo);
 
                         // Act
                         Integer orderId = orderService.createOrder(request);
@@ -108,16 +104,16 @@ class OrderServiceTest {
                         // Assert
                         assertThat(orderId).isEqualTo(888);
 
-                        // Verify: 使用 ArgumentCaptor 驗證 OrderInfo 內容
+                        // Verify: 驗證核心依賴的互動
+                        verify(accountClient).getAccountDetail(ACTIVE_ACCOUNT_ID);
+                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
+
+                        // Verify: 驗證對交易服務的呼叫，並用 ArgumentCaptor 捕獲傳遞的 OrderInfo 內容
                         ArgumentCaptor<OrderInfo> infoCaptor = ArgumentCaptor.forClass(OrderInfo.class);
-                        verify(orderInfoRepository).save(infoCaptor.capture());
+                        verify(orderTransactionalService).createOrderAndDetails(infoCaptor.capture(), anyList());
                         assertThat(infoCaptor.getValue())
                                         .hasFieldOrPropertyWithValue("accountId", ACTIVE_ACCOUNT_ID)
                                         .hasFieldOrPropertyWithValue("status", STATUS_CREATED);
-
-                        verify(accountClient).getAccountDetail(ACTIVE_ACCOUNT_ID);
-                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
-                        verify(orderDetailRepository).saveAll(anyList());
                 }
         }
 
@@ -147,8 +143,8 @@ class OrderServiceTest {
                                         .isInstanceOf(AccountInactiveException.class)
                                         .hasMessageContaining("帳戶狀態");
 
-                        verify(orderInfoRepository, never()).save(any());
-                        verifyNoMoreInteractions(orderInfoRepository);
+                        verifyNoInteractions(productClient);
+                        verifyNoInteractions(orderTransactionalService);
                 }
 
                 @Test
@@ -174,8 +170,8 @@ class OrderServiceTest {
                                         .isInstanceOf(ProductInactiveException.class)
                                         .hasMessageContaining("商品不可銷售");
 
-                        // 驗證：既然拋異常了，後面的 save 絕對不該執行
-                        verify(orderInfoRepository, never()).save(any());
+                        // 驗證：既然拋異常了，後面的交易服務絕對不該執行
+                        verifyNoInteractions(orderTransactionalService);
                 }
 
                 @Test
@@ -200,7 +196,8 @@ class OrderServiceTest {
                                         .isInstanceOf(ProductStockNotEnoughException.class)
                                         .hasMessageContaining("庫存不足");
 
-                        verify(orderInfoRepository, never()).save(any());
+                        // 驗證：既然拋異常了，後面的交易服務絕對不該執行
+                        verifyNoInteractions(orderTransactionalService);
                 }
         }
 
@@ -225,11 +222,11 @@ class OrderServiceTest {
                         orderService.updateOrder(request);
 
                         // Assert
+                        // 驗證呼叫了交易層服務來儲存
                         ArgumentCaptor<OrderInfo> captor = ArgumentCaptor.forClass(OrderInfo.class);
-                        verify(orderInfoRepository).save(captor.capture());
+                        verify(orderTransactionalService).saveOrderAndDetails(captor.capture(), anyList());
                         assertThat(captor.getValue().getStatus()).isEqualTo(STATUS_CREATED);
-
-                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
+                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class)); // 庫存處理依然由 OrderService 編排
                 }
         }
 
@@ -259,9 +256,9 @@ class OrderServiceTest {
                                         .hasMessageContaining("Order not found")
                                         .hasMessageContaining(String.valueOf(nonExistentId));
 
-                        // 實務建議：驗證後續的 Repository 或 Client 動作都不應該被執行
-                        verify(orderInfoRepository, never()).save(any());
+                        // 實務建議：驗證後續的 Client 或交易服務都不應該被執行
                         verifyNoInteractions(productClient);
+                        verifyNoInteractions(orderTransactionalService);
                 }
 
                 @Test
@@ -285,8 +282,8 @@ class OrderServiceTest {
                                         .isInstanceOf(ProductStockNotEnoughException.class)
                                         .hasMessageContaining("庫存不足");
 
-                        // 驗證流程在拋出異常後中斷，沒有執行存檔
-                        verify(orderInfoRepository, never()).save(any());
+                        // 驗證流程在拋出異常後中斷，沒有執行交易服務
+                        verifyNoInteractions(orderTransactionalService);
                 }
         }
 
@@ -305,7 +302,7 @@ class OrderServiceTest {
                         orderService.deleteOrder(EXISTING_ORDER_ID);
 
                         // Assert
-                        verify(orderInfoRepository).delete(order);
+                        verify(orderTransactionalService).deleteOrderAndDetails(order);
                         verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
                 }
         }
@@ -333,8 +330,8 @@ class OrderServiceTest {
 
                         // Verify: 實務防禦性驗證
                         // 確保沒有呼叫刪除動作，且沒有與庫存服務進行任何交互
-                        verify(orderInfoRepository, never()).delete(any());
                         verifyNoInteractions(productClient);
+                        verifyNoInteractions(orderTransactionalService);
                 }
 
                 @Test
@@ -351,8 +348,8 @@ class OrderServiceTest {
                                         .hasMessageContaining("訂單狀態不允許刪除");
 
                         // 驗證：狀態不對，不應該執行後續任何儲存或扣庫存動作
-                        verify(orderInfoRepository, never()).save(any());
                         verifyNoInteractions(productClient);
+                        verifyNoInteractions(orderTransactionalService);
                 }
         }
 
