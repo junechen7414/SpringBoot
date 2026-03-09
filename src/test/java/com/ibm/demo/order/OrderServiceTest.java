@@ -3,11 +3,9 @@ package com.ibm.demo.order;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
@@ -40,7 +38,6 @@ import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderInfo;
-import com.ibm.demo.order.Repository.OrderDetailRepository;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.util.ProcessOrderItemsRequest;
@@ -94,9 +91,9 @@ class OrderServiceTest {
                                         .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
 
                         // 2. 模擬交易服務層的行為
-                        OrderInfo savedInfo = new OrderInfo();
-                        savedInfo.setId(888);
-                        when(orderTransactionalService.createOrderAndDetails(any(OrderInfo.class), anyList())).thenReturn(savedInfo);
+                        // OrderInfo savedInfo = new OrderInfo();
+                        // savedInfo.setId(888);
+                        when(orderTransactionalService.createOrder(any(CreateOrderRequest.class))).thenReturn(888);
 
                         // Act
                         Integer orderId = orderService.createOrder(request);
@@ -109,11 +106,11 @@ class OrderServiceTest {
                         verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
 
                         // Verify: 驗證對交易服務的呼叫，並用 ArgumentCaptor 捕獲傳遞的 OrderInfo 內容
-                        ArgumentCaptor<OrderInfo> infoCaptor = ArgumentCaptor.forClass(OrderInfo.class);
-                        verify(orderTransactionalService).createOrderAndDetails(infoCaptor.capture(), anyList());
-                        assertThat(infoCaptor.getValue())
-                                        .hasFieldOrPropertyWithValue("accountId", ACTIVE_ACCOUNT_ID)
-                                        .hasFieldOrPropertyWithValue("status", STATUS_CREATED);
+                        ArgumentCaptor<CreateOrderRequest> requestCaptor = ArgumentCaptor
+                                        .forClass(CreateOrderRequest.class);
+                        verify(orderTransactionalService).createOrder(requestCaptor.capture());
+                        assertThat(requestCaptor.getValue())
+                                        .hasFieldOrPropertyWithValue("accountId", ACTIVE_ACCOUNT_ID);
                 }
         }
 
@@ -223,10 +220,8 @@ class OrderServiceTest {
 
                         // Assert
                         // 驗證呼叫了交易層服務來儲存
-                        ArgumentCaptor<OrderInfo> captor = ArgumentCaptor.forClass(OrderInfo.class);
-                        verify(orderTransactionalService).saveOrderAndDetails(captor.capture(), anyList());
-                        assertThat(captor.getValue().getStatus()).isEqualTo(STATUS_CREATED);
-                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class)); // 庫存處理依然由 OrderService 編排
+                        verify(orderTransactionalService).updateOrder(request, existingOrder);
+                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class)); // 庫存處理依然由
                 }
         }
 
@@ -302,7 +297,7 @@ class OrderServiceTest {
                         orderService.deleteOrder(EXISTING_ORDER_ID);
 
                         // Assert
-                        verify(orderTransactionalService).deleteOrderAndDetails(order);
+                        verify(orderTransactionalService).deleteOrder(order);
                         verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
                 }
         }
