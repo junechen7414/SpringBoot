@@ -1,0 +1,19 @@
+// Prometheus 配置文件，定義了 Prometheus 的全局設置和抓取配置，以及 Grafana Alloy 的配置，將 Grafana Alloy 收集的數據發送到 Prometheus 中。
+prometheus.remote_write "local" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+// Grafana Alloy 配置文件，定義了 Grafana Alloy 的接收器和導出器，將 Grafana Alloy 收集的數據發送到 Prometheus 中。
+otelcol.receiver.otlp "default" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+  }
+}
+// 將 Grafana Alloy 收集的數據發送到 Prometheus 中，使用 Prometheus 的遠程寫入功能，將數據發送到 Prometheus 的接收器中。
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.local.receiver]
+}
