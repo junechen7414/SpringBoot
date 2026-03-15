@@ -1,4 +1,49 @@
 services:
+  app:
+    build: .
+    container_name: spring-boot-app
+    ports:
+      - "8787:8787"
+    environment:
+      # 透過環境變數注入，優於寫死在程式碼
+      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521/FREEPDB1
+      - SPRING_DATASOURCE_USERNAME=${ORACLE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${ORACLE_PASSWORD}
+    networks:
+      - backend-net
+    depends_on:
+      oracle-db:
+        condition: service_healthy # 關鍵：DB 健康才啟動 App
+      alloy:
+        condition: service_started
+  oracle-db:
+    image: container-registry.oracle.com/database/free:latest
+    container_name: oracle-db
+    ports:
+      - "1521:1521"
+    environment:
+      # Oracle DB 的環境變數設定，根據官方文件，這些是必要的參數
+      # Oracle 的啟動腳本（runOracle.sh）內部有一套預設的命名規則（預設 SID 就是 FREE，PDB 就是 FREEPDB1）。
+      - ORACLE_SID=FREE
+      - ORACLE_PDB=FREEPDB1
+      - ORACLE_USERNAME=${ORACLE_USERNAME}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      # 存放啟動腳本
+      - ./init-scripts:/opt/oracle/scripts/startup
+      # 存放範本檔案 (掛載到另一個自定義目錄)
+      - ./init-scripts-template:/opt/oracle/template
+    healthcheck:
+      # 透過 sqlplus 檢查 PDB 是否已經 Ready
+      test: [ "CMD-SHELL", "sqlplus -L ${ORACLE_USERNAME}/${ORACLE_PASSWORD}@FREEPDB1 <<<'exit;'" ]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    networks:
+      - backend-net
+
   # 使用 Grafana Alloy (現代化的收集器，取代舊的 Prometheus Agent)
   alloy:
     image: grafana/alloy:latest
