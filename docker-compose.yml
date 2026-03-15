@@ -78,3 +78,17 @@ services:
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+networks:
+  # 區分網路：app 只需要把資料推給 alloy，不需要直接接觸 prometheus
+  backend-net:
+    driver: bridge
+  # 監控工具之間的內部通訊
+  monitor-net:
+    driver: bridge
+
+volumes:
+  # 命名磁碟卷：確保你壓測完重啟容器，數據（圖表、指標）不會消失
+  alloy-data:
+  prometheus-data:
+  grafana-data:
+  oracle-data:
