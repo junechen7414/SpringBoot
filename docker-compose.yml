@@ -1,5 +1,6 @@
 services:
   app:
+    # 使用 Dockerfile 來構建 Spring Boot 應用的映像，確保 Dockerfile 位於與 docker-compose.yml 相同的目錄下
     build: .
     container_name: spring-boot-app
     ports:
