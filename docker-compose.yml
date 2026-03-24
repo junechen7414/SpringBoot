@@ -4,9 +4,9 @@ services:
     build: .
     container_name: spring-boot-app
     ports:
-      - "8787:8787"
+      - "8787:8787" # 本機訪問請用 localhost:8787
     environment:
-      # 透過環境變數注入，優於寫死在程式碼
+      # 內部溝通：使用服務名稱 'oracle-db' 而非 localhost
       - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521/FREEPDB1
       - SPRING_DATASOURCE_USERNAME=${ORACLE_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${ORACLE_PASSWORD}
