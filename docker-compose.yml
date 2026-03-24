@@ -1,7 +1,9 @@
 services:
+  # Service Name: app (Spring Boot 應用)
   app:
     # 使用 Dockerfile 來構建 Spring Boot 應用的映像，確保 Dockerfile 位於與 docker-compose.yml 相同的目錄下
     build: .
+    # 容器名稱，方便指令podman ps 等操作識別和管理，不用於真正的網路通信
     container_name: spring-boot-app
     ports:
       - "8787:8787" # 本機訪問請用 localhost:8787
