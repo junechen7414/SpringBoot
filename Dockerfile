@@ -25,6 +25,11 @@ WORKDIR /app
 # Gradle 預設產出路徑在 build/libs/
 COPY --from=build /app/build/libs/*.jar app.jar
 
+# --no-verbose: 不輸出冗長訊息，保持日誌清晰。
+# --spider: 只檢查 URL 是否可達，不下載內容。
+# alpine 包含 wget，不包含curl
+HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 CMD wget --no-verbose --tries=1 --spider http://localhost:8787/actuator/health || exit 1
+
 EXPOSE 8787
 
 # 執行jar檔
