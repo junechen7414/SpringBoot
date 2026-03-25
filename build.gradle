@@ -40,5 +40,11 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform{
+		// 讓 Gradle 讀取命令列傳入的屬性
+        def excludeTag = System.getProperty("junit.platform.exclude.tags")
+        if (excludeTag) {
+            excludeTags excludeTag
+        }
+	}
 }
