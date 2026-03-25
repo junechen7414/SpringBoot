@@ -2,7 +2,7 @@ name: Build and Push Backend Image
 
 on:
   push:
-    branches: [ "main"]
+    branches: [ "main" , "workflow-cache" ]
   workflow_dispatch:      # 允許手動從 GitHub 介面觸發
 
 jobs:
@@ -60,7 +60,12 @@ jobs:
           # meta-action 的id為 "meta"，透過參數的方式帶入上一步的設定
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # 去 GitHub Actions 的快取空間找是否有 Layer 的快取存在
-          cache-from: type=gha
-          # 把這次的 Layer 存到 GitHub Actions 的快取空間
-          cache-to: type=gha,mode=max
+          # 去 GitHub Actions 的快取找是否有 Layer 的快取存在
+          # 嘗試從兩個地方找快取：
+          # 1. 目前分支的專屬快取
+          # 2. main 分支的基準快取 (當做 fallback)
+          cache-from: |
+            type=gha,scope=${{ github.ref_name }}
+            type=gha,scope=main
+          # 把這次的 Layer 存到 GitHub Actions 的快取空間，只更新目前分支的快取
+          cache-to: type=gha,mode=max,scope=${{ github.ref_name }}
