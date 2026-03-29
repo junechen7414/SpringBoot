@@ -17,6 +17,8 @@ import org.springframework.web.client.support.RestClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
 import com.ibm.demo.account.AccountClient;
+import com.ibm.demo.config.properties.AppProperties;
+import com.ibm.demo.config.properties.HttpClientProperties;
 import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.product.ProductClient;
 

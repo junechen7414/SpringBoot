@@ -1,4 +1,4 @@
-package com.ibm.demo;
+package com.ibm.demo.config.properties;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
