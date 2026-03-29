@@ -15,7 +15,8 @@ public enum ErrorCode {
     PRODUCT_INACTIVE(HttpStatus.BAD_REQUEST, "PRODUCT_002", "商品尚未啟用"),
     PRODUCT_STOCK_NOT_ENOUGH(HttpStatus.BAD_REQUEST, "PRODUCT_003", "商品庫存不足"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "SYS_001", "找不到資源"),
-    INVALID_REQUEST(HttpStatus.BAD_REQUEST, "SYS_002", "無效的請求");
+    INVALID_REQUEST(HttpStatus.BAD_REQUEST, "SYS_002", "無效的請求"),
+    SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "SYS_003", "服務暫時不可用");
 
     private final HttpStatus status;
     private final String code;
