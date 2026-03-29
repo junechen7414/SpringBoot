@@ -1,4 +1,4 @@
-package com.ibm.demo;
+package com.ibm.demo.aspect;
 
 import java.util.Arrays;
 
