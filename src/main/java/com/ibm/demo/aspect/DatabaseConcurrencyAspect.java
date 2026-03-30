@@ -26,7 +26,7 @@ public class DatabaseConcurrencyAspect {
 
     @Autowired
     private DatabaseConcurrencyProperties properties;
-    
+
     // 存放不同資源的信號量
     private final Map<String, Semaphore> semaphoreMap = new ConcurrentHashMap<>();
 
@@ -36,9 +36,8 @@ public class DatabaseConcurrencyAspect {
 
         // 優先順序：配置文件中的自定義值 > 配置文件中的 defaultLimit > 註解上的 limit 值
         int limitCount = properties.getLimits().getOrDefault(
-            resourceName, 
-            properties.getDefaultLimit()
-        );
+                resourceName,
+                properties.getDefaultLimit());
 
         // 動態初始化 Semaphore
         Semaphore semaphore = semaphoreMap.computeIfAbsent(resourceName, k -> new Semaphore(limitCount));
@@ -47,8 +46,8 @@ public class DatabaseConcurrencyAspect {
         boolean acquired = semaphore.tryAcquire(3, TimeUnit.SECONDS);
 
         if (!acquired) {
-            log.warn("Concurrency limit reached for [{}]. Current available permits: {}. Rejecting request.", 
-                     resourceName, semaphore.availablePermits());
+            log.warn("Concurrency limit reached for [{}]. Current available permits: {}. Rejecting request.",
+                    resourceName, semaphore.availablePermits());
             throw new ServiceOverloadedException("系統忙碌中，請稍後再試。");
         }
 
