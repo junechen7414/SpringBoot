@@ -15,6 +15,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.BusinessLogicCheck.BusinessException;
+import com.ibm.demo.exception.BusinessLogicCheck.ServiceOverloadedException;
 import com.ibm.demo.util.ErrorCode;
 
 @RestControllerAdvice
@@ -30,6 +31,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         String errorType = (errorCode != null) ? errorCode.getMessage() : "Business Error";
 
         return createResponseEntity(status, errorType, ex.getMessage());
+    }
+
+    // 專門處理 ServiceOverloadedException，優先級高於 generic 的 BusinessException
+    @ExceptionHandler(ServiceOverloadedException.class)
+    public ResponseEntity<ApiErrorResponse> handleServiceOverloaded(ServiceOverloadedException ex) {
+        return createResponseEntity(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "System Overloaded",
+                ex.getMessage());
     }
 
     /**
