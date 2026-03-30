@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
+import com.ibm.demo.annotation.DatabaseConcurrencyLimit;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
@@ -62,6 +63,7 @@ public class OrderService {
         /**
          * @param createOrderRequest
          */
+        @DatabaseConcurrencyLimit(value ="OrderService")
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
                 ServiceValidator.validateNotNull(createOrderRequest.accountId(), "Account ID");
