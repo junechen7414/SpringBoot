@@ -20,7 +20,7 @@ public class DatabaseConcurrencyProperties {
     private Map<String, Integer> limits = new HashMap<>();
 
     /**
-     * 全域預設限制，若 limits 找不到對應資源則回歸此設定
+     * 全域預設限制，若 application properties 中 app.database.concurrency 沒有設定就會使用這個初始值
      */
-    private int defaultLimit = 22;
+    private int defaultLimit = 20;
 }
