@@ -22,5 +22,5 @@ public class DatabaseConcurrencyProperties {
     /**
      * 全域預設限制，若 limits 找不到對應資源則回歸此設定
      */
-    private int defaultLimit = 10;
+    private int defaultLimit = 22;
 }
