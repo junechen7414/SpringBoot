@@ -10,7 +10,6 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -18,14 +17,16 @@ import com.ibm.demo.annotation.DatabaseConcurrencyLimit;
 import com.ibm.demo.config.properties.DatabaseConcurrencyProperties;
 import com.ibm.demo.exception.BusinessLogicCheck.ServiceOverloadedException;
 
+import lombok.RequiredArgsConstructor;
+
 @Aspect
 @Component
+@RequiredArgsConstructor
 @Order(1) // 確保在 LoggingAspect 之前或之後執行，通常流量控制要在最外層
 public class DatabaseConcurrencyAspect {
     private static final Logger log = LoggerFactory.getLogger(DatabaseConcurrencyAspect.class);
 
-    @Autowired
-    private DatabaseConcurrencyProperties properties;
+    private final DatabaseConcurrencyProperties properties;
 
     // 存放不同資源的信號量
     private final Map<String, Semaphore> semaphoreMap = new ConcurrentHashMap<>();
