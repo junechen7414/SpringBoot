@@ -35,10 +35,9 @@ public class DatabaseConcurrencyAspect {
     public Object limit(ProceedingJoinPoint pjp, DatabaseConcurrencyLimit limitAnnotation) throws Throwable {
         String resourceName = limitAnnotation.value();
 
-        // 優先順序：配置文件中的自定義值 > 配置文件中的 defaultLimit > 註解上的 limit 值
-        int limitCount = properties.getLimits().getOrDefault(
-                resourceName,
-                properties.getDefaultLimit());
+        // 兩層：application.properties中 Map 指定值 > 全域預設值
+        final int limitCount = properties.getLimits()
+                .getOrDefault(resourceName, properties.getDefaultLimit());
 
         // 動態初始化 Semaphore
         Semaphore semaphore = semaphoreMap.computeIfAbsent(resourceName, k -> new Semaphore(limitCount));

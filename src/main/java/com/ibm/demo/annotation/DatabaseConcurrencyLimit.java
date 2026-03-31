@@ -10,6 +10,6 @@ import java.lang.annotation.Target;
 public @interface DatabaseConcurrencyLimit {
     /** 資源名稱，例如 "OrderService" */
     String value() default "default";
-    /** 允許的最大併發數 */
-    int limit() default 10;
+    // 移除 limit()，將數值控制權完全交給 Properties 檔，
+    // 可以統一管理測試參數，避免這裡有魔術數字
 }
