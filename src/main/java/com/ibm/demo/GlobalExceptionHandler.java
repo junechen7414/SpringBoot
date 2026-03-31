@@ -36,10 +36,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     // 專門處理 ServiceOverloadedException，優先級高於 generic 的 BusinessException
     @ExceptionHandler(ServiceOverloadedException.class)
     public ResponseEntity<ApiErrorResponse> handleServiceOverloaded(ServiceOverloadedException ex) {
-        return createResponseEntity(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "System Overloaded",
-                ex.getMessage());
+        ErrorCode errorCode = ex.getErrorCode();
+        HttpStatus status = (errorCode != null) ? errorCode.getStatus() : HttpStatus.SERVICE_UNAVAILABLE;
+        String errorType = (errorCode != null) ? errorCode.getMessage() : "Service Overloaded";
+        
+        return createResponseEntity(status, errorType, ex.getMessage());
     }
 
     /**
@@ -52,7 +53,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpHeaders headers,
             HttpStatusCode status,
             WebRequest request) {
-
         String detailedMessage = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
@@ -67,6 +67,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .build();
 
         return new ResponseEntity<>(response, status);
+
     }
 
     private ResponseEntity<ApiErrorResponse> createResponseEntity(HttpStatus status, String errorType, String message) {
