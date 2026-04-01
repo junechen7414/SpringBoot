@@ -1,4 +1,4 @@
-package com.ibm.demo;
+package com.ibm.demo.config;
 
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -16,24 +16,22 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.support.RestClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
+import com.ibm.demo.RestClientErrorHandler;
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.config.properties.AppProperties;
 import com.ibm.demo.config.properties.HttpClientProperties;
 import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.product.ProductClient;
 
+import lombok.RequiredArgsConstructor;
+
 @Configuration
-@EnableConfigurationProperties({AppProperties.class, HttpClientProperties.class})
+@RequiredArgsConstructor
+@EnableConfigurationProperties({ AppProperties.class, HttpClientProperties.class })
 public class RestClientConfig {
 
     private final AppProperties appProperties;
     private final HttpClientProperties httpClientProperties;
-
-    // 透過建構子注入，這是最現代化的做法
-    public RestClientConfig(AppProperties appProperties, HttpClientProperties httpClientProperties) {
-        this.appProperties = appProperties;
-        this.httpClientProperties = httpClientProperties;
-    }
 
     // 建立一個自訂的 ClientHttpRequestFactory，使用 Apache HttpClient 並配置連線池和超時
     private ClientHttpRequestFactory clientHttpRequestFactory() {
@@ -48,7 +46,8 @@ public class RestClientConfig {
                 // 關鍵：給予虛擬執行緒足夠的排隊時間，不要一拿不到連線就斷開
                 .setDefaultRequestConfig(RequestConfig.custom()
                         // 從池中拿連線可以等 5 秒
-                        .setConnectionRequestTimeout(Timeout.ofSeconds(httpClientProperties.getConnectionRequestTimeout()))
+                        .setConnectionRequestTimeout(
+                                Timeout.ofSeconds(httpClientProperties.getConnectionRequestTimeout()))
                         // 等待 API 回傳可等 10 秒
                         .setResponseTimeout(Timeout.ofSeconds(httpClientProperties.getResponseTimeout()))
                         .build())
