@@ -10,6 +10,8 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.annotation.AnnotationUtils;
+import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -31,8 +33,22 @@ public class DatabaseConcurrencyAspect {
     // 存放不同資源的信號量
     private final Map<String, Semaphore> semaphoreMap = new ConcurrentHashMap<>();
 
-    @Around("@annotation(limitAnnotation)")
-    public Object limit(ProceedingJoinPoint pjp, DatabaseConcurrencyLimit limitAnnotation) throws Throwable {
+    @Around("@within(com.ibm.demo.annotation.DatabaseConcurrencyLimit) || @annotation(com.ibm.demo.annotation.DatabaseConcurrencyLimit)")
+    public Object limit(ProceedingJoinPoint pjp) throws Throwable {
+        MethodSignature signature = (MethodSignature) pjp.getSignature();
+        
+        // 1. 優先尋找方法上的註解
+        DatabaseConcurrencyLimit limitAnnotation = AnnotationUtils.findAnnotation(signature.getMethod(), DatabaseConcurrencyLimit.class);
+        
+        // 2. 如果方法上沒有，則尋找類別上的註解
+        if (limitAnnotation == null) {
+            limitAnnotation = AnnotationUtils.findAnnotation(pjp.getTarget().getClass(), DatabaseConcurrencyLimit.class);
+        }
+
+        if (limitAnnotation == null) {
+            return pjp.proceed();
+        }
+
         String resourceName = limitAnnotation.value();
 
         // 兩層：application.properties中 Map 指定值 > 全域預設值

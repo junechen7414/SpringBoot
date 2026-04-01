@@ -36,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
+@DatabaseConcurrencyLimit(value = "OrderService")
 public class OrderService {
         private final OrderInfoRepository orderInfoRepository;
         private final AccountClient accountClient;
@@ -63,7 +64,6 @@ public class OrderService {
         /**
          * @param createOrderRequest
          */
-        @DatabaseConcurrencyLimit(value ="OrderService")
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
                 ServiceValidator.validateNotNull(createOrderRequest.accountId(), "Account ID");
