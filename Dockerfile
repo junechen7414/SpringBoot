@@ -32,5 +32,8 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 CMD wget
 
 EXPOSE 8787
 
-# 執行jar檔
+# 設定預設環境變數 (Fallback)
+ENV SPRING_PROFILES_ACTIVE=dev
+
+# 執行jar檔，會優先取得指令的環境變數
 ENTRYPOINT ["java", "-jar", "app.jar"]
