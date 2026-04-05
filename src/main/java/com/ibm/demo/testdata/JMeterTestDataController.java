@@ -16,7 +16,7 @@ import lombok.RequiredArgsConstructor;
 public class JMeterTestDataController {
     private final TestDataService testDataService;
 
-    @PostMapping("/createJMeterPrecondition")
+    @PostMapping("/create")
     public ResponseEntity<String> createJMeterPrecondition(@RequestParam Integer count) {
         testDataService.createOrderPrecondition(count);
         return ResponseEntity.ok(count + "Account and Product record created successfully.");
