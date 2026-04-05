@@ -23,7 +23,7 @@ public class TestDataService {
     private final AccountRepository accountRepository;
 
     @Transactional
-    public void createTestData(Integer count) {
+    public void createOrderPrecondition(Integer count) {
         List<Product> products = new ArrayList<>();
         List<Account> accounts = new ArrayList<>();
         for (int i = 0; i < count; i++) {
