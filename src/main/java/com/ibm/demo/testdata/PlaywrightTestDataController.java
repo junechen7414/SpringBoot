@@ -10,19 +10,12 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/testdata")
+@RequestMapping("/PlaywrightTestData")
 @RequiredArgsConstructor
-public class TestDataController {
+@Profile("test")
+public class PlaywrightTestDataController {
     private final TestDataService testDataService;
 
-    @Profile({ "dev" })
-    @PostMapping("/createJMeterPrecondition")
-    public ResponseEntity<String> createJMeterPrecondition(@RequestParam Integer count) {
-        testDataService.createOrderPrecondition(count);
-        return ResponseEntity.ok(count + "Account and Product record created successfully.");
-    }
-
-    @Profile({ "test" })
     @PostMapping("/createOrderPrecondition")
     public ResponseEntity<String> createOrderPrecondition(@RequestParam Integer count) {
         testDataService.createOrderPrecondition(count);
