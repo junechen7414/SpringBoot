@@ -19,7 +19,7 @@ import com.ibm.demo.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
 
 @Component
-@Profile({"dev", "test"})
+@Profile({"dev"})
 @RequiredArgsConstructor
 public class TestDataInitializer implements CommandLineRunner {
     private final ProductRepository productRepository;
