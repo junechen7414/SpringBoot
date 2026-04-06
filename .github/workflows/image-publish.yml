@@ -1,7 +1,7 @@
 name: Build and Push Backend Image
 
 on:
-  push:
+  pull_request:
     branches: [ "main"]
   workflow_dispatch:      # 允許手動從 GitHub 介面觸發
 
@@ -69,6 +69,12 @@ jobs:
             type=gha,scope=main
           # 把這次的 Layer 存到 GitHub Actions 的快取空間，只更新目前分支的快取
           cache-to: type=gha,mode=max,scope=${{ github.ref_name }}
+      - name: Trigger E2E Tests
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }} # 需要一個具備寫入權限的 Personal Access Token
+          repository: ${{vars.DEST_USER}}/${{vars.DEST_REPO}} # 目標 Repo
+          event-type: backend_image_updated
   # 新增的產文檔 Job，設定它「依賴」上一個 Job
   generate-docs:
     needs: build-and-push
