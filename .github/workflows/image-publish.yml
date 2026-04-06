@@ -69,3 +69,35 @@ jobs:
             type=gha,scope=main
           # 把這次的 Layer 存到 GitHub Actions 的快取空間，只更新目前分支的快取
           cache-to: type=gha,mode=max,scope=${{ github.ref_name }}
+  # 新增的產文檔 Job，設定它「依賴」上一個 Job
+  generate-docs:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle 
+
+      # 執行產生swagger文件的 Gradle 指令
+      - name: Generate Swagger JSON
+        run: ./gradlew generateOpenApiDocs
+
+      # 將產出的檔案推送到另一個 Repo
+      - name: Pushes to another repository
+        uses: cpina/github-action-push-to-another-repository@main
+        env:
+          # 你需要先在 Github Settings 產一個具有 Repo 權限的 PAT (Token)
+          API_TOKEN_GITHUB: ${{ secrets.MY_REPO_TOKEN }}
+        with:
+          source-directory: 'build/docs'
+          # 使用 vars 語法引用非敏感變數
+          destination-github-username: ${{ vars.DEST_USER }}
+          destination-repository-name: ${{ vars.DEST_REPO }}
+          user-email: ${{ vars.DEST_EMAIL }}
+          target-directory: 'docs/swagger'
+          target-branch: main
