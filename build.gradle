@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.13'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id "org.springdoc.openapi-gradle-plugin" version "1.9.0"
 }
 
 group = 'com.ibm'
@@ -11,6 +12,16 @@ java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)
 	}
+}
+
+openApi {
+	apiDocsUrl.set("http://localhost:8787/v3/api-docs")
+	outputDir.set(file("$buildDir/docs"))
+	outputFileName.set("swagger.json")
+	// 這是關鍵：強制指定使用的 Profile
+    customBootRun {
+        args = ["--spring.profiles.active=openapi"]
+    }
 }
 
 repositories {
@@ -37,6 +48,7 @@ dependencies {
     // 讓 Micrometer 支持 OTLP
     implementation 'io.micrometer:micrometer-registry-otlp'
 	implementation 'io.micrometer:micrometer-java21'
+	runtimeOnly 'com.h2database:h2'
 }
 
 tasks.named('test') {
