@@ -108,5 +108,5 @@ jobs:
           destination-github-username: ${{ vars.DEST_USER }}
           destination-repository-name: ${{ vars.DEST_REPO }}
           user-email: ${{ vars.DEST_EMAIL }}
-          target-directory: 'docs/swagger'
+          target-directory: 'docs/'
           target-branch: main
