@@ -98,12 +98,11 @@ jobs:
 
       # 將產出的檔案推送到另一個 Repo
       - name: Pushes to another repository
-        uses: cpina/github-action-push-to-another-repository@main
-        env:
-          # 你需要先在 Github Settings 產一個具有 Repo 權限的 PAT (Token)
-          API_TOKEN_GITHUB: ${{ secrets.MY_REPO_TOKEN }}
+        uses: cpina/github-action-push-to-another-repository@main        
         with:
           source-directory: 'build/docs'
+          # 需要先在 Github Settings 產一個具有 Repo 權限的 PAT (Token)
+          token: ${{ secrets.MY_REPO_TOKEN }}
           # 使用 vars 語法引用非敏感變數
           destination-github-username: ${{ vars.DEST_USER }}
           destination-repository-name: ${{ vars.DEST_REPO }}
