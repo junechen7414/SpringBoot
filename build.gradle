@@ -20,7 +20,7 @@ openApi {
 	outputFileName.set("swagger.json")
 	// 這是關鍵：強制指定使用的 Profile
     customBootRun {
-        args = ["--spring.profiles.active=openapi"]
+        args = ["--spring.profiles.active=openapi,test"]
     }
 }
 
