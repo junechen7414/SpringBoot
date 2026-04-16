@@ -199,7 +199,6 @@ class ProductServiceTest {
                         Product existingProduct = createTestProduct(id, oldName, oldPrice,
                                         STATUS_SELLABLE, 50);
                         UpdateProductRequest request = UpdateProductRequest.builder()
-                                        .id(id)
                                         .name(newName)
                                         .price(newPrice)
                                         .saleStatus(ProductStatus.AVAILABLE.getCode())
@@ -210,7 +209,7 @@ class ProductServiceTest {
                         when(productRepository.existsByName(newName)).thenReturn(false);
 
                         // Act
-                        productService.updateProduct(request);
+                        productService.updateProduct(id, request);
 
                         // Assert：使用 ArgumentCaptor 驗證更新後的產品內容
                         ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
@@ -229,7 +228,6 @@ class ProductServiceTest {
                         Product existingProduct = createTestProduct(ACTIVE_PRODUCT_ID, "Same Name", DEFAULT_PRICE,
                                         STATUS_SELLABLE, DEFAULT_STOCK);
                         UpdateProductRequest request = UpdateProductRequest.builder()
-                                        .id(ACTIVE_PRODUCT_ID)
                                         .name("Same Name")
                                         .price(new BigDecimal("25.00"))
                                         .saleStatus(ProductStatus.AVAILABLE.getCode())
@@ -241,7 +239,7 @@ class ProductServiceTest {
                         when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
 
                         // Act
-                        productService.updateProduct(request);
+                        productService.updateProduct(ACTIVE_PRODUCT_ID, request);
 
                         // Assert：驗證只呼叫一次 findById，不應呼叫 existsByName
                         verify(productRepository).findById(ACTIVE_PRODUCT_ID);
@@ -258,11 +256,11 @@ class ProductServiceTest {
                 @DisplayName("更新不存在的產品應拋出 ResourceNotFoundException")
                 void updateProduct_WhenNotFound_ShouldThrowException() {
                         UpdateProductRequest request = UpdateProductRequest.builder()
-                                        .id(999).name(NEW_PRODUCT_NAME).build();
+                                        .name(NEW_PRODUCT_NAME).build();
 
                         when(productRepository.findById(999)).thenReturn(Optional.empty());
 
-                        assertThatThrownBy(() -> productService.updateProduct(request))
+                        assertThatThrownBy(() -> productService.updateProduct(999, request))
                                         .isInstanceOf(ResourceNotFoundException.class)
                                         .hasMessageContaining("not found")
                                         .hasMessageContaining("999");
@@ -281,7 +279,6 @@ class ProductServiceTest {
                         Product existingProduct = createTestProduct(id, oldName, DEFAULT_PRICE, STATUS_SELLABLE,
                                         DEFAULT_STOCK);
                         UpdateProductRequest request = UpdateProductRequest.builder()
-                                        .id(id)
                                         .name(newName)
                                         .build();
 
@@ -289,7 +286,7 @@ class ProductServiceTest {
                         when(productRepository.existsByName(newName)).thenReturn(true);
 
                         // Act & Assert
-                        assertThatThrownBy(() -> productService.updateProduct(request))
+                        assertThatThrownBy(() -> productService.updateProduct(id, request))
                                         .isInstanceOf(ProductAlreadyExistException.class)
                                         .hasMessageContaining(newName)
                                         .hasMessageContaining("already exists");
