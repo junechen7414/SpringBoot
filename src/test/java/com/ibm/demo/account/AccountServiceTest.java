@@ -159,7 +159,6 @@ public class AccountServiceTest {
             // Arrange
             Account inactiveAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_INACTIVE);
             UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .id(ACTIVE_ACCOUNT_ID)
                     .name("Updated Name")
                     .status(STATUS_ACTIVE)
                     .build();
@@ -167,7 +166,7 @@ public class AccountServiceTest {
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(inactiveAccount));
 
             // Act
-            accountService.updateAccount(request);
+            accountService.updateAccount(ACTIVE_ACCOUNT_ID, request);
 
             // Assert
             ArgumentCaptor<Account> captor = ArgumentCaptor.forClass(Account.class);
@@ -186,7 +185,6 @@ public class AccountServiceTest {
             // Arrange
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
             UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .id(ACTIVE_ACCOUNT_ID)
                     .name("New Name")
                     .status(STATUS_ACTIVE)
                     .build();
@@ -194,7 +192,7 @@ public class AccountServiceTest {
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
 
             // Act
-            accountService.updateAccount(request);
+            accountService.updateAccount(activeAccount.getId(), request);
 
             // Assert
             verify(accountRepository).save(any(Account.class));
@@ -211,11 +209,11 @@ public class AccountServiceTest {
         void updateAccount_WhenNotFound_ShouldThrowException() {
             Integer id = 999;
             UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .id(id).name("Any Name").status(STATUS_ACTIVE).build();
+                    .name("Any Name").status(STATUS_ACTIVE).build();
 
             when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> accountService.updateAccount(request))
+            assertThatThrownBy(() -> accountService.updateAccount(id, request))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("not found")
                     .hasMessageContaining(String.valueOf(id));
@@ -231,7 +229,6 @@ public class AccountServiceTest {
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
 
             UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .id(ACTIVE_ACCOUNT_ID)
                     .status(STATUS_INACTIVE)
                     .build();
 
@@ -239,7 +236,7 @@ public class AccountServiceTest {
             when(orderClient.accountIdIsInOrder(ACTIVE_ACCOUNT_ID)).thenReturn(true);
 
             // Act & Assert
-            assertThatThrownBy(() -> accountService.updateAccount(request))
+            assertThatThrownBy(() -> accountService.updateAccount(ACTIVE_ACCOUNT_ID,request))
                     .isInstanceOf(AccountStillHasOrderCanNotBeDeleteException.class)
                     .hasMessageContaining("associated orders");
 
