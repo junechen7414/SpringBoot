@@ -70,11 +70,10 @@ public class AccountService {
      * @param updateAccountRequestDto
      */
     @Transactional
-    public void updateAccount(UpdateAccountRequest updateAccountRequestDto) {
+    public void updateAccount(Integer id, UpdateAccountRequest updateAccountRequestDto) {
         ServiceValidator.validateNotNull(updateAccountRequestDto, "Update account request");
         // 1. 取得帳戶實體並驗證帳戶是否存在否則拋出例外
-        Integer accountId = updateAccountRequestDto.id();
-        Account existingAccount = findAccountByIdOrThrow(accountId);
+        Account existingAccount = findAccountByIdOrThrow(id);
 
         // 2. 更新帳戶名稱
         existingAccount.setName(updateAccountRequestDto.name());

@@ -9,8 +9,8 @@ public interface OrderClient {
 
     /**
      * 開放查看帳戶ID是否存在任何訂單中的端點
-     * 對應 /order/AccountIdIsInOrder/{accountId}
+     * 對應 /order/account/{accountId}/exists
      */
-    @GetExchange("/AccountIdIsInOrder/{accountId}")
+    @GetExchange("/account/{accountId}/exists")
     Boolean accountIdIsInOrder(@PathVariable("accountId") Integer accountId);
 }
