@@ -101,15 +101,14 @@ public class ProductService {
     /**
      * 更新現有商品的資訊。
      *
+     * @param id 商品 ID
      * @param updateProductRequestDto 包含要更新的商品資訊的請求 DTO
-     * @return 包含已更新商品資訊的回應 DTO
      */
     @Transactional
-    public void updateProduct(UpdateProductRequest updateProductRequestDto) {
+    public void updateProduct(Integer id, UpdateProductRequest updateProductRequestDto) {
         ServiceValidator.validateNotNull(updateProductRequestDto, "Update product request");
-        // 1. 取得商品實體並驗證帳戶是否存在否則拋出例外
-        Integer productId = updateProductRequestDto.id();
-        Product existingProduct = findProductByIdOrThrow(productId);
+        // 1. 取得商品實體並驗證商品是否存在否則拋出例外
+        Product existingProduct = findProductByIdOrThrow(id);
         // 2. 若商品名稱有變更，驗證新名稱是否已存在
         String requestProductName = updateProductRequestDto.name();
         if (!existingProduct.getName().equals(requestProductName)) {

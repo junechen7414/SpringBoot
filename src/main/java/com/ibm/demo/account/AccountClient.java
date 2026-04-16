@@ -8,6 +8,6 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 
 @HttpExchange("/account")
 public interface AccountClient {
-    @GetExchange("/getDetail/{id}")
+    @GetExchange("/{id}")
     GetAccountDetailResponse getAccountDetail(@PathVariable("id") Integer accountId);
 }

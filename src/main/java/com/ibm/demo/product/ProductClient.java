@@ -19,7 +19,7 @@ public interface ProductClient {
      * 獲取商品詳細資訊
      * Spring 會自動將 Set<Integer> 轉換為多個 ids 查詢參數
      */
-    @GetExchange("/getDetails")
+    @GetExchange
     Map<Integer, GetProductDetailResponse> getProductDetails(@RequestParam("ids") Set<Integer> ids);
 
     /**

@@ -30,21 +30,21 @@ public class AccountController {
     }
 
     // Create Account
-    @PostMapping("/create")
+    @PostMapping
     public ResponseEntity<Integer> createAccount(@Valid @RequestBody CreateAccountRequest createAccountRequest) {
         Integer accountId = accountService.createAccount(createAccountRequest);
         return ResponseEntity.ok(accountId);
     }
 
     // Read Account List
-    @GetMapping("/getList")
+    @GetMapping
     public ResponseEntity<List<GetAccountListResponse>> getAccountList() {
         List<GetAccountListResponse> accountList = accountService.getAccountList();
         return ResponseEntity.ok(accountList);
     }
 
     // Read Account Detail
-    @GetMapping("/getDetail/{id}")
+    @GetMapping("/{id}")
     public ResponseEntity<GetAccountDetailResponse> getAccountDetail(@PathVariable Integer id) {
         GetAccountDetailResponse accountDetail = accountService.getAccountDetail(id);
         return ResponseEntity.ok(accountDetail);
@@ -52,15 +52,15 @@ public class AccountController {
 
     // Update Account
     @Operation(summary = "修改帳戶", description = "該ID帳戶不存在拋出NotFound例外，再檢查是否狀態從Y改成N，帳戶有關連到的訂單的話拋出例外，都沒事就更新成功")
-    @PutMapping("/update")
-    public ResponseEntity<Void> updateAccount(@Valid UpdateAccountRequest updateAccountRequest) {
-        accountService.updateAccount(updateAccountRequest);
+    @PutMapping("/{id}")
+    public ResponseEntity<Void> updateAccount(@PathVariable Integer id, @Valid @RequestBody UpdateAccountRequest updateAccountRequest) {
+        accountService.updateAccount(id, updateAccountRequest);
         return ResponseEntity.ok().build();
     }
 
     // Delete Account
     @Operation(summary = "刪除帳戶", description = "找不到帳戶或帳戶已經軟刪除過拋出NotFound，如果仍關聯訂單拋出特定例外，沒有則軟刪除")
-    @DeleteMapping("/delete/{id}")
+    @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteAccount(@PathVariable Integer id) {
         accountService.deleteAccount(id);
         return ResponseEntity.ok().build();
