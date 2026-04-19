@@ -200,6 +200,7 @@ public class ProductService {
      */
     private GetProductDetailResponse mapProductToDetailResponse(Product product) {
         return GetProductDetailResponse.builder()
+                .id(product.getId())
                 .name(product.getName())
                 .price(product.getPrice())
                 .saleStatus(product.getSaleStatus())

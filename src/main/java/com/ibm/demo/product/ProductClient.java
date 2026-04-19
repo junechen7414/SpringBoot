@@ -1,6 +1,6 @@
 package com.ibm.demo.product;
 
-import java.util.Map;
+import java.util.List;
 import java.util.Set;
 
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,8 +19,8 @@ public interface ProductClient {
      * 獲取商品詳細資訊
      * Spring 會自動將 Set<Integer> 轉換為多個 ids 查詢參數
      */
-    @GetExchange
-    Map<Integer, GetProductDetailResponse> getProductDetails(@RequestParam("ids") Set<Integer> ids);
+    @GetExchange("/batch")
+    List<GetProductDetailResponse> getProductDetails(@RequestParam("ids") Set<Integer> ids);
 
     /**
      * 處理訂單商品庫存

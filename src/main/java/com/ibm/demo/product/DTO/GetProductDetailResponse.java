@@ -6,6 +6,7 @@ import lombok.Builder;
 
 @Builder
 public record GetProductDetailResponse(
+                Integer id,
                 String name,
                 BigDecimal price,
                 Integer saleStatus,

@@ -238,7 +238,13 @@ public class OrderService {
                         return Collections.emptyMap();
                 }
 
-                Map<Integer, GetProductDetailResponse> productMap = productClient.getProductDetails(productIds);
+                List<GetProductDetailResponse> productList = productClient.getProductDetails(productIds);
+
+                // 將 List 轉換為 Map，方便後續根據 ID 查找
+                Map<Integer, GetProductDetailResponse> productMap = productList.stream()
+                                .collect(Collectors.toMap(
+                                                GetProductDetailResponse::id,
+                                                product -> product));
 
                 // 不應該 Throw Exception，除非歷史訂單也不准看停售商品
                 return productMap;
