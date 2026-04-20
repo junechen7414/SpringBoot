@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: demo
+  main:
+    web-application-type: servlet
+  datasource:
+    # url: jdbc:oracle:thin:@//oracle-db:1521/FREEPDB1
+    url: jdbc:oracle:thin:@//localhost:1521/FREEPDB1
+    username: ${ORACLE_USERNAME}
+    password: ${ORACLE_PASSWORD}
+    driver-class-name: oracle.jdbc.driver.OracleDriver
+    hikari:
+      connection-timeout: 5000
+      maximum-pool-size: 20
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8787
+
+logging:
+  level:
+    com.example.demo: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    prometheus:
+      access: READ_ONLY
+    health:
+      show-details: always
+  otlp:
+    metrics:
+      export:
+        url: http://alloy:4318/v1/metrics
+        enabled: true
+        step: 10s
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+app:
+  base-url: http://localhost:${server.port}
+  database:
+    concurrency:
+      default-limit: 22
+      limits:
+        OrderService: 23
+
+http:
+  client:
+    max-total: 200
+    default-max-per-route: 150
+    connection-request-timeout: 4
+    # seconds
+    response-timeout: 6
+    evict-idle-connections-period: 30
