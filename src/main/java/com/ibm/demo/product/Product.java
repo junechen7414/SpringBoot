@@ -32,7 +32,7 @@ import lombok.experimental.SuperBuilder;
 // @Index(name = "pk_PRODUCT", columnList = "ID", unique = true) // 同@Id的效用
 // })
 @SuperBuilder
-@SQLDelete(sql = "UPDATE PRODUCT SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP,SALE_STATUS = 1002 WHERE ID = ?") // 軟刪除，將
+@SQLDelete(sql = "UPDATE PRODUCT SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP,SALE_STATUS = 1002,VERSION = VERSION + 1 WHERE ID = ? AND VERSION = ?") // 軟刪除，將
                                                                                                                   // SALE_STATUS
                                                                                                                   // 設為不可銷售
 @SQLRestriction("DELETED = 0 AND SALE_STATUS = 1001") // 只選擇未刪除且可銷售的資料

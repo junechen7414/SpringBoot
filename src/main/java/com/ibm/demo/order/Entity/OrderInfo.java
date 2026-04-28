@@ -30,7 +30,7 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @SuperBuilder
 @Entity
-@SQLDelete(sql = "UPDATE ORDER_INFO SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP,STATUS = 1003 WHERE ID = ?")
+@SQLDelete(sql = "UPDATE ORDER_INFO SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP,STATUS = 1003,VERSION = VERSION + 1 WHERE ID = ? AND VERSION = ?")
 @SQLRestriction("DELETED = 0 AND STATUS=1001") // 只選擇未刪除的資料
 @Table(name = "ORDER_INFO") // 指定對應的資料表名稱
 @Schema(description = "訂單資訊")

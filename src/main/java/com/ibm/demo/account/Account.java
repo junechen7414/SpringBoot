@@ -26,7 +26,7 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @Entity
 @SuperBuilder
-@SQLDelete(sql = "UPDATE ACCOUNT SET DELETED = 1, DELETED_AT = CURRENT_TIMESTAMP, STATUS = 'N' WHERE ID = ?") // 軟刪除，將
+@SQLDelete(sql = "UPDATE ACCOUNT SET DELETED = 1, DELETED_AT = CURRENT_TIMESTAMP, STATUS = 'N', VERSION = VERSION + 1 WHERE ID = ? AND VERSION = ?") // 軟刪除，將
                                                                                                               // STATUS
                                                                                                               // 設為 'N'
 @SQLRestriction("STATUS = 'Y' AND DELETED = 0") // 只選擇啟用狀態且未被刪除的資料
