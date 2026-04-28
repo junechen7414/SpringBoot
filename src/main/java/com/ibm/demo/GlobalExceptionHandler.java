@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -39,8 +40,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ErrorCode errorCode = ex.getErrorCode();
         HttpStatus status = (errorCode != null) ? errorCode.getStatus() : HttpStatus.SERVICE_UNAVAILABLE;
         String errorType = (errorCode != null) ? errorCode.getMessage() : "Service Overloaded";
-        
+
         return createResponseEntity(status, errorType, ex.getMessage());
+    }
+
+    // 處理樂觀鎖衝突例外
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
+        return createResponseEntity(HttpStatus.CONFLICT, "Optimistic Locking Failure", "資料已被其他使用者修改，請重新整理後再試。");
     }
 
     /**

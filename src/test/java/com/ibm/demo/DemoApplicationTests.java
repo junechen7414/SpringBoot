@@ -3,9 +3,11 @@ package com.ibm.demo;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 @Tag("SanityTest")
 @SpringBootTest
+@ActiveProfiles("test") // 使用 test profile，確保使用測試專用的資料庫設定
 class DemoApplicationTests {
 
 	@Test

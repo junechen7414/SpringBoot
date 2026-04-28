@@ -49,6 +49,7 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-otlp'
 	implementation 'io.micrometer:micrometer-java21'
 	runtimeOnly 'com.h2database:h2'
+	testImplementation 'com.h2database:h2'
 }
 
 tasks.named('test') {

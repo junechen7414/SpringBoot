@@ -4,8 +4,8 @@ spring:
   main:
     web-application-type: servlet
   datasource:
-    # url: jdbc:oracle:thin:@//oracle-db:1521/FREEPDB1
-    url: jdbc:oracle:thin:@//localhost:1521/FREEPDB1
+    url: jdbc:oracle:thin:@//oracle-db:1521/FREEPDB1
+    # url: jdbc:oracle:thin:@//localhost:1521/FREEPDB1
     username: ${ORACLE_USERNAME}
     password: ${ORACLE_PASSWORD}
     driver-class-name: oracle.jdbc.driver.OracleDriver
