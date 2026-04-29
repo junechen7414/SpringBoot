@@ -1,6 +1,5 @@
 package com.ibm.demo.order.Entity;
 
-import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import com.ibm.demo.util.BaseEntity;
@@ -30,7 +29,6 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @SuperBuilder
 @Table(name = "ORDER_PRODUCT_DETAIL")
-@SQLDelete(sql = "UPDATE ORDER_PRODUCT_DETAIL SET DELETED = 1,DELETED_AT = CURRENT_TIMESTAMP, VERSION = VERSION + 1 WHERE ID = ? AND VERSION = ?") // 使用樂觀鎖版本號來確保刪除操作的安全性
 @SQLRestriction("DELETED = 0") // 只選擇未刪除的資料
 @Schema(description = "訂單產品明細")
 public class OrderDetail extends BaseEntity {
