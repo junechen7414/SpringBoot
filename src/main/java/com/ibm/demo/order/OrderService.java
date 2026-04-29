@@ -200,6 +200,9 @@ public class OrderService {
                 if (existingOrderInfo.getStatus() != OrderStatus.CREATED.getCode()) {
                         throw new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + existingOrderInfo.getStatus());
                 }
+                
+                // 將資料庫操作委派給交易服務
+                orderTransactionalService.deleteOrder(existingOrderInfo,existingOrderInfo.getVersion());
 
                 // 3. 收集所有商品ID並取得商品資訊
                 Set<OrderItemRequest> originalItems = existingOrderInfo.getOrderDetails().stream()
@@ -216,8 +219,6 @@ public class OrderService {
 
                 productClient.processOrderItems(processRequest);
 
-                // 將資料庫操作委派給交易服務
-                orderTransactionalService.deleteOrder(existingOrderInfo);
         }
 
         /**
