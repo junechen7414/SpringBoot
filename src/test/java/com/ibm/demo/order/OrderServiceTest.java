@@ -297,7 +297,7 @@ class OrderServiceTest {
                         orderService.deleteOrder(EXISTING_ORDER_ID);
 
                         // Assert
-                        verify(orderTransactionalService).deleteOrder(order);
+                        verify(orderTransactionalService).deleteOrder(order,order.getVersion());
                         verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
                 }
         }

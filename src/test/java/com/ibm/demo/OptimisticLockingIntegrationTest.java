@@ -15,12 +15,11 @@ import com.ibm.demo.account.AccountRepository;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.enums.ProductStatus;
+import com.ibm.demo.order.OrderTransactionalService;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
-
-import jakarta.persistence.EntityManager;
 
 @SpringBootTest
 @ActiveProfiles("test") // 使用 test profile，確保使用測試專用的資料庫設定
@@ -36,7 +35,7 @@ public class OptimisticLockingIntegrationTest {
     private OrderInfoRepository orderInfoRepository;
 
     @Autowired
-    private EntityManager entityManager;
+    private OrderTransactionalService orderTransactionalService;
 
     @Test
     public void testUpdateProductOptimisticLocking() {
@@ -130,7 +129,6 @@ public class OptimisticLockingIntegrationTest {
         // 1. A 與 B 同時拿貨
         Product product1 = productRepository.findById(id).get();
         Product product2 = productRepository.findById(id).get();
-        entityManager.detach(product2);
 
         // 2. A 搶先更新了價格 (Version 變 1)
         product1.setPrice(new BigDecimal("999"));
@@ -139,7 +137,6 @@ public class OptimisticLockingIntegrationTest {
         // 3. B 嘗試刪除 (持 Version 0 去刪除 Version 1 的資料)
         assertThrows(ObjectOptimisticLockingFailureException.class, () -> {
             productRepository.delete(product2);
-            // productRepository.flush(); // 強制觸發 SQLDelete
         });
     }
 
@@ -156,7 +153,6 @@ public class OptimisticLockingIntegrationTest {
         // 2. A 與 B 同時拿貨
         Account account1 = accountRepository.findById(id).get();
         Account account2 = accountRepository.findById(id).get();
-        entityManager.detach(account2);
 
         // 3. A 搶先更新了名稱 (Version 變 1)
         account1.setName("帳戶名稱已更改");
@@ -165,7 +161,6 @@ public class OptimisticLockingIntegrationTest {
         // 4. B 嘗試刪除 (持 Version 0 去刪除 Version 1 的資料)
         assertThrows(ObjectOptimisticLockingFailureException.class, () -> {
             accountRepository.delete(account2);
-            // accountRepository.flush(); // 強制觸發 SQLDelete
         });
     }
 
@@ -181,7 +176,6 @@ public class OptimisticLockingIntegrationTest {
         // 2. A 與 B 同時拿貨
         OrderInfo orderInfo1 = orderInfoRepository.findById(id).get();
         OrderInfo orderInfo2 = orderInfoRepository.findById(id).get();
-        entityManager.detach(orderInfo2);
 
         // 3. A 搶先更新了狀態 (Version 變 1)
         orderInfo1.setStatus(OrderStatus.CANCELLED.getCode());
@@ -189,8 +183,7 @@ public class OptimisticLockingIntegrationTest {
 
         // 4. B 嘗試刪除 (持 Version 0 去刪除 Version 1 的資料)
         assertThrows(ObjectOptimisticLockingFailureException.class, () -> {
-            orderInfoRepository.delete(orderInfo2);
-            orderInfoRepository.flush(); // 強制觸發 SQLDelete
+            orderTransactionalService.deleteOrder(orderInfo2, orderInfo2.getVersion());
         });
     }
 }
