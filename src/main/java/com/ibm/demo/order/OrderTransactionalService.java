@@ -84,7 +84,7 @@ public class OrderTransactionalService {
         @Transactional
         public void deleteOrder(OrderInfo existingOrderInfo, Integer version) {
                 int orderId = existingOrderInfo.getId();
-                int updated = orderInfoRepository.softDeleteByOrderId(orderId, version);
+                int updated = orderInfoRepository.softDeleteById(orderId, version);
 
                 DBAssertion.assertUpdated(updated, OrderInfo.class, orderId);
                 orderDetailRepository.softDeleteByOrderId(orderId);
