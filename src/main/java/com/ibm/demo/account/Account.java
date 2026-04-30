@@ -1,6 +1,5 @@
 package com.ibm.demo.account;
 
-import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import com.ibm.demo.enums.AccountStatus;
@@ -26,9 +25,6 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @Entity
 @SuperBuilder
-@SQLDelete(sql = "UPDATE ACCOUNT SET DELETED = 1, DELETED_AT = CURRENT_TIMESTAMP, STATUS = 'N', VERSION = VERSION + 1 WHERE ID = ? AND VERSION = ?") // 軟刪除，將
-                                                                                                              // STATUS
-                                                                                                              // 設為 'N'
 @SQLRestriction("STATUS = 'Y' AND DELETED = 0") // 只選擇啟用狀態且未被刪除的資料
 @Table(name = "ACCOUNT") // 指定對應的資料表名稱
 @Schema(description = "帳號資訊")
