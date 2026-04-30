@@ -16,6 +16,7 @@ import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
+import com.ibm.demo.util.DBAssertion;
 import com.ibm.demo.util.OrderItemRequest;
 import com.ibm.demo.util.ServiceValidator;
 
@@ -27,14 +28,7 @@ import lombok.RequiredArgsConstructor;
 public class ProductService {
     private final ProductRepository productRepository;
 
-    /**
-     * 建構子，注入 Repository，已用lombok註解RequiredArgsConstructor定義。
-     *
-     * @param productRepository 商品資料庫存取介面
-     */
-    // public ProductService(ProductRepository productRepository) {
-    //     this.productRepository = productRepository;
-    // }
+    // 建構子，注入 Repository，已用lombok註解RequiredArgsConstructor定義。
 
     /**
      * 建立新商品。
@@ -126,13 +120,13 @@ public class ProductService {
     /**
      * 刪除商品 (邏輯刪除，將銷售狀態設為不可銷售)。
      *
-     * @param id 要刪除的商品 ID
+     * @param productId 要刪除的商品 ID
      */
     @Transactional
-    public void deleteProduct(Integer id) {
-        Product existingProduct = findProductByIdOrThrow(id);
-        // 使用 delete() 觸發 @SQLDelete，執行軟刪除邏輯
-        productRepository.delete(existingProduct);
+    public void deleteProduct(Integer productId) {
+        Product existingProduct = findProductByIdOrThrow(productId);
+        int updated = productRepository.softDeleteById(productId, existingProduct.getVersion());
+        DBAssertion.assertUpdated(updated, Product.class, productId);
     }
 
     @Transactional
