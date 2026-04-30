@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 import com.ibm.demo.enums.OrderStatus;
@@ -16,6 +15,7 @@ import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
+import com.ibm.demo.util.DBAssertion;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -86,10 +86,7 @@ public class OrderTransactionalService {
                 int orderId = existingOrderInfo.getId();
                 int updated = orderInfoRepository.softDeleteByOrderId(orderId, version);
 
-                if (updated == 0) {
-                        throw new ObjectOptimisticLockingFailureException(
-                                        OrderInfo.class, orderId);
-                }
+                DBAssertion.assertUpdated(updated, OrderInfo.class, orderId);
                 orderDetailRepository.softDeleteByOrderId(orderId);
         }
 }
