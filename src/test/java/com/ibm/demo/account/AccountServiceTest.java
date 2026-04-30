@@ -253,14 +253,16 @@ public class AccountServiceTest {
         void deleteAccount_Success() {
             // Arrange
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
+            activeAccount.setVersion(1);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
             when(orderClient.accountIdIsInOrder(ACTIVE_ACCOUNT_ID)).thenReturn(false);
+            when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1)).thenReturn(1);
 
             // Act
             accountService.deleteAccount(ACTIVE_ACCOUNT_ID);
 
             // Assert
-            verify(accountRepository).delete(activeAccount);
+            verify(accountRepository).softDeleteById(ACTIVE_ACCOUNT_ID, 1);
         }
     }
 

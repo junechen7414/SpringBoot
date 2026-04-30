@@ -305,17 +305,15 @@ class ProductServiceTest {
                         // Arrange
                         Product activeProduct = createTestProduct(ACTIVE_PRODUCT_ID, "Active Product", DEFAULT_PRICE,
                                         STATUS_SELLABLE, DEFAULT_STOCK);
+                        activeProduct.setVersion(1);
                         when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(activeProduct));
+                        when(productRepository.softDeleteById(ACTIVE_PRODUCT_ID, 1)).thenReturn(1);
 
                         // Act
                         productService.deleteProduct(ACTIVE_PRODUCT_ID);
 
                         // Assert
-                        ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
-                        verify(productRepository).delete(captor.capture());
-                        assertThat(captor.getValue())
-                                        .hasFieldOrPropertyWithValue("id", ACTIVE_PRODUCT_ID)
-                                        .hasFieldOrPropertyWithValue("name", "Active Product");
+                        verify(productRepository).softDeleteById(ACTIVE_PRODUCT_ID, 1);
                 }
         }
 
