@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -22,9 +22,10 @@ import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
 
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-@SpringBootTest
+@DataJpaTest
 @ActiveProfiles("test")
 public class OptimisticLockingIntegrationTest {
 
@@ -36,6 +37,9 @@ public class OptimisticLockingIntegrationTest {
 
     @Autowired
     private OrderInfoRepository orderInfoRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     @DisplayName("測試商品更新時的樂觀鎖機制 (JPA 標準)")
@@ -50,6 +54,10 @@ public class OptimisticLockingIntegrationTest {
 
         Product product1 = productRepository.findById(id).get();
         Product product2 = productRepository.findById(id).get();
+        // 關鍵：將 product2 脫離 JPA 託管（Detach）。
+        // 這樣 product1 更新時，product2 手中的 Version 0 才不會被同步更新為 1。
+        // 這是在同一個交易內「人工模擬」出持有舊版資料的客戶端物件。
+        entityManager.detach(product2); // 模擬不同的交易上下文
 
         product1.setPrice(new BigDecimal("110"));
         productRepository.saveAndFlush(product1);
@@ -72,6 +80,10 @@ public class OptimisticLockingIntegrationTest {
 
         Account account1 = accountRepository.findById(id).get();
         Account account2 = accountRepository.findById(id).get();
+        // 關鍵：將 account2 脫離 JPA 託管（Detach）。
+        // 這樣 account1 更新時，account2 手中的 Version 0 才不會被同步更新為 1。
+        // 這是在同一個交易內「人工模擬」出持有舊版資料的客戶端物件。
+        entityManager.detach(account2);
 
         account1.setName("帳戶名稱已更改");
         accountRepository.saveAndFlush(account1);
@@ -94,6 +106,10 @@ public class OptimisticLockingIntegrationTest {
 
         OrderInfo orderInfo1 = orderInfoRepository.findById(id).get();
         OrderInfo orderInfo2 = orderInfoRepository.findById(id).get();
+        // 關鍵：將 orderInfo2 脫離 JPA 託管（Detach）。
+        // 這樣 orderInfo1 更新時，orderInfo2 手中的 Version 0 才不會被同步更新為 1。
+        // 這是在同一個交易內「人工模擬」出持有舊版資料的客戶端物件。
+        entityManager.detach(orderInfo2); // 模擬不同的交易上下文
 
         orderInfo1.setStatus(OrderStatus.CANCELLED.getCode());
         orderInfoRepository.saveAndFlush(orderInfo1);
