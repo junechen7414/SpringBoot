@@ -300,19 +300,20 @@ class ProductServiceTest {
         class DeleteProductSuccessTests {
 
                 @Test
-                @DisplayName("刪除存在的活躍產品應成功執行軟刪除")
-                void deleteProduct_WhenExists_Success() {
+                @DisplayName("刪除時若版本不符 (樂觀鎖衝突)，應拋出 ObjectOptimisticLockingFailureException")
+                void deleteProduct_WhenOptimisticLockingConflict_ShouldThrowException() {
                         // Arrange
-                        Product activeProduct = createTestProduct(ACTIVE_PRODUCT_ID, "Active Product", DEFAULT_PRICE,
+                        Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE,
                                         STATUS_SELLABLE, DEFAULT_STOCK);
-                        activeProduct.setVersion(1);
-                        when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(activeProduct));
-                        when(productRepository.softDeleteById(ACTIVE_PRODUCT_ID, 1)).thenReturn(1);
+                        product.setVersion(1);
+                        when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(product));
+                        // 模擬更新失敗 (傳回 0)
+                        when(productRepository.softDeleteById(ACTIVE_PRODUCT_ID, 1)).thenReturn(0);
 
-                        // Act
-                        productService.deleteProduct(ACTIVE_PRODUCT_ID);
+                        // Act & Assert
+                        assertThatThrownBy(() -> productService.deleteProduct(ACTIVE_PRODUCT_ID))
+                                        .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
 
-                        // Assert
                         verify(productRepository).softDeleteById(ACTIVE_PRODUCT_ID, 1);
                 }
         }

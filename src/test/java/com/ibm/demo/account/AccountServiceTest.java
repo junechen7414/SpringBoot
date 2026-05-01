@@ -249,6 +249,24 @@ public class AccountServiceTest {
     class DeleteAccountSuccessTests {
 
         @Test
+        @DisplayName("刪除時若版本不符 (樂觀鎖衝突)，應拋出 ObjectOptimisticLockingFailureException")
+        void deleteAccount_WhenOptimisticLockingConflict_ShouldThrowException() {
+            // Arrange
+            Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
+            activeAccount.setVersion(1);
+            when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
+            when(orderClient.accountIdIsInOrder(ACTIVE_ACCOUNT_ID)).thenReturn(false);
+            // 模擬版本不符更新失敗
+            when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1)).thenReturn(0);
+
+            // Act & Assert
+            assertThatThrownBy(() -> accountService.deleteAccount(ACTIVE_ACCOUNT_ID))
+                    .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
+
+            verify(accountRepository).softDeleteById(ACTIVE_ACCOUNT_ID, 1);
+        }
+
+        @Test
         @DisplayName("刪除存在的活躍帳戶且無訂單時應成功")
         void deleteAccount_Success() {
             // Arrange
