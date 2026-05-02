@@ -51,15 +51,6 @@ public class OrderService {
          * @param accountClient         帳戶服務的Client，用於驗證帳戶狀態
          * @param productClient         商品服務的Client，用於驗證商品庫存和獲取商品資訊
          */
-        // public OrderService(OrderInfoRepository orderInfoRepository,
-        // OrderDetailRepository orderDetailRepository,
-        // AccountClient accountClient,
-        // ProductClient productClient) {
-        // this.orderInfoRepository = orderInfoRepository;
-        // this.orderDetailRepository = orderDetailRepository;
-        // this.accountClient = accountClient;
-        // this.productClient = productClient;
-        // }
 
         /**
          * @param createOrderRequest
@@ -209,6 +200,9 @@ public class OrderService {
                 if (existingOrderInfo.getStatus() != OrderStatus.CREATED.getCode()) {
                         throw new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + existingOrderInfo.getStatus());
                 }
+                
+                // 將資料庫操作委派給交易服務
+                orderTransactionalService.deleteOrder(existingOrderInfo,existingOrderInfo.getVersion());
 
                 // 3. 收集所有商品ID並取得商品資訊
                 Set<OrderItemRequest> originalItems = existingOrderInfo.getOrderDetails().stream()
@@ -225,8 +219,6 @@ public class OrderService {
 
                 productClient.processOrderItems(processRequest);
 
-                // 將資料庫操作委派給交易服務
-                orderTransactionalService.deleteOrder(existingOrderInfo);
         }
 
         /**

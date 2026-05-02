@@ -13,6 +13,7 @@ import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.OrderClient;
+import com.ibm.demo.util.DBAssertion;
 import com.ibm.demo.util.ServiceValidator;
 
 import lombok.RequiredArgsConstructor;
@@ -25,13 +26,10 @@ public class AccountService {
 
     /**
      * 注入Repository和Client，已用lombok註解RequiredArgsConstructor定義建構子。
+     * 
      * @param accountRepository
      * @param orderClient
      */
-    // public AccountService(AccountRepository accountRepository, OrderClient orderClient) {
-    //     this.accountRepository = accountRepository;
-    //     this.orderClient = orderClient;
-    // }
 
     /**
      * @param account_DTO
@@ -93,8 +91,8 @@ public class AccountService {
     public void deleteAccount(Integer accountId) {
         Account existingAccount = findAccountByIdOrThrow(accountId);
         checkAccountHasNoOrdersOrThrow(accountId);
-        // 使用 delete() 觸發 @SQLDelete，執行軟刪除邏輯
-        accountRepository.delete(existingAccount);
+        int updated = accountRepository.softDeleteById(accountId, existingAccount.getVersion());
+        DBAssertion.assertUpdated(updated, Account.class, accountId);
     }
 
     // --- Private Helper Methods ---
@@ -130,6 +128,7 @@ public class AccountService {
     /**
      * 更新帳戶狀態，並在需要時執行業務邏輯檢查。
      * 如果狀態從啟用變為停用，會檢查帳戶是否仍有關聯訂單。
+     * 
      * @param account 要更新的帳戶實體
      * @param newStatus 新的狀態碼
      */

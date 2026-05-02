@@ -297,7 +297,7 @@ class OrderServiceTest {
                         orderService.deleteOrder(EXISTING_ORDER_ID);
 
                         // Assert
-                        verify(orderTransactionalService).deleteOrder(order);
+                        verify(orderTransactionalService).deleteOrder(order,order.getVersion());
                         verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
                 }
         }
@@ -345,6 +345,25 @@ class OrderServiceTest {
                         // 驗證：狀態不對，不應該執行後續任何儲存或扣庫存動作
                         verifyNoInteractions(productClient);
                         verifyNoInteractions(orderTransactionalService);
+                }
+
+                @Test
+                @DisplayName("刪除時若發生樂觀鎖衝突，應拋出 ObjectOptimisticLockingFailureException")
+                void deleteOrder_WhenOptimisticLockingConflict_ShouldThrowException() {
+                        // Arrange
+                        OrderInfo order = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED);
+                        order.setVersion(1);
+                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(order));
+
+                        // 模擬交易服務拋出樂觀鎖異常
+                        doThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(OrderInfo.class, EXISTING_ORDER_ID))
+                                        .when(orderTransactionalService).deleteOrder(order, 1);
+
+                        // Act & Assert
+                        assertThatThrownBy(() -> orderService.deleteOrder(EXISTING_ORDER_ID))
+                                        .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
+
+                        verify(orderTransactionalService).deleteOrder(order, 1);
                 }
         }
 
