@@ -51,6 +51,7 @@ public class OrderInfo extends BaseEntity {
 
     @OneToMany(mappedBy = "orderInfo", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude // 加在Entity中的OneToMany或ManyToOne的關聯上，否則會造成循環引用的問題，導致 StackOverflowError。
+    @Schema(description = "訂單產品明細列表")
     private List<OrderDetail> orderDetails; // 存放該訂單下的所有產品明細
 
     // 移除原本手寫的 @Builder 建構子，SuperBuilder 會自動處理 accountId 與 status

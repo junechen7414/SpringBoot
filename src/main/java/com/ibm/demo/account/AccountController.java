@@ -30,6 +30,7 @@ public class AccountController {
     }
 
     // Create Account
+    @Operation(summary = "建立新帳戶", description = "建立新帳戶。成功則新增帳戶資料，預設狀態為啟用 'Y'。")
     @PostMapping
     public ResponseEntity<Integer> createAccount(@Valid @RequestBody CreateAccountRequest createAccountRequest) {
         Integer accountId = accountService.createAccount(createAccountRequest);
@@ -37,6 +38,7 @@ public class AccountController {
     }
 
     // Read Account List
+    @Operation(summary = "獲取帳戶列表", description = "獲取所有帳戶的列表。受限於 SQLRestriction 規則，僅會回傳未軟刪除且狀態為啟用 'Y' 的帳戶。")
     @GetMapping
     public ResponseEntity<List<GetAccountListResponse>> getAccountList() {
         List<GetAccountListResponse> accountList = accountService.getAccountList();
@@ -44,6 +46,7 @@ public class AccountController {
     }
 
     // Read Account Detail
+    @Operation(summary = "獲取帳戶詳細資訊", description = "根據 ID 獲取帳戶詳細資訊。受限於 SQLRestriction 規則，若帳戶不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。")
     @GetMapping("/{id}")
     public ResponseEntity<GetAccountDetailResponse> getAccountDetail(@PathVariable Integer id) {
         GetAccountDetailResponse accountDetail = accountService.getAccountDetail(id);
@@ -51,7 +54,7 @@ public class AccountController {
     }
 
     // Update Account
-    @Operation(summary = "修改帳戶", description = "該ID帳戶不存在拋出NotFound例外，再檢查是否狀態從Y改成N，帳戶有關連到的訂單的話拋出例外，都沒事就更新成功")
+    @Operation(summary = "更新帳戶", description = "更新現有帳戶資訊。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若欲將狀態從啟用 'Y' 變更為停用 'N'，會先檢查該帳戶是否仍有關聯訂單，若有則拋出 AccountStillHasOrderCanNotBeDeleteException。")
     @PutMapping("/{id}")
     public ResponseEntity<Void> updateAccount(@PathVariable Integer id, @Valid @RequestBody UpdateAccountRequest updateAccountRequest) {
         accountService.updateAccount(id, updateAccountRequest);
@@ -59,7 +62,7 @@ public class AccountController {
     }
 
     // Delete Account
-    @Operation(summary = "刪除帳戶", description = "找不到帳戶或帳戶已經軟刪除過拋出NotFound，如果仍關聯訂單拋出特定例外，沒有則軟刪除")
+    @Operation(summary = "刪除帳戶", description = "執行帳戶軟刪除。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若該帳戶仍有關聯訂單，則拋出 AccountStillHasOrderCanNotBeDeleteException。")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteAccount(@PathVariable Integer id) {
         accountService.deleteAccount(id);
