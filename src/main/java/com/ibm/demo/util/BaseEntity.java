@@ -23,6 +23,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
+@Schema(description = "基礎實體欄位")
 public abstract class BaseEntity {
     @CreatedDate
     @Column(name = "CREATED_AT", updatable = false)
