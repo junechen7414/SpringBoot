@@ -30,7 +30,7 @@ public class OrderController {
     }
 
     // Create Order
-    @Operation(summary = "建立新訂單", description = "帳戶狀態N拋出特定例外，之後若商品狀態不可銷售拋出特定例外，再來若商品庫存不足拋出特定例外，沒例外則更新商品庫存和新增訂單")
+    @Operation(summary = "建立新訂單", description = "建立新訂單。先驗證帳戶是否啟用（不啟用則拋出 AccountInactiveException），檢查訂單內是否有重複商品（重複則拋出 InvalidRequestException），最後透過商品服務處理庫存（若狀態不可銷售或庫存不足由商品服務拋出異常）。成功則新增訂單主檔（預設狀態 1001）與明細。")
     @PostMapping
     public ResponseEntity<Integer> createOrder(@Valid @RequestBody CreateOrderRequest createOrderRequest) {
         Integer orderId = orderService.createOrder(createOrderRequest);
@@ -38,6 +38,7 @@ public class OrderController {
     }
 
     // Read Order List
+    @Operation(summary = "獲取帳戶訂單清單", description = "獲取該帳戶的所有有效訂單清單。受限於SQLRestriction規則，僅會回傳未被軟刪除且狀態為 1001 (CREATED) 的訂單。")
     @GetMapping("/account/{accountId}")
     public ResponseEntity<List<GetOrderListResponse>> getOrderList(@PathVariable Integer accountId) {
         List<GetOrderListResponse> getOrderListResponse = orderService.getOrderListByAccountId(accountId);
@@ -45,6 +46,7 @@ public class OrderController {
     }
 
     // Read Order Detail
+    @Operation(summary = "獲取訂單詳細資訊", description = "獲取指定訂單的詳細資訊。受限於SQLRestriction規則，若訂單不存在、已被軟刪除或狀態非 1001 (CREATED)，將回傳 NotFound。")
     @GetMapping("/{orderId}")
     public ResponseEntity<GetOrderDetailResponse> getOrderDetails(@PathVariable Integer orderId) {
         GetOrderDetailResponse getOrderDetailResponse = orderService.getOrderDetailByOrderId(orderId);
@@ -52,7 +54,7 @@ public class OrderController {
     }
 
     // Update Order
-    @Operation(summary = "更新訂單內容", description = "不存在該訂單ID拋出NotFound，若商品狀態不可銷售拋出特定例外，再來若有商品庫存不足拋出特定例外，都沒更新商品庫存、訂單")
+    @Operation(summary = "更新訂單內容", description = "更新訂單內容。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。接著檢查重複商品（重複則拋出 InvalidRequestException），並透過商品服務調整庫存（包含歸還舊品項庫存與扣除新品項庫存），最後更新訂單狀態與明細。")
     @PutMapping
     public ResponseEntity<Void> updateOrder(@Valid @RequestBody UpdateOrderRequest updateOrderRequest) {
         orderService.updateOrder(updateOrderRequest);
@@ -60,7 +62,7 @@ public class OrderController {
     }
 
     // Delete Order
-    @Operation(summary = "刪除訂單", description = "訂單id不存在或狀態已經為1003取消拋出NotFound，都沒有則軟刪除更新OrderInfo的狀態資料欄位，真刪除OrderDetail並歸還商品庫存")
+    @Operation(summary = "刪除訂單", description = "刪除訂單。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。執行時會對訂單主檔與明細進行軟刪除，並透過商品服務歸還商品庫存。")
     @DeleteMapping("/{orderId}")
     public ResponseEntity<Void> deleteOrder(@PathVariable Integer orderId) {
         orderService.deleteOrder(orderId);
@@ -68,7 +70,7 @@ public class OrderController {
     }
 
     // 帳戶ID是否存在任何訂單中
-    @Operation(summary = "檢查帳戶ID是否存在於任何訂單中", description = "判斷帳戶有沒有在訂單中，讓帳戶在更新狀態和刪除時檢核用，只在傳入的帳戶ID有關連訂單時回傳TRUE，傳入不存在和沒再訂單中的帳戶ID也回傳false")
+    @Operation(summary = "檢查帳戶ID是否存在於任何有效訂單中", description = "判斷帳戶是否有關聯的有效訂單，用於帳戶更新與刪除時的檢核。受限於系統規則，僅會針對未軟刪除且狀態為 1001 (CREATED) 的訂單進行判定。")
     @GetMapping("/account/{accountId}/exists")
     public ResponseEntity<Boolean> AccountIdIsInOrder(@PathVariable Integer accountId) {
         boolean isExist = orderService.ActiveAccountIdIsInOrder(accountId);
