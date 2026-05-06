@@ -50,15 +50,14 @@ app:
   base-url: http://localhost:${server.port}
   database:
     concurrency:
-      default-limit: 22
+      default-limit: 15
       limits:
-        OrderService: 23
+        OrderService: 18
 
 http:
   client:
     max-total: 200
     default-max-per-route: 150
-    connection-request-timeout: 4
-    # seconds
-    response-timeout: 6
-    evict-idle-connections-period: 30
+    connection-request-timeout: PT4S
+    response-timeout: PT5S
+    evict-idle-connections-period: PT30S
