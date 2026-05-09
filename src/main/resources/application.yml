@@ -58,6 +58,6 @@ http:
   client:
     max-total: 200
     default-max-per-route: 150
-    connection-request-timeout: PT4S
-    response-timeout: PT5S
-    evict-idle-connections-period: PT30S
+    connection-request-timeout: 4s
+    response-timeout: 5s
+    evict-idle-connections-period: 30s
