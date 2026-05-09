@@ -6,3 +6,14 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: create-drop
+
+management:
+  otlp:
+    metrics:
+      export:
+        url: http://alloy:4318/v1/metrics
+        enabled: true
+        step: 10s
+  metrics:
+    tags:
+      application: ${spring.application.name}
