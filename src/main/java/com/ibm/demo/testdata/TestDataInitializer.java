@@ -30,7 +30,7 @@ public class TestDataInitializer implements CommandLineRunner {
     public void run(String... args) throws Exception{
         List<Product> products = new ArrayList<>();
         List<Account> accounts = new ArrayList<>();
-        for (int i = 0; i < 100; i++) {
+        for (int i = 1; i <= 100; i++) {
             products.add(Product.builder()
                     .name("Product " + i)
                     .price(BigDecimal.valueOf((long) i * i))
