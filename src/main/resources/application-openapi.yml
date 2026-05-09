@@ -1,17 +1,29 @@
+# OpenAPI 文件生成專用設定
+# 目的：在 Gradle build 期間啟動一個輕量級環境以擷取 API 定義
 spring:
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=Oracle
+    # 使用 H2 記憶體資料庫，模擬 Oracle 模式，避免文件生成時需要實體資料庫連線
+    url: jdbc:h2:mem:openapidb;DB_CLOSE_DELAY=-1;MODE=Oracle
     driver-class-name: org.h2.Driver
     username: sa
     password: 
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: none
+      ddl-auto: create-drop
 
-server:
-  port: 8787
+management:
+  # 關閉 Actuator 部分功能以加快啟動速度
+  endpoints:
+    access:
+      default: none
+  health:
+    defaults:
+      enabled: false
 
 logging:
+  # 減少日誌噪音，僅顯示必要資訊
   level:
-    org.hibernate: ERROR
+    root: WARN
+    com.ibm.demo: INFO
+    org.springdoc: INFO

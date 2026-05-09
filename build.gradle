@@ -18,9 +18,9 @@ openApi {
 	apiDocsUrl.set("http://localhost:8787/v3/api-docs")
 	outputDir.set(file("$buildDir/docs"))
 	outputFileName.set("swagger.json")
-	// 這是關鍵：強制指定使用的 Profile
+	// 使用專屬的 openapi profile 進行文件生成
     customBootRun {
-        args = ["--spring.profiles.active=openapi,test"]
+        args = ["--spring.profiles.active=openapi"]
     }
 }
 
