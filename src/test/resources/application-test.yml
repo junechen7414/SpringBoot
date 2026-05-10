@@ -13,6 +13,12 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        # 強制 Hibernate 在 Oracle 中創建 sequences
+        id:
+          new_generator_mappings: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
     show-sql: true
 
 management:
