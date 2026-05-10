@@ -1,14 +1,14 @@
 services:
-  # Service Name: app (Spring Boot 應用)
+  # Service Name: app (Spring Boot Application)
   app:
-    # 使用 Dockerfile 來構建 Spring Boot 應用的映像，確保 Dockerfile 位於與 docker-compose.yml 相同的目錄下
+    # Build Spring Boot application image using Dockerfile in the same directory as docker-compose.yml
     build: .
-    # 容器名稱，方便指令podman ps 等操作識別和管理，不用於真正的網路通信
+    # Container name for easy identification in commands like podman ps, not used for network communication
     container_name: spring-boot-app
     ports:
-      - "8787:8787" # 本機訪問請用 localhost:8787
+      - "8787:8787" # Access via localhost:8787 from host machine
     environment:
-      # 內部溝通：使用服務名稱 'oracle-db' 而非 localhost
+      # Internal communication: use service name 'oracle-db' instead of localhost
       - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521/FREEPDB1
       - SPRING_DATASOURCE_USERNAME=${ORACLE_DEV_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${ORACLE_DEV_PASSWORD}
@@ -16,7 +16,7 @@ services:
       - backend-net
     depends_on:
       oracle-db:
-        condition: service_healthy # 關鍵：DB 健康才啟動 App
+        condition: service_healthy # Critical: App starts only when DB is healthy
       alloy:
         condition: service_started
   oracle-db:
@@ -25,23 +25,23 @@ services:
     ports:
       - "1521:1521"
     environment:
-      # Oracle DB 的環境變數設定，根據官方文件，這些是必要的參數
-      # Oracle 的啟動腳本（runOracle.sh）內部有一套預設的命名規則（預設 SID 就是 FREE，PDB 就是 FREEPDB1）。
+      # Oracle DB environment variables as per official documentation
+      # Oracle startup script (runOracle.sh) uses default naming: SID=FREE, PDB=FREEPDB1
       - ORACLE_SID=FREE
       - ORACLE_PDB=FREEPDB1
       - ORACLE_USERNAME=${ORACLE_DEV_USERNAME}
       - ORACLE_PASSWORD=${ORACLE_DEV_PASSWORD}
-      # 傳遞給自定義腳本使用的環境變數
+      # Environment variables passed to custom initialization scripts
       - ORACLE_DEV_USERNAME=${ORACLE_DEV_USERNAME}
       - ORACLE_DEV_PASSWORD=${ORACLE_DEV_PASSWORD}
     volumes:
       - oracle-data:/opt/oracle/oradata
-      # 存放啟動腳本
+      # Startup scripts directory
       - ./init-scripts:/opt/oracle/scripts/startup
-      # 存放範本檔案 (掛載到另一個自定義目錄)
+      # Template files directory (mounted to custom location)
       - ./init-scripts-template:/opt/oracle/template
     healthcheck:
-      # 透過 sqlplus 檢查 PDB 是否已經 Ready
+      # Check if PDB is ready using sqlplus
       test: [ "CMD-SHELL", "sqlplus -L ${ORACLE_DEV_USERNAME}/${ORACLE_DEV_PASSWORD}@FREEPDB1 <<<'exit;'" ]
       interval: 30s
       timeout: 10s
@@ -50,19 +50,19 @@ services:
     networks:
       - backend-net
 
-  # 使用 Grafana Alloy (現代化的收集器，取代舊的 Prometheus Agent)
+  # Grafana Alloy (modern collector replacing legacy Prometheus Agent)
   alloy:
     image: grafana/alloy:latest
     container_name: grafana-alloy
-    # 將當前目錄掛載到容器內的 /etc/alloy，讓 Alloy 可以讀取配置文件
+    # Mount current directory to /etc/alloy for configuration file access
     volumes:
       - ./config.alloy:/etc/alloy/config.alloy
       - alloy-data:/var/lib/alloy/data
-    # 運行 Alloy，指定存儲路徑和配置文件位置
+    # Run Alloy with specified storage path and configuration file
     command: run --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
     ports:
-      - "4318:4318" # 接收 OTLP 資料的端口
-    # 確保 Alloy 在 Prometheus 啟動後才啟動，因為 Alloy 需要將資料發送到 Prometheus
+      - "4318:4318" # Port for receiving OTLP data
+    # Alloy sends data to Prometheus
     networks:
       - backend-net
       - monitor-net
@@ -72,13 +72,13 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
-    # 運行 Prometheus，指定配置文件位置，並開啟接收功能以接收 Grafana Alloy 發送的資料
+    # Run Prometheus with configuration file and enable remote write receiver for Grafana Alloy data
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-remote-write-receiver' # 確保這行有被讀進去
+      - '--web.enable-remote-write-receiver' # Enable remote write receiver
     ports:
       - "9090:9090"
     networks:
@@ -95,20 +95,20 @@ services:
     networks:
       - monitor-net
     restart: unless-stopped
-    # 允許匿名訪問 Grafana，並將匿名用戶設置為 Admin 角色，以便在 Grafana 中查看和管理數據
+    # Allow anonymous access to Grafana with Admin role for viewing and managing data
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
 networks:
-  # 區分網路：app 只需要把資料推給 alloy，不需要直接接觸 prometheus
+  # Network separation: app only pushes data to alloy, no direct access to prometheus
   backend-net:
     driver: bridge
-  # 監控工具之間的內部通訊
+  # Internal communication between monitoring tools
   monitor-net:
     driver: bridge
 
 volumes:
-  # 命名磁碟卷：確保你壓測完重啟容器，數據（圖表、指標）不會消失
+  # Named volumes: ensure data (dashboards, metrics) persists after container restarts
   alloy-data:
   prometheus-data:
   grafana-data:
