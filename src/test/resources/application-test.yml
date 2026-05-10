@@ -1,9 +1,13 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=Oracle
-    driver-class-name: org.h2.Driver
+    url: jdbc:oracle:thin:@//oracle-db:1521/FREEPDB1
+    username: ${ORACLE_TEST_USERNAME}
+    password: ${ORACLE_TEST_PASSWORD}
+    driver-class-name: oracle.jdbc.driver.OracleDriver
+    hikari:
+      connection-timeout: 5000
+      maximum-pool-size: 20
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: create-drop
 

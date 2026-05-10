@@ -10,8 +10,8 @@ services:
     environment:
       # 內部溝通：使用服務名稱 'oracle-db' 而非 localhost
       - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521/FREEPDB1
-      - SPRING_DATASOURCE_USERNAME=${ORACLE_USERNAME}
-      - SPRING_DATASOURCE_PASSWORD=${ORACLE_PASSWORD}
+      - SPRING_DATASOURCE_USERNAME=${ORACLE_DEV_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${ORACLE_DEV_PASSWORD}
     networks:
       - backend-net
     depends_on:
@@ -29,8 +29,11 @@ services:
       # Oracle 的啟動腳本（runOracle.sh）內部有一套預設的命名規則（預設 SID 就是 FREE，PDB 就是 FREEPDB1）。
       - ORACLE_SID=FREE
       - ORACLE_PDB=FREEPDB1
-      - ORACLE_USERNAME=${ORACLE_USERNAME}
-      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - ORACLE_USERNAME=${ORACLE_DEV_USERNAME}
+      - ORACLE_PASSWORD=${ORACLE_DEV_PASSWORD}
+      # 傳遞給自定義腳本使用的環境變數
+      - ORACLE_DEV_USERNAME=${ORACLE_DEV_USERNAME}
+      - ORACLE_DEV_PASSWORD=${ORACLE_DEV_PASSWORD}
     volumes:
       - oracle-data:/opt/oracle/oradata
       # 存放啟動腳本
@@ -39,7 +42,7 @@ services:
       - ./init-scripts-template:/opt/oracle/template
     healthcheck:
       # 透過 sqlplus 檢查 PDB 是否已經 Ready
-      test: [ "CMD-SHELL", "sqlplus -L ${ORACLE_USERNAME}/${ORACLE_PASSWORD}@FREEPDB1 <<<'exit;'" ]
+      test: [ "CMD-SHELL", "sqlplus -L ${ORACLE_DEV_USERNAME}/${ORACLE_DEV_PASSWORD}@FREEPDB1 <<<'exit;'" ]
       interval: 30s
       timeout: 10s
       retries: 20

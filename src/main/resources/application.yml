@@ -1,3 +1,49 @@
+# ============================================================================
+# Spring Profile Configuration Strategy
+# ============================================================================
+# This application uses Spring profiles to manage environment-specific settings.
+#
+# Available Profiles:
+# -------------------
+# 1. 'dev' (Development) - Default profile for local development
+#    - Uses Oracle database with credentials from environment variables
+#    - Enables DEBUG logging for application code
+#    - Configures metrics export to Alloy/Prometheus
+#    - Database schema is recreated on each startup (ddl-auto: create-drop)
+#    - See: application-dev.yml
+#
+# 2. 'test' (Testing) - Used for automated testing
+#    - Configured in src/test/resources/application-test.yml
+#    - Uses test-specific database and settings
+#
+# 3. 'openapi' (OpenAPI Documentation Generation)
+#    - Lightweight profile for generating API documentation during build
+#    - Uses H2 in-memory database to avoid external dependencies
+#    - Disables unnecessary features for faster startup
+#    - See: application-openapi.yml
+#
+# Overriding the Default Profile:
+# --------------------------------
+# The default profile is set to 'dev' for convenience during development.
+# To use a different profile in production or other environments:
+#
+# Option 1: Environment Variable (Recommended for production)
+#   export SPRING_PROFILES_ACTIVE=prod
+#   or set SPRING_PROFILES_ACTIVE=prod (Windows)
+#
+# Option 2: Command Line Argument
+#   java -jar app.jar --spring.profiles.active=prod
+#
+# Option 3: System Property
+#   java -Dspring.profiles.active=prod -jar app.jar
+#
+# Migration Notes:
+# ----------------
+# - Datasource configuration has been moved from application.yml to profile-specific files
+# - Existing deployments should set SPRING_PROFILES_ACTIVE environment variable
+# - Production environments should NOT use 'dev' profile (creates/drops schema on startup)
+# ============================================================================
+
 spring:
   profiles:
     active: dev
