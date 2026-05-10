@@ -19,15 +19,13 @@ import com.ibm.demo.account.DTO.UpdateAccountRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
-@RestController // Restful Controller
-@RequestMapping("/account") // 基礎路徑
+@RestController
+@RequestMapping("/account")
+@RequiredArgsConstructor
 public class AccountController {
     private final AccountService accountService;
-
-    public AccountController(AccountService accountService) {
-        this.accountService = accountService;
-    }
 
     // Create Account
     @Operation(summary = "建立新帳戶", description = "建立新帳戶。成功則新增帳戶資料，預設狀態為啟用 'Y'。")

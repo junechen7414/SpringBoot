@@ -45,13 +45,13 @@ public class RestClientConfig {
                 .setConnectionManager(connectionManager)
                 // 關鍵：給予虛擬執行緒足夠的排隊時間，不要一拿不到連線就斷開
                 .setDefaultRequestConfig(RequestConfig.custom()
-                        // 從池中拿連線可以等 5 秒
+                        // 從池中拿連線
                         .setConnectionRequestTimeout(
-                                Timeout.ofSeconds(httpClientProperties.getConnectionRequestTimeout()))
-                        // 等待 API 回傳可等 10 秒
-                        .setResponseTimeout(Timeout.ofSeconds(httpClientProperties.getResponseTimeout()))
+                                Timeout.of(httpClientProperties.getConnectionRequestTimeout()))
+                        // 等待 API 回傳
+                        .setResponseTimeout(Timeout.of(httpClientProperties.getResponseTimeout()))
                         .build())
-                .evictIdleConnections(TimeValue.ofSeconds(httpClientProperties.getEvictIdleConnectionsPeriod()))
+                .evictIdleConnections(TimeValue.of(httpClientProperties.getEvictIdleConnectionsPeriod()))
                 .build();
 
         factory.setHttpClient(httpClient);

@@ -22,15 +22,13 @@ import com.ibm.demo.util.ProcessOrderItemsRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
-@RestController // Restful Controller
-@RequestMapping("/product") // 基礎路徑
+@RestController
+@RequestMapping("/product")
+@RequiredArgsConstructor
 public class ProductController {
     private final ProductService productService;
-
-    public ProductController(ProductService productService) {
-        this.productService = productService;
-    }
 
     // Create Product
     @Operation(summary = "新增商品", description = "建立新商品。若已存在同名商品則拋出 ProductAlreadyExistException。成功則新增商品資料，預設銷售狀態為 1001 (AVAILABLE)。")

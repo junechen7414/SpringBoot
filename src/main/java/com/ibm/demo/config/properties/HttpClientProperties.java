@@ -1,5 +1,8 @@
 package com.ibm.demo.config.properties;
 
+import java.time.Duration;
+
+import org.hibernate.validator.constraints.time.DurationMin;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -23,15 +26,15 @@ public class HttpClientProperties {
     @NotNull(message = "Default max per route must be greater than 0")
     private int defaultMaxPerRoute;
 
-    @Positive
-    @NotNull(message = "Connection request timeout must be greater than 0")
-    private int connectionRequestTimeout; // seconds
+    @DurationMin(seconds = 1)
+    @NotNull(message = "Connection request timeout must be set")
+    private Duration connectionRequestTimeout;
 
-    @Positive
-    @NotNull(message = "Response timeout must be greater than 0")
-    private int responseTimeout; // seconds
+    @DurationMin(seconds = 1)
+    @NotNull(message = "Response timeout must be set")
+    private Duration responseTimeout;
 
-    @Positive
-    @NotNull(message = "Evict idle connections period must be greater than 0")
-    private int evictIdleConnectionsPeriod; // seconds
+    @DurationMin(seconds = 1)
+    @NotNull(message = "Evict idle connections period must be set")
+    private Duration evictIdleConnectionsPeriod;
 }

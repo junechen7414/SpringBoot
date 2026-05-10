@@ -19,15 +19,13 @@ import com.ibm.demo.order.DTO.UpdateOrderRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/order") // 基礎路徑
+@RequestMapping("/order")
+@RequiredArgsConstructor
 public class OrderController {
     private final OrderService orderService;
-
-    public OrderController(OrderService orderService) {
-        this.orderService = orderService;
-    }
 
     // Create Order
     @Operation(summary = "建立新訂單", description = "建立新訂單。先驗證帳戶是否啟用（不啟用則拋出 AccountInactiveException），檢查訂單內是否有重複商品（重複則拋出 InvalidRequestException），最後透過商品服務處理庫存（若狀態不可銷售或庫存不足由商品服務拋出異常）。成功則新增訂單主檔（預設狀態 1001）與明細。")
@@ -69,7 +67,7 @@ public class OrderController {
         return ResponseEntity.noContent().build();
     }
 
-    // 帳戶ID是否存在任何訂單中
+    // Check if account ID exists in any order
     @Operation(summary = "檢查帳戶ID是否存在於任何有效訂單中", description = "判斷帳戶是否有關聯的有效訂單，用於帳戶更新與刪除時的檢核。受限於系統規則，僅會針對未軟刪除且狀態為 1001 (CREATED) 的訂單進行判定。")
     @GetMapping("/account/{accountId}/exists")
     public ResponseEntity<Boolean> AccountIdIsInOrder(@PathVariable Integer accountId) {
