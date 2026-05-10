@@ -9,7 +9,8 @@ spring:
       maximum-pool-size: 20
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update  # 改為 update，保留資料避免每次重啟都清空
+    show-sql: true  # 開發環境顯示 SQL 語句，方便除錯
 
 logging:
   level:
