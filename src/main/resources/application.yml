@@ -60,7 +60,7 @@ server:
 
 logging:
   level:
-    com.example.demo: INFO
+    com.ibm.demo: INFO
 
 management:
   endpoints:
