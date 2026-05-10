@@ -12,14 +12,14 @@ spring:
       ddl-auto: create-drop
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.OracleDialect
         format_sql: true
-        # 強制 Hibernate 在 Oracle 中創建 sequences
-        id:
-          new_generator_mappings: true
         jdbc:
           lob:
             non_contextual_creation: true
     show-sql: true
+  flyway:
+    enabled: false
 
 management:
   otlp:

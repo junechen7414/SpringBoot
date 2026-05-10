@@ -9,8 +9,17 @@ spring:
       maximum-pool-size: 20
   jpa:
     hibernate:
-      ddl-auto: update  # 改為 update，保留資料避免每次重啟都清空
+      ddl-auto: create-drop  
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.OracleDialect
+        format_sql: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
     show-sql: true  # 開發環境顯示 SQL 語句，方便除錯
+  flyway:
+    enabled: false  # 不使用 Flyway，使用 JPA DDL auto
 
 logging:
   level:
