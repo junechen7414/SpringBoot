@@ -43,3 +43,16 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+logging:
+  level:
+    org:
+      hibernate:
+        SQL: DEBUG
+        type:
+          descriptor:
+            sql:
+              BasicBinder: TRACE
+        tool:
+          schema:
+            internal: DEBUG
