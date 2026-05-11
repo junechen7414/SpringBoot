@@ -1,4 +1,17 @@
 # E2E Test Profile - Uses Oracle database in Docker
+#
+# IMPORTANT: This profile is ONLY used in the Playwright repository for E2E tests
+# via docker-compose. It is NOT tested in this SpringBoot repository because:
+# 1. Oracle database is not available in the unit test environment
+# 2. The e2e profile requires docker-compose setup from the Playwright repository
+# 3. Testing this profile requires the full E2E test infrastructure
+#
+# Testing Location: This profile is validated in the Playwright repository's
+# docker-compose.test.yml environment where Oracle database is available.
+#
+# Configuration Validation: Any changes to this file should be tested in the
+# Playwright repository by running: docker compose -f docker-compose.test.yml up
+#
 # This profile is used for end-to-end tests with docker-compose
 spring:
   datasource:
