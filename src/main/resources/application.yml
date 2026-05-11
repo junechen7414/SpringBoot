@@ -22,6 +22,11 @@
 #    - Disables unnecessary features for faster startup
 #    - See: application-openapi.yml
 #
+# 4. 'e2e' (End-to-End Testing)
+#    - Used for end-to-end and Playwright-based test scenarios
+#    - Configured in src/test/resources/application-e2e.yml
+#    - Uses test-specific settings for E2E execution
+#
 # Overriding the Default Profile:
 # --------------------------------
 # The default profile is set to 'dev' for convenience during development.
