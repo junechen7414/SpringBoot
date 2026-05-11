@@ -1,0 +1,32 @@
+# E2E Test Profile - Uses Oracle database in Docker
+# This profile is used for end-to-end tests with docker-compose
+spring:
+  datasource:
+    url: jdbc:oracle:thin:@//oracle-db:1521/FREEPDB1
+    username: ${ORACLE_TEST_USERNAME}
+    password: ${ORACLE_TEST_PASSWORD}
+    driver-class-name: oracle.jdbc.driver.OracleDriver
+    hikari:
+      connection-timeout: 5000
+      maximum-pool-size: 20
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.OracleDialect
+    show-sql: true
+  flyway:
+    enabled: false
+
+management:
+  otlp:
+    metrics:
+      export:
+        url: http://alloy:4318/v1/metrics
+        enabled: true
+        step: 10s
+  metrics:
+    tags:
+      application: ${spring.application.name}
