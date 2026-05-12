@@ -29,7 +29,7 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @SuperBuilder
 @Table(name = "ORDER_PRODUCT_DETAIL")
-@SQLRestriction("DELETED = 0") // 只選擇未刪除的資料
+@SQLRestriction("DELETED = false") // 只選擇未刪除的資料
 @Schema(description = "訂單產品明細")
 public class OrderDetail extends BaseEntity {
 

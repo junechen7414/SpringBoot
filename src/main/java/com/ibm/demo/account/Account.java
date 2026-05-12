@@ -25,7 +25,7 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @Entity
 @SuperBuilder
-@SQLRestriction("STATUS = 'Y' AND DELETED = 0") // 只選擇啟用狀態且未被刪除的資料
+@SQLRestriction("STATUS = 'Y' AND DELETED = false") // 只選擇啟用狀態且未被刪除的資料
 @Table(name = "ACCOUNT") // 指定對應的資料表名稱
 @Schema(description = "帳號資訊")
 public class Account extends BaseEntity {

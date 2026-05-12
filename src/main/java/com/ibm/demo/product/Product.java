@@ -28,7 +28,7 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @Entity
 @SuperBuilder
-@SQLRestriction("DELETED = 0 AND SALE_STATUS = 1001") // 只選擇未刪除且可銷售的資料
+@SQLRestriction("DELETED = false AND SALE_STATUS = 1001") // 只選擇未刪除且可銷售的資料
 @Table(name = "PRODUCT")
 @Schema(description = "商品資訊")
 public class Product extends BaseEntity {
