@@ -77,6 +77,13 @@ jobs:
           token: ${{ secrets.MY_REPO_TOKEN }} # 需要一個具備寫入權限的 Personal Access Token
           repository: ${{vars.DEST_USER}}/${{vars.DEST_REPO}} # 目標 Repo
           event-type: backend_image_updated
+          client-payload: |
+            {
+              "image_tag": "${{ steps.meta.outputs.version }}",
+              "ref": "${{ github.ref }}",
+              "sha": "${{ github.sha }}",
+              "event_name": "${{ github.event_name }}"
+            }
   # 新增的產文檔 Job，設定它「依賴」上一個 Job
   generate-docs:
     needs: build-and-push
