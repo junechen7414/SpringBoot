@@ -24,14 +24,17 @@ spring:
       maximum-pool-size: 20
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.OracleDialect
     show-sql: true
   flyway:
-    enabled: false
+    enabled: true
+    baseline-on-migrate: true
+    clean-disabled: false
+    locations: classpath:db/migration
 
 management:
   otlp:

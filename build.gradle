@@ -43,6 +43,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-aop'
 	implementation 'org.apache.httpcomponents.client5:httpclient5'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	// Flyway for database migration
+	implementation 'org.flywaydb:flyway-core'
+	runtimeOnly 'org.flywaydb:flyway-database-oracle'
 	// 關鍵：將 Micrometer 指標透過 OTLP 格式導出
     implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
     // 讓 Micrometer 支持 OTLP

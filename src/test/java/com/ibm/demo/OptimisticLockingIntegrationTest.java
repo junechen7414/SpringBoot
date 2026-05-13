@@ -97,8 +97,14 @@ public class OptimisticLockingIntegrationTest {
     @Test
     @DisplayName("測試訂單更新時的樂觀鎖機制 (JPA 標準)")
     public void testUpdateOrderOptimisticLocking() {
+        // 先建立帳戶以滿足外鍵約束
+        Account account = accountRepository.saveAndFlush(Account.builder()
+                .name("訂單測試帳戶")
+                .status(AccountStatus.ACTIVE.getCode())
+                .build());
+        
         OrderInfo order = OrderInfo.builder()
-                .accountId(999)
+                .accountId(account.getId())
                 .status(OrderStatus.CREATED.getCode())
                 .build();
         order = orderInfoRepository.saveAndFlush(order);
@@ -167,8 +173,14 @@ public class OptimisticLockingIntegrationTest {
     @DisplayName("測試訂單軟刪除時的樂觀鎖機制 (自定義 @Query)")
     @Transactional
     public void testSoftDeleteOrderOptimisticLocking() {
+        // 先建立帳戶以滿足外鍵約束
+        Account account = accountRepository.saveAndFlush(Account.builder()
+                .name("訂單軟刪除測試帳戶")
+                .status(AccountStatus.ACTIVE.getCode())
+                .build());
+        
         OrderInfo order = orderInfoRepository.saveAndFlush(OrderInfo.builder()
-                .accountId(999)
+                .accountId(account.getId())
                 .status(OrderStatus.CREATED.getCode())
                 .build());
         Integer id = order.getId();
