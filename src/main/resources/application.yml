@@ -46,7 +46,7 @@
 # ----------------
 # - Datasource configuration has been moved from application.yml to profile-specific files
 # - Existing deployments should set SPRING_PROFILES_ACTIVE environment variable
-# - Production environments should NOT use 'dev' profile (creates/drops schema on startup)
+# - Production environments should NOT use 'dev' profile (configured for local development)
 # ============================================================================
 
 spring:
