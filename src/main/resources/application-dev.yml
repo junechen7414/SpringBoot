@@ -9,7 +9,7 @@ spring:
       maximum-pool-size: 20
   jpa:
     hibernate:
-      ddl-auto: create-drop  
+      ddl-auto: validate  
     properties:
       hibernate:
         dialect: org.hibernate.dialect.OracleDialect
@@ -19,7 +19,7 @@ spring:
             non_contextual_creation: true
     show-sql: true  # 開發環境顯示 SQL 語句，方便除錯
   flyway:
-    enabled: false  # 不使用 Flyway，使用 JPA DDL auto
+    enabled: true  # 使用 Flyway 進行資料庫遷移版本控制
 
 logging:
   level:
