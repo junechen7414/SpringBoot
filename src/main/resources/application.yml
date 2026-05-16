@@ -12,8 +12,8 @@
 #    - Database schema is recreated on each startup (ddl-auto: create-drop)
 #    - See: application-dev.yml
 #
-# 2. 'test' (Testing) - Used for automated testing
-#    - Configured in src/test/resources/application-test.yml
+# 2. 'unit-test' (Unit Testing) - Used for automated unit testing
+#    - Configured in src/test/resources/application-unit-test.yml
 #    - Uses test-specific database and settings
 #
 # 3. 'openapi' (OpenAPI Documentation Generation)
