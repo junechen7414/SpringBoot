@@ -53,14 +53,16 @@ dependencies {
 	implementation 'io.micrometer:micrometer-java21'
 	runtimeOnly 'com.h2database:h2'
 	testImplementation 'com.h2database:h2'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation "org.testcontainers:testcontainers-oracle-free:2.0.5"
+	testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
 }
 
 tasks.named('test') {
 	useJUnitPlatform{
-		// 讓 Gradle 讀取命令列傳入的屬性
-        def excludeTag = System.getProperty("junit.platform.exclude.tags")
+        def excludeTag = System.getProperty('junit.platform.exclude.tags')
         if (excludeTag) {
-            excludeTags excludeTag
+            excludeTags excludeTag.split(',')
         }
 	}
 }
