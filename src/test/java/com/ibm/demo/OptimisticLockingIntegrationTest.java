@@ -8,9 +8,7 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.test.context.ActiveProfiles;
 
 import com.ibm.demo.account.Account;
 import com.ibm.demo.account.AccountRepository;
@@ -25,9 +23,7 @@ import com.ibm.demo.product.ProductRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
-@DataJpaTest
-@ActiveProfiles("test")
-public class OptimisticLockingIntegrationTest {
+public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ProductRepository productRepository;
@@ -43,6 +39,7 @@ public class OptimisticLockingIntegrationTest {
 
     @Test
     @DisplayName("測試商品更新時的樂觀鎖機制 (JPA 標準)")
+    @Transactional
     public void testUpdateProductOptimisticLocking() {
         Product product = Product.builder()
                 .name("商品樂觀鎖測試")
@@ -70,6 +67,7 @@ public class OptimisticLockingIntegrationTest {
 
     @Test
     @DisplayName("測試帳戶更新時的樂觀鎖機制 (JPA 標準)")
+    @Transactional
     public void testUpdateAccountOptimisticLocking() {
         Account account = Account.builder()
                 .name("帳戶樂觀鎖測試")
@@ -96,6 +94,7 @@ public class OptimisticLockingIntegrationTest {
 
     @Test
     @DisplayName("測試訂單更新時的樂觀鎖機制 (JPA 標準)")
+    @Transactional
     public void testUpdateOrderOptimisticLocking() {
         // 先建立帳戶以滿足外鍵約束
         Account account = accountRepository.saveAndFlush(Account.builder()
