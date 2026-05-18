@@ -14,17 +14,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.BusinessLogicCheck.BusinessException;
-import com.ibm.demo.exception.BusinessLogicCheck.ServiceOverloadedException;
 import com.ibm.demo.util.ErrorCode;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
-    /**
-     * 優化：利用 BusinessException 帶出來的狀態碼動態處理
-     */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException ex) {
         ErrorCode errorCode = ex.getErrorCode();
@@ -34,14 +31,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return createResponseEntity(status, errorType, ex.getMessage());
     }
 
-    // 專門處理 ServiceOverloadedException，優先級高於 generic 的 BusinessException
-    @ExceptionHandler(ServiceOverloadedException.class)
-    public ResponseEntity<ApiErrorResponse> handleServiceOverloaded(ServiceOverloadedException ex) {
-        ErrorCode errorCode = ex.getErrorCode();
-        HttpStatus status = (errorCode != null) ? errorCode.getStatus() : HttpStatus.SERVICE_UNAVAILABLE;
-        String errorType = (errorCode != null) ? errorCode.getMessage() : "Service Overloaded";
-
-        return createResponseEntity(status, errorType, ex.getMessage());
+    @ExceptionHandler(BulkheadFullException.class)
+    public ResponseEntity<ApiErrorResponse> handleBulkheadFull(BulkheadFullException ex) {
+        return createResponseEntity(HttpStatus.SERVICE_UNAVAILABLE, "Service Overloaded", "系統負載過高，請稍後再試。");
     }
 
     // 處理樂觀鎖衝突例外
