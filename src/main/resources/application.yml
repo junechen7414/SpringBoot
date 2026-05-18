@@ -12,8 +12,8 @@
 #    - Database schema is recreated on each startup (ddl-auto: create-drop)
 #    - See: application-dev.yml
 #
-# 2. 'test' (Testing) - Used for automated testing
-#    - Configured in src/test/resources/application-test.yml
+# 2. 'unit-test' (Unit Testing) - Used for automated unit testing
+#    - Configured in src/test/resources/application-unit-test.yml
 #    - Uses test-specific database and settings
 #
 # 3. 'openapi' (OpenAPI Documentation Generation)
@@ -80,11 +80,6 @@ management:
 
 app:
   base-url: http://localhost:${server.port}
-  database:
-    concurrency:
-      default-limit: 15
-      limits:
-        OrderService: 18
 
 http:
   client:
@@ -93,3 +88,20 @@ http:
     connection-request-timeout: 4s
     response-timeout: 5s
     evict-idle-connections-period: 30s
+
+# Resilience4j 配置 - 替換原有的自定義 Semaphore 限流機制
+# 使用 Semaphore-based Bulkhead 實現 fail-fast 行為
+resilience4j:
+  bulkhead:
+    configs:
+      default:
+        max-concurrent-calls: 15
+        max-wait-duration: 0ms  # fail-fast: 不等待，立即拒絕
+    instances:
+      OrderService:
+        base-config: default
+        max-concurrent-calls: 18
+      AccountService:
+        base-config: default
+      ProductService:
+        base-config: default

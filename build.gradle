@@ -43,6 +43,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-aop'
 	implementation 'org.apache.httpcomponents.client5:httpclient5'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	// Resilience4j for rate limiting and bulkhead
+	implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.3.0'
 	// Flyway for database migration
 	implementation 'org.flywaydb:flyway-core'
 	runtimeOnly 'org.flywaydb:flyway-database-oracle'
