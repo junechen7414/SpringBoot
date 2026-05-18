@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
-import com.ibm.demo.annotation.DatabaseConcurrencyLimit;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
@@ -36,7 +36,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@DatabaseConcurrencyLimit(value = "OrderService")
+@Bulkhead(name = "OrderService")
 public class OrderService {
         private final OrderInfoRepository orderInfoRepository;
         private final AccountClient accountClient;
