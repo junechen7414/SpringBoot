@@ -8,11 +8,30 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import com.ibm.demo.exception.ApiErrorResponse;
 
 public class GlobalExceptionHandlerTest {
 
     private GlobalExceptionHandler globalExceptionHandler = new GlobalExceptionHandler();
+
+    @Test
+    @DisplayName("處理 BulkheadFullException，應回傳 503 Service Unavailable 狀態碼")
+    void handleBulkheadFull_ShouldReturnServiceUnavailableStatus() {
+        // Arrange
+        BulkheadFullException ex = BulkheadFullException.createBulkheadFullException(
+                io.github.resilience4j.bulkhead.Bulkhead.ofDefaults("test-bulkhead"));
+
+        // Act
+        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleBulkheadFull(ex);
+
+        // Assert
+        assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(responseEntity.getBody()).isNotNull();
+        assertThat(responseEntity.getBody().status()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
+        assertThat(responseEntity.getBody().error()).isEqualTo("Service Overloaded");
+        assertThat(responseEntity.getBody().message()).isEqualTo("系統負載過高，請稍後再試。");
+    }
 
     @Test
     @DisplayName("處理樂觀鎖衝突例外，應回傳 409 Conflict 狀態碼")
