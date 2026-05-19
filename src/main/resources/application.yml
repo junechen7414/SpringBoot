@@ -105,3 +105,21 @@ resilience4j:
         base-config: default
       ProductService:
         base-config: default
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+    instances:
+      OrderService:
+        base-config: default
+      AccountService:
+        base-config: default
+      ProductService:
+        base-config: default

@@ -15,6 +15,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.BusinessLogicCheck.BusinessException;
 import com.ibm.demo.util.ErrorCode;
@@ -34,6 +35,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(BulkheadFullException.class)
     public ResponseEntity<ApiErrorResponse> handleBulkheadFull(BulkheadFullException ex) {
         return createResponseEntity(HttpStatus.SERVICE_UNAVAILABLE, "Service Overloaded", "系統負載過高，請稍後再試。");
+    }
+
+    @ExceptionHandler(CallNotPermittedException.class)
+    public ResponseEntity<ApiErrorResponse> handleCallNotPermitted(CallNotPermittedException ex) {
+        return createResponseEntity(HttpStatus.SERVICE_UNAVAILABLE, "Circuit Breaker Open", "服務暫時不可用，請稍後再試。");
     }
 
     // 處理樂觀鎖衝突例外
