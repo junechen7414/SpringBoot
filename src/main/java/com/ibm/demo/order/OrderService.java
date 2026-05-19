@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
@@ -37,6 +38,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 @Bulkhead(name = "OrderService")
+@CircuitBreaker(name = "OrderService")
 public class OrderService {
         private final OrderInfoRepository orderInfoRepository;
         private final AccountClient accountClient;
