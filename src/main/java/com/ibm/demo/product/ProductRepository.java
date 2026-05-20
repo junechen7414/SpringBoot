@@ -33,8 +33,8 @@ public interface ProductRepository extends JpaRepository<Product, Integer>, Soft
     @Override
     @Modifying
     @Query("""
-            UPDATE Product p SET p.deleted = true,
-            p.deletedAt = CURRENT_TIMESTAMP,
+            UPDATE Product p SET p.softDeleteMetadata.deleted = true,
+            p.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP,
             p.saleStatus = 1002,
             p.version = p.version + 1
             WHERE p.id = :id AND p.version = :version

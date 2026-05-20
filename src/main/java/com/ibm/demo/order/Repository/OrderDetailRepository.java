@@ -11,8 +11,8 @@ public interface OrderDetailRepository extends JpaRepository<OrderDetail, Intege
     @Modifying
     @Query("""
             UPDATE OrderDetail d
-            SET d.deleted = true,
-                d.deletedAt = CURRENT_TIMESTAMP,
+            SET d.softDeleteMetadata.deleted = true,
+                d.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP,
                 d.version = d.version + 1
             WHERE d.orderInfo.id = :orderId
             """)

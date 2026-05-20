@@ -20,8 +20,8 @@ public interface AccountRepository extends JpaRepository<Account, Integer>, Soft
     @Override
     @Modifying
     @Query("""
-            UPDATE Account a SET a.deleted = true,
-            a.deletedAt = CURRENT_TIMESTAMP,
+            UPDATE Account a SET a.softDeleteMetadata.deleted = true,
+            a.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP,
             a.status = 'N',
             a.version = a.version + 1
             WHERE a.id = :id AND a.version = :version
