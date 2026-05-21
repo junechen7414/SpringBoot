@@ -18,8 +18,8 @@ public interface OrderInfoRepository extends JpaRepository<OrderInfo, Integer>, 
     @Modifying
     @Query("""
             UPDATE OrderInfo o
-            SET o.deleted = true,
-                o.deletedAt = CURRENT_TIMESTAMP,
+            SET o.softDeleteMetadata.deleted = true,
+                o.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP,
                 o.status = 1003,
                 o.version = o.version + 1
             WHERE o.id = :id AND o.version = :version
