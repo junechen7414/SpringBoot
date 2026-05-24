@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
@@ -29,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Bulkhead(name = "ProductService")
 @CircuitBreaker(name = "ProductService")
+@RateLimiter(name = "ProductService")
 public class ProductService {
     private final ProductRepository productRepository;
 

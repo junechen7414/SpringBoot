@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
@@ -24,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Bulkhead(name = "AccountService")
 @CircuitBreaker(name = "AccountService")
+@RateLimiter(name = "AccountService")
 public class AccountService {
     private final AccountRepository accountRepository;
     private final OrderClient orderClient;
