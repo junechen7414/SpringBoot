@@ -72,6 +72,10 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  otlp:
+    metrics:
+      export:
+        enabled: false
   endpoint:
     prometheus:
       access: READ_ONLY
