@@ -16,6 +16,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.BusinessLogicCheck.BusinessException;
 import com.ibm.demo.util.ErrorCode;
@@ -40,6 +41,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(CallNotPermittedException.class)
     public ResponseEntity<ApiErrorResponse> handleCallNotPermitted(CallNotPermittedException ex) {
         return createResponseEntity(HttpStatus.SERVICE_UNAVAILABLE, "Circuit Breaker Open", "服務暫時不可用，請稍後再試。");
+    }
+
+    @ExceptionHandler(RequestNotPermitted.class)
+    public ResponseEntity<ApiErrorResponse> handleRateLimiter(RequestNotPermitted ex) {
+        return createResponseEntity(HttpStatus.TOO_MANY_REQUESTS, "Rate Limit Exceeded", "請求過於頻繁，請稍後再試。");
     }
 
     // 處理樂觀鎖衝突例外
