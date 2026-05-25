@@ -10,6 +10,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 
 import com.ibm.demo.exception.ApiErrorResponse;
 
@@ -69,6 +70,24 @@ public class GlobalExceptionHandlerTest {
         assertThat(responseEntity.getBody().status()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
         assertThat(responseEntity.getBody().error()).isEqualTo("Circuit Breaker Open");
         assertThat(responseEntity.getBody().message()).isEqualTo("服務暫時不可用，請稍後再試。");
+    }
+
+    @Test
+    @DisplayName("處理 RequestNotPermitted，應回傳 429 Too Many Requests 狀態碼")
+    void handleRateLimiter_ShouldReturnTooManyRequestsStatus() {
+        // Arrange
+        RequestNotPermitted ex = RequestNotPermitted.createRequestNotPermitted(
+                io.github.resilience4j.ratelimiter.RateLimiter.ofDefaults("test-rate-limiter"));
+
+        // Act
+        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleRateLimiter(ex);
+
+        // Assert
+        assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(responseEntity.getBody()).isNotNull();
+        assertThat(responseEntity.getBody().status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+        assertThat(responseEntity.getBody().error()).isEqualTo("Rate Limit Exceeded");
+        assertThat(responseEntity.getBody().message()).isEqualTo("請求過於頻繁，請稍後再試。");
     }
 
 }
