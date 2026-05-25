@@ -108,6 +108,19 @@ resilience4j:
         base-config: default
       ProductService:
         base-config: default
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100      # 每個週期允許 100 個請求
+        limit-refresh-period: 1s   # 每秒刷新限制
+        timeout-duration: 0ms      # fail-fast: 不等待，立即拒絕
+    instances:
+      OrderService:
+        base-config: default
+      AccountService:
+        base-config: default
+      ProductService:
+        base-config: default
   circuitbreaker:
     configs:
       default:
