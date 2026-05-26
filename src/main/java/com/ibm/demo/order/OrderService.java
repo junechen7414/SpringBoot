@@ -12,6 +12,9 @@ import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
+import lombok.extern.slf4j.Slf4j;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
@@ -34,9 +37,12 @@ import com.ibm.demo.util.ServiceValidator;
 
 import lombok.RequiredArgsConstructor;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Bulkhead(name = "OrderService")
+@CircuitBreaker(name = "OrderService")
+@RateLimiter(name = "OrderService")
 public class OrderService {
         private final OrderInfoRepository orderInfoRepository;
         private final AccountClient accountClient;
@@ -84,8 +90,23 @@ public class OrderService {
 
                 productClient.processOrderItems(request);
 
-                // 將資料庫操作委派給交易服務
-                return orderTransactionalService.createOrder(createOrderRequest);
+                // 將資料庫操作委派給交易服務，若失敗則補償歸還庫存
+                try {
+                        return orderTransactionalService.createOrder(createOrderRequest);
+                } catch (Exception e) {
+                        // 補償: 歸還已扣除的庫存 (反轉 original 和 updated)
+                        ProcessOrderItemsRequest rollbackRequest = ProcessOrderItemsRequest.builder()
+                                        .originalItems(uniqueItems)
+                                        .updatedItems(Collections.emptySet())
+                                        .build();
+                        try {
+                                productClient.processOrderItems(rollbackRequest);
+                        } catch (Exception compensationEx) {
+                                log.error("建立訂單失敗後，補償歸還庫存也失敗，需人工介入處理。原始異常: {}, 補償異常: {}",
+                                                e.getMessage(), compensationEx.getMessage());
+                        }
+                        throw e;
+                }
         }
 
         public List<GetOrderListResponse> getOrderListByAccountId(Integer accountId) {
@@ -182,8 +203,23 @@ public class OrderService {
 
                 productClient.processOrderItems(processRequest);
 
-                // 將資料庫操作委派給交易服務
-                orderTransactionalService.updateOrder(request, order);
+                // 將資料庫操作委派給交易服務，若失敗則補償反轉庫存操作
+                try {
+                        orderTransactionalService.updateOrder(request, order);
+                } catch (Exception e) {
+                        // 補償: 反轉庫存操作 (將 original 和 updated 互換)
+                        ProcessOrderItemsRequest rollbackRequest = ProcessOrderItemsRequest.builder()
+                                        .originalItems(uniqueItems)
+                                        .updatedItems(originalItems)
+                                        .build();
+                        try {
+                                productClient.processOrderItems(rollbackRequest);
+                        } catch (Exception compensationEx) {
+                                log.error("更新訂單失敗後，補償反轉庫存也失敗，需人工介入處理。原始異常: {}, 補償異常: {}",
+                                                e.getMessage(), compensationEx.getMessage());
+                        }
+                        throw e;
+                }
         }
 
         /**
@@ -192,19 +228,14 @@ public class OrderService {
         public void deleteOrder(Integer orderId) {
                 ServiceValidator.validateNotNull(orderId, "Order ID");
                 // 1. 獲取訂單資訊
-                OrderInfo existingOrderInfo = orderInfoRepository.findById(orderId)
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Order not found with ID: " + orderId));
+                OrderInfo existingOrderInfo = findOrderByIdOrThrow(orderId);
 
                 // 2. 驗證訂單狀態
                 if (existingOrderInfo.getStatus() != OrderStatus.CREATED.getCode()) {
                         throw new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + existingOrderInfo.getStatus());
                 }
-                
-                // 將資料庫操作委派給交易服務
-                orderTransactionalService.deleteOrder(existingOrderInfo,existingOrderInfo.getVersion());
 
-                // 3. 收集所有商品ID並取得商品資訊
+                // 3. 先歸還庫存（外部服務調用放在前面，失敗時訂單不受影響）
                 Set<OrderItemRequest> originalItems = existingOrderInfo.getOrderDetails().stream()
                                 .map(detail -> OrderItemRequest.builder()
                                                 .productId(detail.getProductId())
@@ -219,6 +250,23 @@ public class OrderService {
 
                 productClient.processOrderItems(processRequest);
 
+                // 4. 再刪除訂單，若失敗則補償重新扣回庫存
+                try {
+                        orderTransactionalService.deleteOrder(existingOrderInfo, existingOrderInfo.getVersion());
+                } catch (Exception e) {
+                        // 補償: 重新扣回已歸還的庫存
+                        ProcessOrderItemsRequest rollbackRequest = ProcessOrderItemsRequest.builder()
+                                        .originalItems(Collections.emptySet())
+                                        .updatedItems(originalItems)
+                                        .build();
+                        try {
+                                productClient.processOrderItems(rollbackRequest);
+                        } catch (Exception compensationEx) {
+                                log.error("刪除訂單失敗後，補償重新扣回庫存也失敗，需人工介入處理。原始異常: {}, 補償異常: {}",
+                                                e.getMessage(), compensationEx.getMessage());
+                        }
+                        throw e;
+                }
         }
 
         /**
