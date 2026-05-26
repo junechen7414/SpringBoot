@@ -127,6 +127,25 @@ podman compose build app
 - **容器工具**: 一律使用 `podman`，禁用 `docker` 指令
 - **套件管理**: 前端專案使用 `pnpm`，禁用 `npm` 或 `yarn`
 
+### Shell 指令執行規範
+
+執行 CLI 指令前，必須先偵測當前使用的 Shell 環境（PowerShell 或 CMD），並根據環境調整指令語法：
+
+| 差異項目 | PowerShell (`pwsh`) | CMD (`cmd.exe`) |
+|---------|-------------------|-----------------|
+| 指令串接 | 使用 `;` 分隔 | 使用 `&&` 分隔 |
+| 執行當前目錄腳本 | `./gradlew` | `gradlew` (或 `.\gradlew`) |
+| 環境變數引用 | `$env:VAR_NAME` | `%VAR_NAME%` |
+| 路徑分隔 | 支援 `/` 和 `\` | 建議使用 `\` |
+
+**範例對照：**
+- PowerShell：`cd src; ./gradlew test`
+- CMD：`cd src && gradlew test`
+
+**重要原則：**
+- 不可假設預設 Shell，須透過環境資訊判斷
+- 指令語法必須與當前 Shell 相容，避免跨 Shell 語法混用
+
 ### Git 工作流程
 
 #### 分支命名規範
