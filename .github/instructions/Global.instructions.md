@@ -18,6 +18,10 @@ description: Every conversation
 ## 指令執行偏好
 1. 容器管理工具：一律使用 podman 而非 docker。
 2. 套件管理器：一律使用 pnpm。嚴禁使用 npm 或 yarn。
+3. Shell 環境適配：執行指令前須先偵測當前 Shell（PowerShell 或 CMD），並使用對應語法：
+   - PowerShell (`pwsh`)：指令串接用 `;`，執行當前目錄腳本用 `./script`（例如 `./gradlew`）
+   - CMD (`cmd.exe`)：指令串接用 `&&`，執行當前目錄腳本直接用名稱（例如 `gradlew`，不加 `./`）
+   - 不可假設預設 Shell 環境，須透過環境資訊判斷後再決定指令語法
 
 ## git 命名/訊息偏好
 1. 分支命名 (Branch Naming)
