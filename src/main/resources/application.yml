@@ -72,6 +72,10 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  otlp:
+    metrics:
+      export:
+        enabled: false
   endpoint:
     prometheus:
       access: READ_ONLY
@@ -95,12 +99,42 @@ resilience4j:
   bulkhead:
     configs:
       default:
-        max-concurrent-calls: 15
-        max-wait-duration: 0ms  # fail-fast: 不等待，立即拒絕
+        max-concurrent-calls: 100 # 調整至連線池上限的 50% 左右
+        max-wait-duration: 0ms    # fail-fast: 不等待，立即拒絕
     instances:
       OrderService:
         base-config: default
-        max-concurrent-calls: 18
+      AccountService:
+        base-config: default
+      ProductService:
+        base-config: default
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100      # 每個週期允許 100 個請求
+        limit-refresh-period: 1s   # 每秒刷新限制
+        timeout-duration: 0ms      # fail-fast: 不等待，立即拒絕
+    instances:
+      OrderService:
+        base-config: default
+      AccountService:
+        base-config: default
+      ProductService:
+        base-config: default
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 50             # 擴大窗口，增加統計置信度
+        minimum-number-of-calls: 20         # 至少 20 個請求才開始計算
+        failure-rate-threshold: 50          # 50% 失敗率觸發開路
+        wait-duration-in-open-state: 30s    # 給予下游 30 秒恢復時間
+        permitted-number-of-calls-in-half-open-state: 10
+        automatic-transition-from-open-to-half-open-enabled: true
+    instances:
+      OrderService:
+        base-config: default
       AccountService:
         base-config: default
       ProductService:
