@@ -20,9 +20,12 @@ import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
 
+import org.junit.jupiter.api.Tag;
+
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
+@Tag("IntegrationTest")
 public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
 
     @Autowired

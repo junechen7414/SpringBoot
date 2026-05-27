@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("SanityTest")
+@Tag("IntegrationTest")
 class DemoApplicationTests extends BaseIntegrationTest {
 
 	@Test

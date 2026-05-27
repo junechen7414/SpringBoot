@@ -91,8 +91,6 @@ class OrderServiceTest {
                                         .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
 
                         // 2. 模擬交易服務層的行為
-                        // OrderInfo savedInfo = new OrderInfo();
-                        // savedInfo.setId(888);
                         when(orderTransactionalService.createOrder(any(CreateOrderRequest.class))).thenReturn(888);
 
                         // Act
@@ -111,6 +109,32 @@ class OrderServiceTest {
                         verify(orderTransactionalService).createOrder(requestCaptor.capture());
                         assertThat(requestCaptor.getValue())
                                         .hasFieldOrPropertyWithValue("accountId", ACTIVE_ACCOUNT_ID);
+                }
+
+                @Test
+                @DisplayName("建立訂單時交易服務失敗，應觸發補償歸還庫存並拋出原始異常")
+                void createOrder_WhenTransactionFails_ShouldCompensateAndThrow() {
+                        // Arrange
+                        CreateOrderRequest request = CreateOrderRequest.builder()
+                                        .accountId(ACTIVE_ACCOUNT_ID)
+                                        .orderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
+                                        .build();
+
+                        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
+                                        .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
+
+                        // 模擬交易服務拋出異常
+                        doThrow(new RuntimeException("DB connection failed"))
+                                        .when(orderTransactionalService).createOrder(any(CreateOrderRequest.class));
+
+                        // Act & Assert
+                        assertThatThrownBy(() -> orderService.createOrder(request))
+                                        .isInstanceOf(RuntimeException.class)
+                                        .hasMessageContaining("DB connection failed");
+
+                        // Verify: processOrderItems 被呼叫兩次（一次扣庫存，一次補償歸還）
+                        verify(productClient, org.mockito.Mockito.times(2))
+                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
                 }
         }
 
@@ -187,7 +211,6 @@ class OrderServiceTest {
                         doThrow(new ProductStockNotEnoughException("庫存不足"))
                                         .when(productClient)
                                         .processOrderItems(any(ProcessOrderItemsRequest.class));
-
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
                                         .isInstanceOf(ProductStockNotEnoughException.class)
@@ -222,6 +245,33 @@ class OrderServiceTest {
                         // 驗證呼叫了交易層服務來儲存
                         verify(orderTransactionalService).updateOrder(request, existingOrder);
                         verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class)); // 庫存處理依然由
+                }
+
+                @Test
+                @DisplayName("更新訂單時交易服務失敗，應觸發補償反轉庫存並拋出原始異常")
+                void updateOrder_WhenTransactionFails_ShouldCompensateAndThrow() {
+                        // Arrange
+                        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID,
+                                        STATUS_CREATED);
+                        UpdateOrderRequest request = new UpdateOrderRequest(
+                                        EXISTING_ORDER_ID,
+                                        STATUS_CREATED,
+                                        List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
+
+                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
+
+                        // 模擬交易服務拋出異常
+                        doThrow(new RuntimeException("DB update failed"))
+                                        .when(orderTransactionalService).updateOrder(any(), any());
+
+                        // Act & Assert
+                        assertThatThrownBy(() -> orderService.updateOrder(request))
+                                        .isInstanceOf(RuntimeException.class)
+                                        .hasMessageContaining("DB update failed");
+
+                        // Verify: processOrderItems 被呼叫兩次（一次調整庫存，一次補償反轉）
+                        verify(productClient, org.mockito.Mockito.times(2))
+                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
                 }
         }
 
@@ -348,8 +398,8 @@ class OrderServiceTest {
                 }
 
                 @Test
-                @DisplayName("刪除時若發生樂觀鎖衝突，應拋出 ObjectOptimisticLockingFailureException")
-                void deleteOrder_WhenOptimisticLockingConflict_ShouldThrowException() {
+                @DisplayName("刪除時若發生樂觀鎖衝突，應觸發補償重新扣回庫存並拋出原始異常")
+                void deleteOrder_WhenOptimisticLockingConflict_ShouldCompensateAndThrow() {
                         // Arrange
                         OrderInfo order = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED);
                         order.setVersion(1);
@@ -364,6 +414,9 @@ class OrderServiceTest {
                                         .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
 
                         verify(orderTransactionalService).deleteOrder(order, 1);
+                        // Verify: processOrderItems 被呼叫兩次（一次歸還庫存，一次補償重新扣回）
+                        verify(productClient, org.mockito.Mockito.times(2))
+                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
                 }
         }
 
