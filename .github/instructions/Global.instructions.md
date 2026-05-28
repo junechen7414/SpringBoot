@@ -23,16 +23,264 @@ description: Every conversation
    - CMD (`cmd.exe`)：指令串接用 `&&`，執行當前目錄腳本直接用名稱（例如 `gradlew`，不加 `./`）
    - 不可假設預設 Shell 環境，須透過環境資訊判斷後再決定指令語法
 
-## git 命名/訊息偏好
-1. 分支命名 (Branch Naming)
-- **格式：** `類別/任務簡述`
-- **常用前綴：** `feature/` (新功能)、`bugfix/` (修復)、`hotfix/` (緊急修復)、`refactor/` (重構)。
-- **關鍵原則：** 全小寫、使用  分隔、使用 `/` 分層。
+## Git 工作流程規範
 
-2. Commit 訊息 (Conventional Commits)
-- **格式：** `<type>(<scope>): <subject>`
-- **常用類型：** `feat`, `fix`, `docs`, `style`, `refactor`, `chore`。
-- **關鍵原則：** 使用祈使句（如 `add` 而非 `added`）、標題與內容空一行、內容著重「為什麼」而非「怎麼做」。
+### 改動前的分支檢查流程
+
+在進行任何程式碼改動前，必須遵循以下工作流程確保改動在正確的分支上進行：
+
+#### 1. 檢查當前分支狀態
+
+```bash
+# 查看當前分支
+git branch --show-current
+
+# 查看工作區狀態
+git status
+
+# 列出所有本地分支
+git branch -a
+```
+
+#### 2. 判斷改動類型並選擇分支策略
+
+根據改動性質決定分支類型：
+
+| 改動類型 | 分支前綴 | 說明 | 範例 |
+|---------|---------|------|------|
+| 新功能開發 | `feature/` | 新增業務功能或模組 | `feature/add-payment-module` |
+| Bug 修復 | `bugfix/` | 修復非緊急的程式錯誤 | `bugfix/fix-order-calculation` |
+| 緊急修復 | `hotfix/` | 修復生產環境的緊急問題 | `hotfix/security-patch` |
+| 程式碼重構 | `refactor/` | 改善程式結構但不改變功能 | `refactor/optimize-query-performance` |
+| 文件更新 | `docs/` | 僅更新文件內容 | `docs/update-api-guide` |
+| 測試相關 | `test/` | 新增或修改測試案例 | `test/add-integration-tests` |
+| 建置/工具 | `chore/` | 更新建置腳本、依賴版本等 | `chore/upgrade-spring-boot` |
+
+#### 3. 分支選擇決策流程
+
+**步驟 A: 檢查是否存在相關分支**
+
+```bash
+# PowerShell 環境
+git branch -a | Select-String -Pattern "關鍵字"
+
+# 範例：搜尋與訂單相關的分支（PowerShell）
+git branch -a | Select-String -Pattern "order"
+
+# Bash/Linux 環境
+git branch -a | grep -i "關鍵字"
+git branch -a | grep -i "order"
+```
+
+**步驟 B: 決策邏輯**
+
+```
+IF 存在相關且未合併的分支 THEN
+    → 切換到該分支繼續開發
+ELSE IF 當前在 main/master 分支 THEN
+    → 必須建立新分支
+ELSE IF 當前分支與改動類型不符 THEN
+    → 建議建立新分支或切換到適當分支
+ELSE
+    → 可在當前分支繼續開發
+END IF
+```
+
+#### 4. 分支操作指令
+
+**情境 1: 切換到已存在的分支**
+
+```bash
+# 切換到本地分支
+git checkout feature/add-payment-module
+
+# 切換到遠端分支（首次）
+git checkout -b feature/add-payment-module origin/feature/add-payment-module
+
+# 更新分支到最新狀態
+git pull origin feature/add-payment-module
+```
+
+**情境 2: 建立新分支**
+
+```bash
+# 從 main 建立新分支
+git checkout main
+git pull origin main
+git checkout -b feature/add-payment-module
+
+# 從當前分支建立新分支（不建議，除非有特殊需求）
+git checkout -b feature/new-feature
+```
+
+**情境 3: 有未提交的改動需要切換分支**
+
+```bash
+# 方法 1: 暫存改動（推薦使用具名 stash）
+git stash push -m "WIP: 描述當前工作"
+git checkout target-branch
+git stash list  # 查看 stash 列表
+git stash pop   # 彈出最新的 stash
+# 或指定特定的 stash
+git stash apply stash@{0}
+
+# 方法 2: 提交到臨時分支
+git checkout -b temp/wip-backup
+git add .
+git commit -m "WIP: temporary backup"
+git checkout target-branch
+```
+
+#### 5. 改動提交前的最終檢查
+
+在提交前必須確認：
+
+```bash
+# 1. 確認當前分支正確
+git branch --show-current
+
+# 2. 檢查改動內容
+git status
+git diff
+
+# 3. 確認沒有意外的檔案被追蹤
+git ls-files --others --exclude-standard
+
+# 4. 執行測試（依專案需求）
+./gradlew test
+
+# 5. 提交改動
+git add <files>
+git commit -m "type(scope): description"
+```
+
+#### 6. Agent 自動化建議流程
+
+當 Agent 準備進行程式碼改動時，應自動執行以下檢查：
+
+1. **偵測當前分支**: 執行 `git branch --show-current`
+2. **分析改動性質**: 根據任務描述判斷改動類型（feature/bugfix/refactor 等）
+3. **搜尋相關分支**: 執行 `git branch -a | grep -i "關鍵字"` 尋找相關分支
+4. **提供建議**:
+   - 若在 main 分支 → **必須**建議建立新分支
+   - 若存在相關分支 → 建議切換到該分支
+   - 若當前分支類型不符 → 建議建立新分支或切換分支
+   - 若當前分支適合 → 確認後繼續
+5. **等待使用者確認**: 詢問使用者是否同意建議的分支操作
+6. **執行分支操作**: 獲得確認後執行 Git 指令
+7. **進行程式碼改動**: 分支確認無誤後才開始修改程式碼
+
+**範例對話流程**:
+
+```
+Agent: 偵測到您當前在 main 分支，準備進行新功能開發。
+建議建立新分支: feature/add-payment-module
+
+是否要我執行以下指令？
+git checkout -b feature/add-payment-module
+
+User: 是
+
+Agent: [執行 git checkout -b feature/add-payment-module]
+分支建立成功，現在開始進行程式碼改動...
+```
+
+### 分支命名規範
+
+```
+<類別>/<任務簡述>
+
+類別前綴:
+- feature/  : 新功能開發
+- bugfix/   : Bug 修復
+- hotfix/   : 緊急修復
+- refactor/ : 程式碼重構
+- docs/     : 文件更新
+- test/     : 測試相關
+- chore/    : 建置/工具更新
+
+範例:
+feature/add-payment-module
+bugfix/fix-order-calculation
+hotfix/security-patch
+refactor/optimize-query-performance
+docs/update-api-guide
+test/add-integration-tests
+chore/upgrade-spring-boot
+```
+
+**關鍵原則：** 全小寫、使用連字符分隔、使用 `/` 分層。
+
+### Commit 訊息規範 (Conventional Commits)
+
+```
+<type>(<scope>): <subject>
+
+type: feat, fix, docs, style, refactor, test, chore
+scope: 可選，如 account, order, product
+subject: 使用祈使句，如 "add" 而非 "added"
+
+範例:
+feat(order): add bulk order creation endpoint
+fix(product): resolve stock deduction race condition
+docs: update API documentation for account module
+refactor(service): replace WebClient with RestClient
+test(order): add integration tests for order creation
+chore(deps): upgrade Spring Boot to 3.5.14
+```
+
+**關鍵原則：** 使用祈使句、標題與內容空一行、內容著重「為什麼」而非「怎麼做」。
+
+### 分支合併與清理
+
+**推薦方式：使用 Pull Request**
+
+```bash
+# 1. 推送分支到遠端
+git push origin feature/add-payment-module
+
+# 2. 建立 Pull Request
+# 方式 A: 使用 Bob Agent 的 /create-pr 指令（推薦）
+#   - 自動切換到 Advanced 模式
+#   - 生成 PR 描述
+#   - 詢問目標分支
+#   - 建立 Pull Request
+
+# 方式 B: 使用 GitHub CLI
+gh pr create --base main --head feature/add-payment-module --title "feat: add payment module" --body "詳細說明..."
+
+# 3. 等待 Code Review 與 CI/CD 通過後，在 GitHub 上合併 PR
+
+# 4. 合併後清理本地分支
+git checkout main
+git pull origin main
+git branch -d feature/add-payment-module
+
+# 5. 清理已刪除的遠端分支參考
+git fetch --prune
+```
+
+**緊急情況：本地直接合併（不推薦）**
+
+僅在緊急情況或個人專案使用：
+
+```bash
+git checkout main
+git pull origin main
+git merge --no-ff feature/add-payment-module
+git push origin main
+git branch -d feature/add-payment-module
+```
+
+**Agent 建議流程**
+
+當改動完成準備合併時，Agent 應：
+1. 確認所有改動已提交
+2. 建議推送分支到遠端：`git push origin <branch-name>`
+3. **優先建議使用者執行 `/create-pr` 指令**（Bob Agent）或使用 GitHub CLI
+4. 提醒使用者等待 Code Review 與 CI/CD 檢查
+5. 合併後才建議清理本地分支
+```
 
 ## 文檔管理規範
 
