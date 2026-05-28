@@ -41,8 +41,45 @@ services:
       # Template files directory (mounted to custom location)
       - ./init-scripts-template:/opt/oracle/template
     healthcheck:
-      # Check if PDB is ready using sqlplus
-      test: [ "CMD-SHELL", "sqlplus -L ${ORACLE_DEV_USERNAME}/${ORACLE_DEV_PASSWORD}@FREEPDB1 <<<'exit;'" ]
+      # Three-stage health check for robust database readiness verification
+      test:
+        - "CMD-SHELL"
+        - |
+          # Stage 1: Check PDB status (must be READ WRITE)
+          PDB_STATUS=$$(sqlplus -S / as sysdba <<'EOSQL'
+          SET PAGESIZE 0 FEEDBACK OFF VERIFY OFF HEADING OFF
+          SELECT open_mode FROM v$$pdbs WHERE name='FREEPDB1';
+          EXIT;
+          EOSQL
+          )
+          
+          if ! echo "$$PDB_STATUS" | grep -q 'READ WRITE'; then
+            exit 1
+          fi
+          
+          # Stage 2: Check if development user exists
+          USER_EXISTS=$$(sqlplus -S / as sysdba <<'EOSQL'
+          SET PAGESIZE 0 FEEDBACK OFF VERIFY OFF HEADING OFF
+          ALTER SESSION SET CONTAINER = FREEPDB1;
+          SELECT COUNT(*) FROM dba_users WHERE username = UPPER('${ORACLE_DEV_USERNAME}');
+          EXIT;
+          EOSQL
+          )
+          
+          USER_EXISTS=$$(echo "$$USER_EXISTS" | tr -d '[:space:]')
+          
+          if [ "$$USER_EXISTS" != "1" ]; then
+            exit 1
+          fi
+          
+          # Stage 3: Check Listener service registration
+          LISTENER_STATUS=$$(lsnrctl status | grep -i "FREEPDB1" | wc -l)
+          
+          if [ "$$LISTENER_STATUS" -eq "0" ]; then
+            exit 1
+          fi
+          
+          exit 0
       interval: 30s
       timeout: 10s
       retries: 20
