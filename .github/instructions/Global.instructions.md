@@ -103,14 +103,36 @@ git pull origin feature/add-payment-module
 
 **情境 2: 建立新分支**
 
+**基底分支選擇策略**：
+1. **優先選擇相關的功能分支作為基底**：如果新功能依賴於尚未合併的分支
+2. **否則從 main 分支建立**：獨立功能或修復
+
 ```bash
-# 從 main 建立新分支
+# 策略 A: 從 main 建立新分支（獨立功能）
 git checkout main
 git pull origin main
 git checkout -b feature/add-payment-module
 
-# 從當前分支建立新分支（不建議，除非有特殊需求）
-git checkout -b feature/new-feature
+# 策略 B: 從現有功能分支建立（依賴關係）
+# 範例：新功能依賴於 feature/add-user-auth 的改動
+git checkout feature/add-user-auth
+git pull origin feature/add-user-auth
+git checkout -b feature/add-payment-with-auth
+
+# 策略 C: 從當前分支建立（延續當前工作）
+git checkout -b feature/extend-current-work
+```
+
+**何時使用策略 B（從功能分支建立）**：
+- 新功能需要使用尚未合併到 main 的程式碼
+- 修復依賴於另一個未合併分支的 bug
+- 在大型功能的子任務間建立依賴關係
+
+**範例情境**：
+```
+main
+ └─ feature/user-authentication (尚未合併)
+     └─ feature/payment-with-auth (依賴 user-authentication)
 ```
 
 **情境 3: 有未提交的改動需要切換分支**
@@ -258,6 +280,94 @@ git branch -d feature/add-payment-module
 
 # 5. 清理已刪除的遠端分支參考
 git fetch --prune
+**分支策略：短期分支原則**
+
+**核心原則**：
+- **所有功能分支都從 main 建立**，避免分支間依賴
+- **盡快合併**，減少長期分支的維護成本
+- **拆分大功能**為多個小 PR，每個獨立可測試
+
+**實務做法**：
+
+```
+# ❌ 避免：建立依賴鏈
+main
+ └─ feature/user-auth
+     └─ feature/payment (依賴 user-auth)
+
+# ✅ 推薦：拆分獨立 PR
+main
+ ├─ feature/user-auth-api (先合併)
+ ├─ feature/user-auth-ui (等 API 合併後建立)
+ └─ feature/payment (等前面都合併後建立)
+```
+
+**如何處理功能依賴**：
+
+1. **拆分功能**：將大功能分解為可獨立交付的小單元
+2. **順序開發**：等前置功能合併後，再從最新的 main 建立新分支
+3. **使用 Feature Flag**：未完成的功能用開關控制，允許提早合併
+
+**範例：開發支付功能（依賴使用者認證）**
+
+```bash
+# 步驟 1: 開發並合併使用者認證 API
+git checkout main
+git pull origin main
+git checkout -b feature/user-auth-api
+# ... 開發 & 提交 ...
+# 使用 /create-pr 合併到 main
+
+# 步驟 2: 等 PR 合併後，開發使用者認證 UI
+git checkout main
+git pull origin main  # 取得最新的 user-auth-api
+git checkout -b feature/user-auth-ui
+# ... 開發 & 提交 ...
+# 使用 /create-pr 合併到 main
+
+# 步驟 3: 等 PR 合併後，開發支付功能
+git checkout main
+git pull origin main  # 取得完整的 user-auth
+git checkout -b feature/payment
+# ... 開發 & 提交 ...
+# 使用 /create-pr 合併到 main
+```
+
+**特殊情況：必須並行開發時**
+
+如果確實需要在功能分支上建立子分支（不推薦，但有時無法避免）：
+
+```bash
+# 從功能分支建立
+git checkout feature/user-auth
+git checkout -b feature/payment-on-auth
+
+# 當 feature/user-auth 合併到 main 後
+git checkout feature/payment-on-auth
+git rebase main  # 將基底改為 main
+git push origin feature/payment-on-auth --force-with-lease
+# 使用 /create-pr 合併到 main
+```
+
+**Agent 偵測與建議**
+
+當 Agent 偵測到使用者想從功能分支建立新分支時：
+
+```
+Agent: 偵測到您想從 feature/user-auth 建立新分支。
+
+建議採用短期分支策略：
+1. 將 feature/user-auth 拆分為更小的 PR 並先合併
+2. 或等待 feature/user-auth 合併後，從 main 建立新分支
+
+這樣可以：
+- 避免複雜的合併順序
+- 減少合併衝突
+- 加快 Code Review 速度
+
+是否要繼續從 feature/user-auth 建立？（不推薦）
+```
+
 ```
 
 **緊急情況：本地直接合併（不推薦）**
@@ -271,6 +381,16 @@ git merge --no-ff feature/add-payment-module
 git push origin main
 git branch -d feature/add-payment-module
 ```
+
+**Agent 建議流程**
+
+當改動完成準備合併時，Agent 應：
+1. 確認所有改動已提交
+2. **檢查是否從功能分支建立**：如果是，提醒考慮重新從 main 建立
+3. 建議推送分支到遠端：`git push origin <branch-name>`
+4. **優先建議使用者執行 `/create-pr` 指令**（Bob Agent）或使用 GitHub CLI
+5. 提醒使用者等待 Code Review 與 CI/CD 檢查
+6. 合併後才建議清理本地分支
 
 **Agent 建議流程**
 
