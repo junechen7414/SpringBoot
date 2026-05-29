@@ -11,9 +11,17 @@ import lombok.Builder;
 
 @Builder
 public record UpdateOrderRequest(
-        @NotNull(message = "Order ID is required") @Digits(integer = 10, fraction = 0, message = "10 characters max") @Positive(message = "Order ID must be positive") Integer orderId,
+        @NotNull(message = "Order ID is required")
+        @Digits(integer = 10, fraction = 0, message = "10 characters max")
+        @Positive(message = "Order ID must be positive")
+        Integer orderId,
 
-        @NotNull(message = "orderStatus is required") @Digits(integer = 4, fraction = 0, message = "4 characters max") @Positive(message = "orderStatus must be positive") Integer orderStatus,
+        @NotNull(message = "Order Status is required")
+        @Digits(integer = 4, fraction = 0, message = "4 characters max")
+        @Positive(message = "Order Status must be positive")
+        Integer orderStatus,
 
-        @Valid @NotEmpty(message = "Order items are required") List<UpdateOrderDetailRequest> items) {
+        @Valid
+        @NotEmpty(message = "Order items are required")
+        List<UpdateOrderDetailRequest> items) {
 }
