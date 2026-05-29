@@ -71,7 +71,7 @@ public class OrderController {
     @Operation(summary = "檢查帳戶ID是否存在於任何有效訂單中", description = "判斷帳戶是否有關聯的有效訂單，用於帳戶更新與刪除時的檢核。受限於系統規則，僅會針對未軟刪除且狀態為 1001 (CREATED) 的訂單進行判定。")
     @GetMapping("/account/{accountId}/exists")
     public ResponseEntity<Boolean> AccountIdIsInOrder(@PathVariable Integer accountId) {
-        boolean isExist = orderService.ActiveAccountIdIsInOrder(accountId);
+        boolean isExist = orderService.isActiveAccountInOrder(accountId);
         return ResponseEntity.ok(isExist);
     }
 }

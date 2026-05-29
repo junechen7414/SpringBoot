@@ -21,6 +21,7 @@ import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 import com.ibm.demo.util.DBAssertion;
 import com.ibm.demo.util.OrderItemRequest;
+import com.ibm.demo.util.ProcessOrderItemsRequest;
 import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
@@ -136,7 +137,11 @@ public class ProductService {
     }
 
     @Transactional
-    public void processOrderItems(Set<OrderItemRequest> originalItems, Set<OrderItemRequest> updatedItems) {
+    public void processOrderItems(ProcessOrderItemsRequest request) {
+        ServiceValidator.validateNotNull(request, "Process order items request");
+        Set<OrderItemRequest> originalItems = request.originalItems();
+        Set<OrderItemRequest> updatedItems = request.updatedItems();
+        
         // 0. 驗證輸入的訂單商品明細集合是否為空，且updatedItems中productId要存在，否則拋出ResourceNotFound
         ServiceValidator.validateNotNull(originalItems, "Original order items");
         ServiceValidator.validateNotNull(updatedItems, "Updated order items");

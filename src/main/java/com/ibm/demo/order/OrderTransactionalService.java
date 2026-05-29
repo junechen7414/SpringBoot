@@ -7,6 +7,8 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
+import lombok.extern.slf4j.Slf4j;
+
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
@@ -20,6 +22,7 @@ import com.ibm.demo.util.DBAssertion;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OrderTransactionalService {
@@ -28,6 +31,10 @@ public class OrderTransactionalService {
 
         @Transactional
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
+                log.debug("開始建立訂單，帳戶ID: {}, 商品數量: {}", 
+                        createOrderRequest.accountId(), 
+                        createOrderRequest.orderDetails().size());
+                
                 // 建立新訂單
                 OrderInfo newOrderInfo = OrderInfo.builder()
                                 .accountId(createOrderRequest.accountId())
@@ -48,11 +55,20 @@ public class OrderTransactionalService {
                                 })
                                 .collect(Collectors.toList());
                 orderDetailRepository.saveAll(orderDetails);
+                
+                log.info("訂單建立成功，訂單ID: {}, 帳戶ID: {}", 
+                        savedOrderInfo.getId(), 
+                        createOrderRequest.accountId());
                 return savedOrderInfo.getId();
         }
 
         @Transactional
         public void updateOrder(UpdateOrderRequest request, OrderInfo order) {
+                log.debug("開始更新訂單，訂單ID: {}, 新狀態: {}, 商品數量: {}", 
+                        request.orderId(), 
+                        request.orderStatus(), 
+                        request.items().size());
+                
                 Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
                                 .collect(Collectors.toMap(OrderDetail::getProductId, Function.identity()));
                 Map<Integer, UpdateOrderDetailRequest> incomingMap = request.items().stream()
@@ -79,14 +95,24 @@ public class OrderTransactionalService {
                                                                 .build()));
                 order.setStatus(request.orderStatus());
                 orderInfoRepository.save(order);
+                
+                log.info("訂單更新成功，訂單ID: {}, 新狀態: {}", 
+                        request.orderId(), 
+                        request.orderStatus());
         }
 
         @Transactional
         public void deleteOrder(OrderInfo existingOrderInfo, Integer version) {
                 int orderId = existingOrderInfo.getId();
+                log.debug("開始刪除訂單，訂單ID: {}, 帳戶ID: {}", 
+                        orderId, 
+                        existingOrderInfo.getAccountId());
+                
                 int updated = orderInfoRepository.softDeleteById(orderId, version);
 
                 DBAssertion.assertUpdated(updated, OrderInfo.class, orderId);
                 orderDetailRepository.softDeleteByOrderId(orderId);
+                
+                log.info("訂單刪除成功，訂單ID: {}", orderId);
         }
 }

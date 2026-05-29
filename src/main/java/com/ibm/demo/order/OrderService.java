@@ -71,17 +71,11 @@ public class OrderService {
                         throw new AccountInactiveException("帳戶狀態:" + AccountStatus.INACTIVE.getDescription());
                 }
 
-                // 使用 Set 來過濾重複的商品ID，避免同一訂單中同一商品多筆明細造成的庫存計算錯誤
-                // 如果有重複商品ID，直接丟出錯誤，要求前端修正訂單明細，因為同一訂單中同一商品多筆明細在業務上通常是不合理的
-                Set<OrderItemRequest> uniqueItems = createOrderRequest.orderDetails().stream()
-                                .map(detail -> OrderItemRequest.builder()
-                                                .productId(detail.productId())
-                                                .quantity(detail.quantity())
-                                                .build())
-                                .collect(Collectors.toSet());
-                if (uniqueItems.size() != createOrderRequest.orderDetails().size()) {
-                        throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
-                }
+                // 驗證並轉換訂單明細，確保同一訂單中同一商品只有一筆明細
+                Set<OrderItemRequest> uniqueItems = validateAndConvertToUniqueItems(
+                                createOrderRequest.orderDetails(),
+                                detail -> detail.productId(),
+                                detail -> detail.quantity());
 
                 ProcessOrderItemsRequest request = ProcessOrderItemsRequest.builder()
                                 .originalItems(Collections.emptySet())
@@ -102,8 +96,15 @@ public class OrderService {
                         try {
                                 productClient.processOrderItems(rollbackRequest);
                         } catch (Exception compensationEx) {
-                                log.error("建立訂單失敗後，補償歸還庫存也失敗，需人工介入處理。原始異常: {}, 補償異常: {}",
-                                                e.getMessage(), compensationEx.getMessage());
+                                log.error("建立訂單失敗後，補償歸還庫存也失敗，需人工介入處理。" +
+                                                "帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",
+                                                createOrderRequest.accountId(),
+                                                uniqueItems.stream()
+                                                                .map(item -> String.format("商品%d(數量%d)", item.productId(), item.quantity()))
+                                                                .collect(Collectors.joining(", ")),
+                                                e.getMessage(),
+                                                compensationEx.getMessage(),
+                                                compensationEx);
                         }
                         throw e;
                 }
@@ -115,16 +116,24 @@ public class OrderService {
                 if (orderInfoList == null || orderInfoList.isEmpty()) {
                         return new ArrayList<>();
                 }
+                
+                // 收集所有訂單涉及的商品 ID
+                Set<Integer> allProductIds = orderInfoList.stream()
+                                .flatMap(order -> order.getOrderDetails().stream())
+                                .map(OrderDetail::getProductId)
+                                .collect(Collectors.toSet());
+                
+                // 一次性批量查詢所有商品
+                Map<Integer, GetProductDetailResponse> productMap = batchGetProductDetails(allProductIds);
+                
+                // 計算每個訂單的總金額
                 return orderInfoList.stream()
-                                .map(orderInfo -> {
-                                        GetOrderListResponse response = GetOrderListResponse.builder()
-                                                        .orderId(orderInfo.getId())
-                                                        .status(orderInfo.getStatus())
-                                                        .totalAmount(calculateOrderTotalAmount(orderInfo))
-                                                        .build();
-                                        return response;
-                                }).collect(Collectors.toList());
-
+                                .map(orderInfo -> GetOrderListResponse.builder()
+                                                .orderId(orderInfo.getId())
+                                                .status(orderInfo.getStatus())
+                                                .totalAmount(calculateOrderTotalAmount(orderInfo, productMap))
+                                                .build())
+                                .collect(Collectors.toList());
         }
 
         /**
@@ -184,17 +193,11 @@ public class OrderService {
                                                 .build())
                                 .collect(Collectors.toSet());
 
-                // 使用 Set 來過濾重複的商品ID，避免同一訂單中同一商品多筆明細造成的庫存計算錯誤
-                // 如果有重複商品ID，直接丟出錯誤，要求前端修正訂單明細，因為同一訂單中同一商品多筆明細在業務上通常是不合理的
-                Set<OrderItemRequest> uniqueItems = request.items().stream()
-                                .map(detail -> OrderItemRequest.builder()
-                                                .productId(detail.productId())
-                                                .quantity(detail.quantity())
-                                                .build())
-                                .collect(Collectors.toSet());
-                if (uniqueItems.size() != request.items().size()) {
-                        throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
-                }
+                // 驗證並轉換訂單明細，確保同一訂單中同一商品只有一筆明細
+                Set<OrderItemRequest> uniqueItems = validateAndConvertToUniqueItems(
+                                request.items(),
+                                detail -> detail.productId(),
+                                detail -> detail.quantity());
 
                 ProcessOrderItemsRequest processRequest = ProcessOrderItemsRequest.builder()
                                 .originalItems(originalItems)
@@ -215,8 +218,19 @@ public class OrderService {
                         try {
                                 productClient.processOrderItems(rollbackRequest);
                         } catch (Exception compensationEx) {
-                                log.error("更新訂單失敗後，補償反轉庫存也失敗，需人工介入處理。原始異常: {}, 補償異常: {}",
-                                                e.getMessage(), compensationEx.getMessage());
+                                log.error("更新訂單失敗後，補償反轉庫存也失敗，需人工介入處理。" +
+                                                "訂單ID: {}, 帳戶ID: {}, 原商品清單: {}, 新商品清單: {}, 原始異常: {}, 補償異常: {}",
+                                                request.orderId(),
+                                                order.getAccountId(),
+                                                originalItems.stream()
+                                                                .map(item -> String.format("商品%d(數量%d)", item.productId(), item.quantity()))
+                                                                .collect(Collectors.joining(", ")),
+                                                uniqueItems.stream()
+                                                                .map(item -> String.format("商品%d(數量%d)", item.productId(), item.quantity()))
+                                                                .collect(Collectors.joining(", ")),
+                                                e.getMessage(),
+                                                compensationEx.getMessage(),
+                                                compensationEx);
                         }
                         throw e;
                 }
@@ -262,8 +276,16 @@ public class OrderService {
                         try {
                                 productClient.processOrderItems(rollbackRequest);
                         } catch (Exception compensationEx) {
-                                log.error("刪除訂單失敗後，補償重新扣回庫存也失敗，需人工介入處理。原始異常: {}, 補償異常: {}",
-                                                e.getMessage(), compensationEx.getMessage());
+                                log.error("刪除訂單失敗後，補償重新扣回庫存也失敗，需人工介入處理。" +
+                                                "訂單ID: {}, 帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",
+                                                orderId,
+                                                existingOrderInfo.getAccountId(),
+                                                originalItems.stream()
+                                                                .map(item -> String.format("商品%d(數量%d)", item.productId(), item.quantity()))
+                                                                .collect(Collectors.joining(", ")),
+                                                e.getMessage(),
+                                                compensationEx.getMessage(),
+                                                compensationEx);
                         }
                         throw e;
                 }
@@ -311,6 +333,22 @@ public class OrderService {
                 return totalAmount;
         }
 
+        /**
+         * 
+         * @param orderInfo 訂單資訊
+         * @param productMap 已批量查詢的商品資訊 Map
+         * @return 訂單總金額
+         */
+        private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo, 
+                                                     Map<Integer, GetProductDetailResponse> productMap) {
+                return orderInfo.getOrderDetails().stream()
+                                .map(detail -> {
+                                        GetProductDetailResponse product = productMap.get(detail.getProductId());
+                                        return product.price().multiply(BigDecimal.valueOf(detail.getQuantity()));
+                                })
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+
         public OrderInfo findOrderByIdOrThrow(Integer orderId) {
                 ServiceValidator.validateNotNull(orderId, "Order ID");
                 return orderInfoRepository.findById(orderId).orElseThrow(
@@ -318,16 +356,38 @@ public class OrderService {
         }
 
         /**
-         * @param accountId
-         * @return boolean
+         * 驗證並轉換訂單明細為唯一商品集合
+         * 確保同一訂單中同一商品只有一筆明細
+         * 
+         * @param items 訂單明細列表
+         * @return 唯一的訂單商品集合
+         * @throws InvalidRequestException 當存在重複商品時
          */
-        // 驗證帳戶ID有無關聯的訂單
-        public boolean ActiveAccountIdIsInOrder(Integer accountId) {
-                ServiceValidator.validateNotNull(accountId, "Account ID");
-                if (!orderInfoRepository.findByAccountId(accountId).isEmpty()) {
-                        return true;
+        private <T> Set<OrderItemRequest> validateAndConvertToUniqueItems(List<T> items, 
+                                                                           java.util.function.Function<T, Integer> productIdExtractor,
+                                                                           java.util.function.Function<T, Integer> quantityExtractor) {
+                Set<OrderItemRequest> uniqueItems = items.stream()
+                                .map(item -> OrderItemRequest.builder()
+                                                .productId(productIdExtractor.apply(item))
+                                                .quantity(quantityExtractor.apply(item))
+                                                .build())
+                                .collect(Collectors.toSet());
+                
+                if (uniqueItems.size() != items.size()) {
+                        throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
                 }
-                return false;
+                return uniqueItems;
+        }
+
+        /**
+         * 驗證帳戶是否有關聯的訂單
+         * 
+         * @param accountId 帳戶ID
+         * @return 若帳戶有關聯訂單則返回 true，否則返回 false
+         */
+        public boolean isActiveAccountInOrder(Integer accountId) {
+                ServiceValidator.validateNotNull(accountId, "Account ID");
+                return !orderInfoRepository.findByAccountId(accountId).isEmpty();
         }
 
 }

@@ -81,7 +81,7 @@ public class ProductController {
     @Operation(summary = "處理訂單中的商品", description = "處理訂單中的商品資訊")
     @PostMapping("/processOrderItems")
     public void processOrderItems(@RequestBody ProcessOrderItemsRequest request) {
-        productService.processOrderItems(request.originalItems(), request.updatedItems());
+        productService.processOrderItems(request);
     }
 
 }
