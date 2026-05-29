@@ -92,16 +92,30 @@ public class AccountServiceTest {
         @DisplayName("查詢所有帳戶應回傳列表")
         void getAccountList_Success() {
             // Arrange
-            List<GetAccountListResponse> expectedList = List.of(
-                    new GetAccountListResponse(1, "User1", STATUS_ACTIVE),
-                    new GetAccountListResponse(2, "User2", STATUS_INACTIVE));
-            when(accountRepository.findAllAccount()).thenReturn(expectedList);
+            Account account1 = Account.builder()
+                    .id(1)
+                    .name("User1")
+                    .status(STATUS_ACTIVE)
+                    .build();
+            Account account2 = Account.builder()
+                    .id(2)
+                    .name("User2")
+                    .status(STATUS_INACTIVE)
+                    .build();
+            List<Account> accounts = List.of(account1, account2);
+            when(accountRepository.findAllAccount()).thenReturn(accounts);
 
             // Act
             List<GetAccountListResponse> actualList = accountService.getAccountList();
 
             // Assert
-            assertThat(actualList).hasSize(2).isEqualTo(expectedList);
+            assertThat(actualList).hasSize(2);
+            assertThat(actualList.get(0).id()).isEqualTo(1);
+            assertThat(actualList.get(0).name()).isEqualTo("User1");
+            assertThat(actualList.get(0).status()).isEqualTo(STATUS_ACTIVE);
+            assertThat(actualList.get(1).id()).isEqualTo(2);
+            assertThat(actualList.get(1).name()).isEqualTo("User2");
+            assertThat(actualList.get(1).status()).isEqualTo(STATUS_INACTIVE);
             verify(accountRepository).findAllAccount();
         }
 

@@ -59,7 +59,10 @@ public class AccountService {
      */
     @Transactional(readOnly = true)
     public List<GetAccountListResponse> getAccountList() {
-        return accountRepository.findAllAccount();
+        List<Account> accounts = accountRepository.findAllAccount();
+        return accounts.stream()
+                .map(this::mapAccountToListResponse)
+                .toList();
     }
 
     /**
@@ -110,6 +113,14 @@ public class AccountService {
                 .name(account.getName())
                 .status(account.getStatus())
                 .build();
+    }
+
+    private GetAccountListResponse mapAccountToListResponse(Account account) {
+        return new GetAccountListResponse(
+                account.getId(),
+                account.getName(),
+                account.getStatus()
+        );
     }
 
     /**
