@@ -38,9 +38,9 @@ import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderInfo;
+import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
-import com.ibm.demo.util.ProcessOrderItemsRequest;
 
 @Tag("UnitTest")
 @ExtendWith(MockitoExtension.class)

@@ -26,13 +26,13 @@ import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.order.DTO.OrderItemDTO;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
+import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
-import com.ibm.demo.util.OrderItemRequest;
-import com.ibm.demo.util.ProcessOrderItemsRequest;
 import com.ibm.demo.util.ServiceValidator;
 
 import lombok.RequiredArgsConstructor;
