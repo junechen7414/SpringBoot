@@ -7,15 +7,13 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.util.SoftDeleteRepository;
 
 public interface ProductRepository extends JpaRepository<Product, Integer>, SoftDeleteRepository<Integer> {
-    @Query("SELECT new com.ibm.demo.product.DTO.GetProductListResponse(p.id, p.name, p.price, p.saleStatus, p.available) FROM Product p WHERE p.saleStatus = :saleStatus")
-    List<GetProductListResponse> findBySaleStatus(Integer saleStatus);
+    List<Product> findBySaleStatus(Integer saleStatus);
 
-    @Query("SELECT new com.ibm.demo.product.DTO.GetProductListResponse(p.id, p.name, p.price, p.saleStatus, p.available) FROM Product p")
-    List<GetProductListResponse> findAllProducts();
+    @Query("SELECT p FROM Product p")
+    List<Product> findAllProducts();
 
     @Modifying
     @Query("UPDATE Product p SET p.available = p.available - :qty, p.reserved = p.reserved + :qty WHERE p.id = :productId AND p.available >= :qty")

@@ -10,7 +10,7 @@ import org.springframework.web.service.annotation.HttpExchange;
 import org.springframework.web.service.annotation.PostExchange;
 
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
-import com.ibm.demo.util.ProcessOrderItemsRequest;
+import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 
 @HttpExchange("/product")
 public interface ProductClient {

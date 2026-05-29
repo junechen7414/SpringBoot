@@ -16,12 +16,12 @@ import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
+import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 import com.ibm.demo.util.DBAssertion;
-import com.ibm.demo.util.OrderItemRequest;
-import com.ibm.demo.util.ProcessOrderItemsRequest;
 import com.ibm.demo.util.ServiceValidator;
 
 import jakarta.transaction.Transactional;
@@ -67,7 +67,10 @@ public class ProductService {
      * @return 包含所有商品列表資訊的回應 DTO 列表
      */
     public List<GetProductListResponse> getProductList() {
-        return productRepository.findAllProducts();
+        List<Product> products = productRepository.findAllProducts();
+        return products.stream()
+                .map(this::mapProductToListResponse)
+                .toList();
     }
 
     /**
@@ -211,6 +214,22 @@ public class ProductService {
                 .saleStatus(product.getSaleStatus())
                 .available(product.getAvailable())
                 .build();
+    }
+
+    /**
+     * 將單一 Product 實體映射到 GetProductListResponse DTO。
+     *
+     * @param product 商品實體
+     * @return 商品列表資訊 DTO
+     */
+    private GetProductListResponse mapProductToListResponse(Product product) {
+        return new GetProductListResponse(
+                product.getId(),
+                product.getName(),
+                product.getPrice(),
+                product.getSaleStatus(),
+                product.getAvailable()
+        );
     }
 
     /**

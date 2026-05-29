@@ -15,7 +15,9 @@ public record UpdateProductRequest(
 
                 @NotNull(message = "Price is required") @Digits(integer = 8, fraction = 4) @Positive(message = "Price must be positive") BigDecimal price,
 
-                @NotNull(message = "Sale Status is required") @Digits(integer = 4, fraction = 0) Integer saleStatus,
+                @NotNull(message = "Sale Status is required")
+                @Digits(integer = 4, fraction = 0)
+                Integer saleStatus,
 
                 @NotNull(message = "Stock Qty is required") @Digits(integer = 10, fraction = 0) Integer available) {
 }

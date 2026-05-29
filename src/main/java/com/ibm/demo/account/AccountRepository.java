@@ -7,15 +7,13 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.util.SoftDeleteRepository;
 
 public interface AccountRepository extends JpaRepository<Account, Integer>, SoftDeleteRepository<Integer> {
-    @Query("SELECT new com.ibm.demo.account.DTO.GetAccountListResponse(a.id, a.name, a.status) FROM Account a WHERE a.status = :status")
-    List<GetAccountListResponse> findByStatus(String status);
+    List<Account> findByStatus(String status);
 
-    @Query("SELECT new com.ibm.demo.account.DTO.GetAccountListResponse(a.id, a.name, a.status) FROM Account a")
-    List<GetAccountListResponse> findAllAccount();
+    @Query("SELECT a FROM Account a")
+    List<Account> findAllAccount();
 
     @Override
     @Modifying
