@@ -19,38 +19,39 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * 基礎實體類別 - 已棄用
- * 
+ *
  * @deprecated 此類別已被棄用，請使用組合模式替代繼承：
  * <ul>
  * <li>{@link AuditMetadata} - 用於審計欄位（createdAt, updatedAt）</li>
  * <li>{@link SoftDeleteMetadata} - 用於軟刪除欄位（deleted, deletedAt）</li>
- * <li>{@link VersionMetadata} - 用於樂觀鎖版本控制（version）</li>
+ * <li>直接在 Entity 宣告 {@code @Version} 欄位 - 用於樂觀鎖版本控制</li>
  * </ul>
- * 
+ *
  * <p>使用範例：</p>
  * <pre>{@code
  * @Entity
  * public class MyEntity {
  *     @Id
  *     private Long id;
- *     
+ *
  *     // 組合所需的功能
  *     @Embedded
  *     @Builder.Default
  *     private AuditMetadata auditMetadata = new AuditMetadata();
- *     
+ *
  *     @Embedded
  *     @Builder.Default
  *     private SoftDeleteMetadata softDeleteMetadata = new SoftDeleteMetadata();
- *     
- *     @Embedded
- *     @Builder.Default
- *     private VersionMetadata versionMetadata = new VersionMetadata();
- *     
+ *
+ *     // 樂觀鎖版本控制
+ *     @Version
+ *     @Column(name = "VERSION")
+ *     private Integer version;
+ *
  *     // 其他業務欄位...
  * }
  * }</pre>
- * 
+ *
  * @since 1.0
  */
 @Deprecated(since = "2.0", forRemoval = true)
@@ -99,7 +100,7 @@ public abstract class BaseEntity {
     private LocalDateTime deletedAt;
 
     /**
-     * @deprecated 使用 {@link VersionMetadata#getVersion()} 替代
+     * @deprecated 直接在 Entity 中宣告 {@code @Version} 欄位替代
      */
     @Deprecated(since = "2.0", forRemoval = true)
     @Version
