@@ -1,0 +1,57 @@
+# Git Aliases for Branch Cleanup
+# 使用方式：將以下內容加入到 ~/.gitconfig 或執行對應的 git config 指令
+
+[alias]
+    # 清理已合併到 main 的本地分支（安全）
+    cleanup = "!git branch --merged main | grep -v '\\*\\|main\\|master' | xargs -r git branch -d"
+    
+    # 清理遠端已刪除的本地分支（刪除所有 [gone] 分支）
+    prune-local = "!git fetch --prune && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs -r git branch -D"
+    
+    # 互動式清理：顯示 [gone] 分支並詢問是否刪除
+    prune-interactive = "!f() { \
+        echo 'Fetching and pruning remote references...'; \
+        git fetch --prune; \
+        echo ''; \
+        echo 'Branches with deleted remotes:'; \
+        git branch -vv | grep ': gone]'; \
+        echo ''; \
+        read -p 'Delete these branches? (y/N) ' confirm; \
+        if [ \"$confirm\" = 'y' ] || [ \"$confirm\" = 'Y' ]; then \
+            git branch -vv | grep ': gone]' | awk '{print $1}' | xargs -r git branch -D; \
+            echo 'Branches deleted.'; \
+        else \
+            echo 'Cancelled.'; \
+        fi; \
+    }; f"
+    
+    # 顯示所有 [gone] 分支（僅查看，不刪除）
+    show-gone = "!git fetch --prune && git branch -vv | grep ': gone]'"
+    
+    # 完整清理：fetch + prune + 刪除已合併分支
+    full-cleanup = "!git fetch --prune && git branch --merged main | grep -v '\\*\\|main\\|master' | xargs -r git branch -d && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs -r git branch -D"
+    
+    # 顯示分支狀態摘要
+    branch-status = "!git fetch --prune && echo 'Local branches:' && git branch -vv"
+
+# PowerShell 專用版本（Windows）
+# 注意：PowerShell 需要使用不同的語法
+
+[alias]
+    # PowerShell: 清理 [gone] 分支
+    prune-local-ps = "!git fetch --prune; git branch -vv | Select-String ': gone]' | ForEach-Object { $_.Line.Trim().Split()[0] } | ForEach-Object { git branch -D $_ }"
+    
+    # PowerShell: 互動式清理
+    prune-interactive-ps = "!git fetch --prune; $branches = git branch -vv | Select-String ': gone]' | ForEach-Object { $_.Line.Trim().Split()[0] }; if ($branches) { Write-Host 'Branches to delete:'; $branches; $confirm = Read-Host 'Delete these branches? (y/N)'; if ($confirm -eq 'y' -or $confirm -eq 'Y') { $branches | ForEach-Object { git branch -D $_ }; Write-Host 'Branches deleted.' } else { Write-Host 'Cancelled.' } } else { Write-Host 'No gone branches found.' }"
+    
+    # PowerShell: 清理已合併分支
+    cleanup-ps = "!git branch --merged main | Select-String -NotMatch '\\*|main|master' | ForEach-Object { $_.Line.Trim() } | ForEach-Object { git branch -d $_ }"
+
+# 使用說明：
+# 1. 將此檔案內容加入到 ~/.gitconfig
+# 2. 或執行以下指令逐一設定：
+#    git config --global alias.cleanup "!git branch --merged main | grep -v '\\*\\|main\\|master' | xargs -r git branch -d"
+#    git config --global alias.prune-local "!git fetch --prune && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs -r git branch -D"
+#    ... (其他 alias)
+
+# Windows PowerShell 使用者建議使用 *-ps 版本的 alias
