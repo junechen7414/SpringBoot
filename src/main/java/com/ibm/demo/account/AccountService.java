@@ -57,6 +57,7 @@ public class AccountService {
     /**
      * @return List<GetAccountListResponse>
      */
+    @Transactional(readOnly = true)
     public List<GetAccountListResponse> getAccountList() {
         return accountRepository.findAllAccount();
     }
@@ -65,6 +66,7 @@ public class AccountService {
      * @param id
      * @return GetAccountDetailResponse
      */
+    @Transactional(readOnly = true)
     public GetAccountDetailResponse getAccountDetail(Integer id) {
         Account existingAccount = findAccountByIdOrThrow(id);
         return mapAccountToDetailResponse(existingAccount);
