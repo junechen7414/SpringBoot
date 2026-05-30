@@ -26,16 +26,17 @@ description: Every conversation
 
 <!-- 開發流程 -->
 @../../docs/agents/03-git-workflow.md
-@../../docs/agents/04-code-standards.md
+@../../docs/agents/04-git-branch-cleanup.md
+@../../docs/agents/05-code-standards.md
 
 <!-- 架構與設計 -->
-@../../docs/agents/05-architecture.md
-@../../docs/agents/06-dependency-check.md
+@../../docs/agents/06-architecture.md
+@../../docs/agents/07-dependency-check.md
 
 <!-- 測試與維運 -->
-@../../docs/agents/07-testing.md
-@../../docs/agents/08-monitoring.md
-@../../docs/agents/09-troubleshooting.md
+@../../docs/agents/08-testing.md
+@../../docs/agents/09-monitoring.md
+@../../docs/agents/10-troubleshooting.md
 
 ## 文檔管理規範
 
