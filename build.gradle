@@ -67,4 +67,6 @@ tasks.named('test') {
             excludeTags excludeTag.split(',')
         }
 	}
+	// 明確禁用並行測試執行，避免 Oracle 容器競爭
+	maxParallelForks = 1
 }
