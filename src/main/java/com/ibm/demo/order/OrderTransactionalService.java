@@ -48,7 +48,7 @@ public class OrderTransactionalService {
                                         Integer quantity = detailRequest.quantity();
                                         // 建立訂單明細
                                         return OrderDetail.builder()
-                                                        .orderInfo(newOrderInfo)
+                                                        .orderInfo(savedOrderInfo)
                                                         .productId(productId)
                                                         .quantity(quantity)
                                                         .build();
