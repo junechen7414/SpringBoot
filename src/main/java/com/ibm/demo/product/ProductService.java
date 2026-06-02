@@ -29,9 +29,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Bulkhead(name = "ProductService")
 @CircuitBreaker(name = "ProductService")
-@RateLimiter(name = "ProductService")
 public class ProductService {
     private final ProductRepository productRepository;
 
@@ -44,6 +42,8 @@ public class ProductService {
      * @return 包含已建立商品資訊的回應 DTO
      */
     @Transactional
+    @Bulkhead(name = "product-write")
+    @RateLimiter(name = "product-write")
     public Integer createProduct(CreateProductRequest product_DTO) {
         ServiceValidator.validateNotNull(product_DTO, "Create product request");
         // 1. 驗證商品名稱是否已存在
@@ -66,6 +66,8 @@ public class ProductService {
      *
      * @return 包含所有商品列表資訊的回應 DTO 列表
      */
+    @Bulkhead(name = "product-read")
+    @RateLimiter(name = "product-read")
     public List<GetProductListResponse> getProductList() {
         List<Product> products = productRepository.findAllProducts();
         return products.stream()
@@ -79,6 +81,8 @@ public class ProductService {
      * @param id 商品 ID
      * @return 包含商品詳細資訊的回應 DTO
      */
+    @Bulkhead(name = "product-read")
+    @RateLimiter(name = "product-read")
     public GetProductDetailResponse getProductDetail(Integer id) {
         Product existingProduct = findProductByIdOrThrow(id);
         return mapProductToDetailResponse(existingProduct);
@@ -94,6 +98,8 @@ public class ProductService {
      * @param ids 商品 ID 集合
      * @return 以商品 ID 為鍵，商品詳細資訊 DTO 為值的 Map
      */
+    @Bulkhead(name = "product-read")
+    @RateLimiter(name = "product-read")
     public Map<Integer, GetProductDetailResponse> getProductDetails(Set<Integer> ids) {
         // 使用多個ID查詢多個商品實體，若有對應不上的ID會忽略 continue，若傳入null會拋出例外
         // 注：@SQLRestriction 已保證只查詢未刪除且可銷售的商品
@@ -109,6 +115,8 @@ public class ProductService {
      * @param updateProductRequestDto 包含要更新的商品資訊的請求 DTO
      */
     @Transactional
+    @Bulkhead(name = "product-write")
+    @RateLimiter(name = "product-write")
     public void updateProduct(Integer id, UpdateProductRequest updateProductRequestDto) {
         ServiceValidator.validateNotNull(updateProductRequestDto, "Update product request");
         // 1. 取得商品實體並驗證商品是否存在否則拋出例外
@@ -133,6 +141,8 @@ public class ProductService {
      * @param productId 要刪除的商品 ID
      */
     @Transactional
+    @Bulkhead(name = "product-write")
+    @RateLimiter(name = "product-write")
     public void deleteProduct(Integer productId) {
         Product existingProduct = findProductByIdOrThrow(productId);
         int updated = productRepository.softDeleteById(productId, existingProduct.getVersion());
@@ -140,6 +150,8 @@ public class ProductService {
     }
 
     @Transactional
+    @Bulkhead(name = "product-inventory")
+    @RateLimiter(name = "product-inventory")
     public void processOrderItems(ProcessOrderItemsRequest request) {
         ServiceValidator.validateNotNull(request, "Process order items request");
         Set<OrderItemRequest> originalItems = request.originalItems();

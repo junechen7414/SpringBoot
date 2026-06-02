@@ -99,28 +99,81 @@ resilience4j:
   bulkhead:
     configs:
       default:
-        max-concurrent-calls: 100 # 調整至連線池上限的 50% 左右
         max-wait-duration: 0ms    # fail-fast: 不等待，立即拒絕
     instances:
-      OrderService:
-        base-config: default
-      AccountService:
-        base-config: default
-      ProductService:
-        base-config: default
+      # AccountService 方法級別配置
+      account-read:
+        max-concurrent-calls: 150
+        max-wait-duration: 0ms
+      account-write:
+        max-concurrent-calls: 100
+        max-wait-duration: 0ms
+      account-write-with-validation:
+        max-concurrent-calls: 80
+        max-wait-duration: 0ms
+      
+      # ProductService 方法級別配置
+      product-read:
+        max-concurrent-calls: 200
+        max-wait-duration: 0ms
+      product-write:
+        max-concurrent-calls: 100
+        max-wait-duration: 0ms
+      product-inventory:
+        max-concurrent-calls: 50
+        max-wait-duration: 0ms
+      
+      # OrderService 方法級別配置
+      order-read:
+        max-concurrent-calls: 100
+        max-wait-duration: 0ms
+      order-write:
+        max-concurrent-calls: 50
+        max-wait-duration: 0ms
+  
   ratelimiter:
     configs:
       default:
-        limit-for-period: 100      # 每個週期允許 100 個請求
         limit-refresh-period: 1s   # 每秒刷新限制
         timeout-duration: 0ms      # fail-fast: 不等待，立即拒絕
     instances:
-      OrderService:
-        base-config: default
-      AccountService:
-        base-config: default
-      ProductService:
-        base-config: default
+      # AccountService 方法級別配置
+      account-read:
+        limit-for-period: 500
+        limit-refresh-period: 1s
+        timeout-duration: 0ms
+      account-write:
+        limit-for-period: 200
+        limit-refresh-period: 1s
+        timeout-duration: 0ms
+      account-write-with-validation:
+        limit-for-period: 150
+        limit-refresh-period: 1s
+        timeout-duration: 0ms
+      
+      # ProductService 方法級別配置
+      product-read:
+        limit-for-period: 1000
+        limit-refresh-period: 1s
+        timeout-duration: 0ms
+      product-write:
+        limit-for-period: 200
+        limit-refresh-period: 1s
+        timeout-duration: 0ms
+      product-inventory:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 0ms
+      
+      # OrderService 方法級別配置
+      order-read:
+        limit-for-period: 300
+        limit-refresh-period: 1s
+        timeout-duration: 0ms
+      order-write:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 0ms
   circuitbreaker:
     configs:
       default:
