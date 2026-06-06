@@ -103,32 +103,32 @@ resilience4j:
     instances:
       # AccountService 方法級別配置
       account-read:
-        max-concurrent-calls: 150
+        max-concurrent-calls: 500
         max-wait-duration: 0ms
       account-write:
-        max-concurrent-calls: 100
+        max-concurrent-calls: 200
         max-wait-duration: 0ms
       account-write-with-validation:
-        max-concurrent-calls: 80
+        max-concurrent-calls: 150
         max-wait-duration: 0ms
       
       # ProductService 方法級別配置
       product-read:
-        max-concurrent-calls: 200
+        max-concurrent-calls: 1000
         max-wait-duration: 0ms
       product-write:
-        max-concurrent-calls: 100
+        max-concurrent-calls: 200
         max-wait-duration: 0ms
       product-inventory:
-        max-concurrent-calls: 50
+        max-concurrent-calls: 100
         max-wait-duration: 0ms
       
       # OrderService 方法級別配置
       order-read:
-        max-concurrent-calls: 100
+        max-concurrent-calls: 300
         max-wait-duration: 0ms
       order-write:
-        max-concurrent-calls: 50
+        max-concurrent-calls: 100
         max-wait-duration: 0ms
   
   ratelimiter:
@@ -179,10 +179,10 @@ resilience4j:
       default:
         register-health-indicator: true
         sliding-window-type: COUNT_BASED
-        sliding-window-size: 50             # 擴大窗口，增加統計置信度
-        minimum-number-of-calls: 20         # 至少 20 個請求才開始計算
+        sliding-window-size: 100            # 擴大窗口，增加統計置信度
+        minimum-number-of-calls: 50         # 至少 50 個請求才開始計算
         failure-rate-threshold: 50          # 50% 失敗率觸發開路
-        wait-duration-in-open-state: 30s    # 給予下游 30 秒恢復時間
+        wait-duration-in-open-state: 60s    # 給予下游 60 秒恢復時間
         permitted-number-of-calls-in-half-open-state: 10
         automatic-transition-from-open-to-half-open-enabled: true
     instances:
