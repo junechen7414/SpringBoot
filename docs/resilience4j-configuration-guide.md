@@ -1,325 +1,325 @@
-# 🛡️ Resilience4j Configuration Guide
+# 🛡️ Resilience4j 設定指南
 
-> **Last Updated**: 2026-06-03  
-> **Author**: Bobby  
-> **Project**: Spring Boot Demo Application
-
----
-
-## 📋 Table of Contents
-
-1. [Introduction & Overview](#-introduction--overview)
-2. [Production Environment Configuration](#-production-environment-configuration)
-3. [Learning/Demo Configuration](#-learningdemo-configuration)
-4. [Configuration Comparison Tables](#-configuration-comparison-tables)
-5. [JMeter Testing Guide](#-jmeter-testing-guide)
-6. [Troubleshooting Guide](#-troubleshooting-guide)
-7. [Quick Reference](#-quick-reference)
+> **最後更新**: 2026-06-03  
+> **作者**: Bobby  
+> **專案**: Spring Boot Demo Application
 
 ---
 
-## 🎯 Introduction & Overview
+## 📋 目錄
 
-### What is Resilience4j?
+1. [簡介與概述](#-簡介與概述)
+2. [生產環境配置](#-生產環境配置)
+3. [學習/演示配置](#-學習演示配置)
+4. [配置比較表](#-配置比較表)
+5. [JMeter 測試指南](#-jmeter-測試指南)
+6. [故障排除指南](#-故障排除指南)
+7. [快速參考](#-快速參考)
 
-Resilience4j is a lightweight fault tolerance library designed for Java applications. This project uses three core patterns to protect our microservices:
+---
 
-### The Three Patterns
+## 🎯 簡介與概述
 
-#### 1️⃣ **RateLimiter** - Request Rate Control
-- **Purpose**: Limits the number of requests per time period (e.g., 1000 requests/second)
-- **Use Case**: Prevent API abuse, protect backend from traffic spikes
-- **Failure Response**: HTTP 429 (Too Many Requests)
-- **Analogy**: Like a bouncer at a club - only allows X people per minute
+### 什麼是 Resilience4j？
 
-#### 2️⃣ **Bulkhead** - Concurrent Call Control
-- **Purpose**: Limits the number of parallel/concurrent executions
-- **Use Case**: Prevent thread pool exhaustion, control resource usage
-- **Failure Response**: HTTP 503 (Service Unavailable)
-- **Analogy**: Like a parking lot - only X cars can park at the same time
+Resilience4j 是一個專為 Java 應用程式設計的輕量級容錯庫。本專案使用三種核心模式來保護我們的微服務：
 
-#### 3️⃣ **CircuitBreaker** - Cascading Failure Protection
-- **Purpose**: Stops calling a failing service to prevent cascading failures
-- **Use Case**: Protect against downstream service failures
-- **Failure Response**: HTTP 503 (Service Unavailable - Circuit Open)
-- **Analogy**: Like an electrical circuit breaker - trips when too many failures occur
+### 三大模式
 
-### 🔄 Configuration Hierarchy & Execution Order
+#### 1️⃣ **RateLimiter** - 請求速率控制
+- **用途**: 限制每個時間段內的請求數量 (例如：每秒 1000 個請求)
+- **應用場景**: 防止 API 濫用，保護後端免受流量激增影響
+- **失敗回應**: HTTP 429 (Too Many Requests)
+- **類比**: 像夜店的保全 - 每分鐘只允許 X 個人進入
+
+#### 2️⃣ **Bulkhead** - 並發呼叫控制
+- **用途**: 限制並行/並發執行的數量
+- **應用場景**: 防止執行緒池耗盡，控制資源使用量
+- **失敗回應**: HTTP 503 (Service Unavailable)
+- **類比**: 像停車場 - 同時只能停 X 輛車
+
+#### 3️⃣ **CircuitBreaker** - 級聯故障保護
+- **用途**: 停止呼叫故障服務，防止故障級聯
+- **應用場景**: 防止下游服務故障影響本服務
+- **失敗回應**: HTTP 503 (Service Unavailable - Circuit Open)
+- **類比**: 像電路斷路器 - 當發生過多故障時會跳閘
+
+### 🔄 配置層級與執行順序
 
 ```
-Request → RateLimiter → Bulkhead → CircuitBreaker → Service Method
-            ↓              ↓            ↓
-          429 Error    503 Error    503 Error
+請求 → RateLimiter → Bulkhead → CircuitBreaker → 服務方法
+           ↓              ↓            ↓
+         429 錯誤      503 錯誤     503 錯誤
 ```
 
-**Execution Flow**:
-1. **RateLimiter** checks first: "Have we exceeded requests/second limit?"
-2. **Bulkhead** checks second: "Are too many requests running concurrently?"
-3. **CircuitBreaker** checks third: "Is the downstream service healthy?"
-4. If all pass → Execute the actual service method
+**執行流程**:
+1. **RateLimiter** 首先檢查: "我們是否超過每秒請求限制了？"
+2. **Bulkhead** 其次檢查: "是否有太多請求在並發執行？"
+3. **CircuitBreaker** 第三檢查: "下游服務是否健康？"
+4. 如果全部通過 → 執行實際的服務方法
 
-### 🤔 When to Use Each Pattern
+### 🤔 何時使用哪種模式
 
-| Pattern | Use When | Don't Use When |
+| 模式 | 使用時機 | 不建議使用時機 |
 |---------|----------|----------------|
-| **RateLimiter** | • Protecting public APIs<br>• Preventing abuse<br>• Enforcing SLA limits | • Internal services only<br>• Trusted clients only |
-| **Bulkhead** | • Limited resources (DB connections, threads)<br>• Preventing resource exhaustion<br>• Isolating critical operations | • Unlimited resources<br>• Simple CRUD operations |
-| **CircuitBreaker** | • Calling external services<br>• Downstream dependencies<br>• Network operations | • Local operations<br>• Database queries (use timeouts instead) |
+| **RateLimiter** | • 保護公開 API<br>• 防止濫用<br>• 強制執行 SLA 限制 | • 僅內部服務<br>• 僅受信任的客戶端 |
+| **Bulkhead** | • 資源有限 (資料庫連線、執行緒)<br>• 防止資源耗盡<br>• 隔離關鍵操作 | • 資源無限<br>• 簡單的 CRUD 操作 |
+| **CircuitBreaker** | • 呼叫外部服務<br>• 下游依賴<br>• 網路操作 | • 本地操作<br>• 資料庫查詢 (請改用逾時設定) |
 
-### 📊 Pattern Relationships
+### 📊 模式關係
 
-**Critical Rule**: `Bulkhead max-concurrent-calls >= RateLimiter limit-for-period`
+**關鍵規則**: `Bulkhead max-concurrent-calls >= RateLimiter limit-for-period`
 
-**Why?** 
-- RateLimiter allows X requests per second
-- Bulkhead must handle at least X concurrent requests
-- Otherwise, valid requests will be rejected by Bulkhead
+**為什麼？**
+- RateLimiter 允許每秒 X 個請求
+- Bulkhead 必須能處理至少 X 個並發請求
+- 否則，合法的請求會被 Bulkhead 拒絕
 
-**Example**:
+**範例**:
 ```yaml
 ratelimiter:
   instances:
     api-read:
-      limit-for-period: 1000        # Allow 1000 requests/second
+      limit-for-period: 1000        # 允許每秒 1000 個請求
 bulkhead:
   instances:
     api-read:
-      max-concurrent-calls: 1000    # Must be >= 1000 to handle them all
+      max-concurrent-calls: 1000    # 必須 >= 1000 才能全部處理
 ```
 
 ---
 
-## 🏭 Production Environment Configuration
+## 🏭 生產環境配置
 
-### Configuration Principles
+### 配置原則
 
-#### 1. Calculate Based on System Capacity
+#### 1. 根據系統容量計算
 
-**Step 1: Measure Your System's Capacity**
+**步驟 1: 測量系統容量**
 ```bash
-# Use load testing tools to find:
-# - Maximum requests/second your server can handle
-# - Average response time
-# - Thread pool size
-# - Database connection pool size
+# 使用負載測試工具找出：
+# - 伺服器每秒可處理的最大請求數
+# - 平均回應時間
+# - 執行緒池大小
+# - 資料庫連線池大小
 ```
 
-**Step 2: Apply Safety Margin (70-80% Rule)**
+**步驟 2: 應用安全邊際 (70-80% 原則)**
 ```
-Production Limit = Measured Capacity × 0.75
+生產限制 = 測量容量 × 0.75
 ```
 
-**Example Calculation**:
-- Load test shows server handles 1500 req/s at 95th percentile < 200ms
-- Apply 75% safety margin: 1500 × 0.75 = **1125 req/s**
-- Round down for safety: **1000 req/s**
+**範例計算**:
+- 負載測試顯示伺服器可處理 1500 req/s，第 95 百分位回應時間 < 200ms
+- 應用 75% 安全邊際: 1500 × 0.75 = **1125 req/s**
+- 無條件捨去以保安全: **1000 req/s**
 
-#### 2. Parameter Relationships
+#### 2. 參數關係
 
-**🔑 Critical Rule: Bulkhead ≥ RateLimiter**
+**🔑 關鍵規則: Bulkhead ≥ RateLimiter**
 
-The Bulkhead limit must be **greater than or equal to** the RateLimiter limit. This is because:
+Bulkhead 限制必須 **大於或等於** RateLimiter 限制。原因如下：
 
-1. **Execution Order**: RateLimiter checks first, then Bulkhead
-2. **If Bulkhead < RateLimiter**: Bulkhead becomes the bottleneck and will reject valid requests that passed RateLimiter
-3. **RateLimiter Never Triggers**: You'll never see 429 errors, only 503 errors from Bulkhead
-4. **Defeats the Purpose**: RateLimiter's rate control becomes meaningless
+1. **執行順序**: RateLimiter 先檢查，然後是 Bulkhead
+2. **如果 Bulkhead < RateLimiter**: Bulkhead 會成為瓶頸，並拒絕通過 RateLimiter 的合法請求
+3. **RateLimiter 永遠不會觸發**: 您永遠看不到 429 錯誤，只會看到來自 Bulkhead 的 503 錯誤
+4. **失去目的**: RateLimiter 的速率控制變得毫無意義
 
-**Example of the Problem**:
+**問題範例**:
 ```
 RateLimiter: 1000 req/s
-Bulkhead: 500 concurrent
+Bulkhead: 500 並發
 
-Result: Only 500 requests can run concurrently
-→ RateLimiter allows 1000/s, but Bulkhead blocks 500/s
-→ You'll see 503 errors (Bulkhead full) instead of 429 (Rate limited)
-→ RateLimiter configuration is wasted
+結果: 只能同時處理 500 個請求
+→ RateLimiter 允許 1000/s，但 Bulkhead 阻擋 500/s
+→ 您會看到 503 錯誤 (Bulkhead 滿載) 而非 429 (速率受限)
+→ RateLimiter 配置被浪費
 ```
 
 ```yaml
-# ✅ CORRECT Configuration
+# ✅ 正確配置
 resilience4j:
   ratelimiter:
     instances:
       api-read:
-        limit-for-period: 1000              # 1000 requests/second
+        limit-for-period: 1000              # 每秒 1000 個請求
   bulkhead:
     instances:
       api-read:
-        max-concurrent-calls: 1000          # >= RateLimiter limit ✅
-        # Bulkhead won't interfere with RateLimiter's rate control
+        max-concurrent-calls: 1000          # >= RateLimiter 限制 ✅
+        # Bulkhead 不會干擾 RateLimiter 的速率控制
 ```
 
 ```yaml
-# ❌ WRONG Configuration
+# ❌ 錯誤配置
 resilience4j:
   ratelimiter:
     instances:
       api-read:
-        limit-for-period: 1000              # 1000 requests/second
+        limit-for-period: 1000              # 每秒 1000 個請求
   bulkhead:
     instances:
       api-read:
-        max-concurrent-calls: 500           # < RateLimiter limit ❌
-        # Problem: Bulkhead becomes the bottleneck!
-        # Valid requests that passed RateLimiter will be rejected by Bulkhead
-        # You'll never see 429 errors, only 503 errors
+        max-concurrent-calls: 500           # < RateLimiter 限制 ❌
+        # 問題: Bulkhead 成為瓶頸！
+        # 通過 RateLimiter 的合法請求會被 Bulkhead 拒絕
+        # 您永遠看不到 429 錯誤，只會看到 503 錯誤
 ```
 
-**Best Practice**:
-- Set Bulkhead = RateLimiter (or slightly higher)
-- This ensures RateLimiter controls the rate, Bulkhead protects resources
-- Both patterns work as intended without interfering with each other
+**最佳實踐**:
+- 設定 Bulkhead = RateLimiter (或略高)
+- 確保 RateLimiter 控制速率，Bulkhead 保護資源
+- 兩種模式皆正常運作而不相互干擾
 
-#### 3. Different API Types Configuration
+#### 3. 不同 API 類型的配置
 
-### 📖 Read Operations (High Throughput)
+### 📖 讀取操作 (高吞吐量)
 
-**Characteristics**:
-- Fast response time (< 100ms)
-- No data modification
-- Can handle high concurrency
-- Cacheable
+**特性**:
+- 回應時間快 (< 100ms)
+- 無資料修改
+- 可處理高並發
+- 可快取
 
-**Configuration Strategy**:
+**配置策略**:
 ```yaml
 resilience4j:
   ratelimiter:
     instances:
       product-read:
-        limit-for-period: 1000              # High limit for reads
+        limit-for-period: 1000              # 讀取的高限制
         limit-refresh-period: 1s
-        timeout-duration: 0ms               # Fail-fast
+        timeout-duration: 0ms               # 快速失敗
   bulkhead:
     instances:
       product-read:
-        max-concurrent-calls: 1000          # Match RateLimiter
-        max-wait-duration: 0ms              # Fail-fast
+        max-concurrent-calls: 1000          # 符合 RateLimiter
+        max-wait-duration: 0ms              # 快速失敗
   circuitbreaker:
     instances:
       ProductService:
-        sliding-window-size: 100            # Large window for stability
-        minimum-number-of-calls: 50         # Need more data points
-        failure-rate-threshold: 50          # 50% failure rate
-        wait-duration-in-open-state: 60s    # 1 minute recovery time
+        sliding-window-size: 100            # 大視窗以保持穩定
+        minimum-number-of-calls: 50         # 需要更多資料點
+        failure-rate-threshold: 50          # 50% 故障率
+        wait-duration-in-open-state: 60s    # 1 分鐘恢復時間
 ```
 
-**Reasoning**:
-- **RateLimiter 1000/s**: Read operations are fast, can handle high volume
-- **Bulkhead 1000**: Matches RateLimiter to avoid unnecessary rejections
-- **CircuitBreaker window 100**: Larger window for more stable failure detection
-- **Minimum calls 50**: Need sufficient data before opening circuit
+**理由**:
+- **RateLimiter 1000/s**: 讀取操作快，可處理大流量
+- **Bulkhead 1000**: 符合 RateLimiter 以避免不必要的拒絕
+- **CircuitBreaker 視窗 100**: 較大視窗以進行更穩定的故障偵測
+- **最少呼叫 50**: 開啟斷路器前需要足夠的資料
 
-### ✍️ Write Operations (Lower Throughput)
+### ✍️ 寫入操作 (較低吞吐量)
 
-**Characteristics**:
-- Slower response time (100-500ms)
-- Data modification (DB writes)
-- Transaction overhead
-- Cannot be cached
+**特性**:
+- 回應時間較慢 (100-500ms)
+- 資料修改 (資料庫寫入)
+- 事務開銷
+- 無法快取
 
-**Configuration Strategy**:
+**配置策略**:
 ```yaml
 resilience4j:
   ratelimiter:
     instances:
       product-write:
-        limit-for-period: 200               # Lower limit for writes
+        limit-for-period: 200               # 寫入的較低限制
         limit-refresh-period: 1s
         timeout-duration: 0ms
   bulkhead:
     instances:
       product-write:
-        max-concurrent-calls: 200           # Match RateLimiter
+        max-concurrent-calls: 200           # 符合 RateLimiter
         max-wait-duration: 0ms
   circuitbreaker:
     instances:
       ProductService:
-        sliding-window-size: 50             # Smaller window
-        minimum-number-of-calls: 20         # Faster detection
+        sliding-window-size: 50             # 較小視窗
+        minimum-number-of-calls: 20         # 更快偵測
         failure-rate-threshold: 50
-        wait-duration-in-open-state: 30s    # Shorter recovery time
+        wait-duration-in-open-state: 30s    # 較短恢復時間
 ```
 
-**Reasoning**:
-- **RateLimiter 200/s**: Write operations are slower, need lower limit
-- **Bulkhead 200**: Matches RateLimiter, prevents DB connection exhaustion
-- **CircuitBreaker window 50**: Smaller window for faster failure detection
-- **Minimum calls 20**: Detect write failures quickly
+**理由**:
+- **RateLimiter 200/s**: 寫入操作慢，需要較低限制
+- **Bulkhead 200**: 符合 RateLimiter，防止資料庫連線耗盡
+- **CircuitBreaker 視窗 50**: 較小視窗以便更快偵測故障
+- **最少呼叫 20**: 快速偵測寫入故障
 
-### 🔧 Critical Operations (Strict Control)
+### 🔧 關鍵操作 (嚴格控制)
 
-**Characteristics**:
-- Complex business logic
-- Multiple validations
-- External service calls
-- High resource consumption
+**特性**:
+- 複雜業務邏輯
+- 多次驗證
+- 外部服務呼叫
+- 高資源消耗
 
-**Configuration Strategy**:
+**配置策略**:
 ```yaml
 resilience4j:
   ratelimiter:
     instances:
       order-create:
-        limit-for-period: 100               # Very strict limit
+        limit-for-period: 100               # 極嚴格限制
         limit-refresh-period: 1s
         timeout-duration: 0ms
   bulkhead:
     instances:
       order-create:
-        max-concurrent-calls: 50            # Even stricter concurrency
+        max-concurrent-calls: 50            # 更嚴格的並發限制
         max-wait-duration: 0ms
   circuitbreaker:
     instances:
       OrderService:
         sliding-window-size: 30
-        minimum-number-of-calls: 10         # Quick detection
-        failure-rate-threshold: 40          # Lower threshold (40%)
+        minimum-number-of-calls: 10         # 快速偵測
+        failure-rate-threshold: 40          # 較低門檻 (40%)
         wait-duration-in-open-state: 60s
 ```
 
-**Reasoning**:
-- **RateLimiter 100/s**: Complex operations need strict rate limiting
-- **Bulkhead 50**: Lower than RateLimiter to prevent resource exhaustion
-- **CircuitBreaker threshold 40%**: More sensitive to failures
-- **Minimum calls 10**: Detect critical operation failures quickly
+**理由**:
+- **RateLimiter 100/s**: 複雜操作需要嚴格的速率限制
+- **Bulkhead 50**: 低於 RateLimiter 以防止資源耗盡
+- **CircuitBreaker 門檻 40%**: 對故障更敏感
+- **最少呼叫 10**: 快速偵測關鍵操作的故障
 
-### 📊 Real-World Production Examples
+### 📊 生產環境實際範例
 
-#### Example 1: E-commerce Product Catalog API
+#### 範例 1: 電子商務產品目錄 API
 
-**System Specs**:
-- Server: 8 CPU cores, 16GB RAM
-- Database: PostgreSQL with 100 connection pool
-- Load test result: 2000 req/s sustained
+**系統規格**:
+- 伺服器: 8 CPU 核心, 16GB RAM
+- 資料庫: PostgreSQL, 100 連線池
+- 負載測試結果: 2000 req/s 持續
 
-**Configuration**:
+**配置**:
 ```yaml
 resilience4j:
   ratelimiter:
     instances:
-      # Product listing (high traffic)
+      # 產品列表 (高流量)
       product-list:
         limit-for-period: 1500              # 2000 × 0.75 = 1500
         limit-refresh-period: 1s
         timeout-duration: 0ms
       
-      # Product detail (medium traffic)
+      # 產品詳情 (中流量)
       product-detail:
-        limit-for-period: 1000              # Lower than list
+        limit-for-period: 1000              # 低於列表
         limit-refresh-period: 1s
         timeout-duration: 0ms
       
-      # Product search (resource intensive)
+      # 產品搜尋 (資源密集)
       product-search:
-        limit-for-period: 500               # More restrictive
+        limit-for-period: 500               # 更具限制性
         limit-refresh-period: 1s
         timeout-duration: 0ms
   
   bulkhead:
     instances:
       product-list:
-        max-concurrent-calls: 1500          # Match RateLimiter
+        max-concurrent-calls: 1500          # 符合 RateLimiter
         max-wait-duration: 0ms
       
       product-detail:
@@ -327,7 +327,7 @@ resilience4j:
         max-wait-duration: 0ms
       
       product-search:
-        max-concurrent-calls: 300           # Lower due to DB load
+        max-concurrent-calls: 300           # 較低以減輕 DB 負載
         max-wait-duration: 0ms
   
   circuitbreaker:
@@ -340,74 +340,74 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 10
 ```
 
-**Calculation Breakdown**:
-- **Product List**: Simple query, fast response → High limit (1500/s)
-- **Product Detail**: Single record fetch → Medium limit (1000/s)
-- **Product Search**: Full-text search, DB intensive → Low limit (500/s)
-- **Bulkhead for Search**: 300 < 500 to prevent DB connection exhaustion
+**計算分解**:
+- **產品列表**: 簡單查詢，回應快 → 高限制 (1500/s)
+- **產品詳情**: 單筆記錄抓取 → 中限制 (1000/s)
+- **產品搜尋**: 全文搜尋，DB 密集 → 低限制 (500/s)
+- **搜尋 Bulkhead**: 300 < 500 以防資料庫連線耗盡
 
-#### Example 2: Payment Processing API
+#### 範例 2: 支付處理 API
 
-**System Specs**:
-- Server: 4 CPU cores, 8GB RAM
-- External payment gateway (3rd party)
-- Average response time: 500ms
+**系統規格**:
+- 伺服器: 4 CPU 核心, 8GB RAM
+- 外部支付閘道 (第三方)
+- 平均回應時間: 500ms
 
-**Configuration**:
+**配置**:
 ```yaml
 resilience4j:
   ratelimiter:
     instances:
       payment-process:
-        limit-for-period: 100               # Conservative for external calls
+        limit-for-period: 100               # 外部呼叫需保守
         limit-refresh-period: 1s
         timeout-duration: 0ms
   
   bulkhead:
     instances:
       payment-process:
-        max-concurrent-calls: 50            # Limit concurrent external calls
+        max-concurrent-calls: 50            # 限制併發外部呼叫
         max-wait-duration: 0ms
   
   circuitbreaker:
     instances:
       PaymentService:
-        sliding-window-size: 20             # Small window for quick detection
+        sliding-window-size: 20             # 快速偵測的小視窗
         minimum-number-of-calls: 10
-        failure-rate-threshold: 30          # Sensitive to failures (30%)
-        wait-duration-in-open-state: 120s   # 2 minutes for external service
+        failure-rate-threshold: 30          # 對故障敏感 (30%)
+        wait-duration-in-open-state: 120s   # 外部服務 2 分鐘恢復時間
         permitted-number-of-calls-in-half-open-state: 5
-        slow-call-duration-threshold: 2s    # Consider >2s as slow
-        slow-call-rate-threshold: 50        # 50% slow calls opens circuit
+        slow-call-duration-threshold: 2s    # >2s 視為慢呼叫
+        slow-call-rate-threshold: 50        # 50% 慢呼叫將開啟斷路器
 ```
 
-**Reasoning**:
-- **Low RateLimiter (100/s)**: External service has rate limits
-- **Lower Bulkhead (50)**: Prevent too many concurrent external calls
-- **Sensitive CircuitBreaker (30%)**: Protect against payment gateway failures
-- **Longer wait time (120s)**: Give external service more time to recover
-- **Slow call detection**: Prevent timeout cascades
+**理由**:
+- **低 RateLimiter (100/s)**: 外部服務有速率限制
+- **較低 Bulkhead (50)**: 防止過多併發外部呼叫
+- **敏感 CircuitBreaker (30%)**: 保護免受支付閘道故障影響
+- **較長等待時間 (120s)**: 給予外部服務更多恢復時間
+- **慢呼叫偵測**: 防止超時級聯
 
-### ✅ Production Best Practices
+### ✅ 生產環境最佳實踐
 
-#### 1. Start Conservative, Then Optimize
+#### 1. 從保守開始，再進行優化
 ```yaml
-# Phase 1: Initial deployment (conservative)
+# 階段 1: 初始部署 (保守)
 ratelimiter:
   instances:
     api:
-      limit-for-period: 500                 # Start low
+      limit-for-period: 500                 # 低限制開始
 
-# Phase 2: After monitoring (optimized)
+# 階段 2: 監控後 (優化)
 ratelimiter:
   instances:
     api:
-      limit-for-period: 1000                # Increase based on metrics
+      limit-for-period: 1000                # 根據指標增加
 ```
 
-#### 2. Monitor and Adjust
+#### 2. 監控與調整
 ```yaml
-# Add metrics monitoring
+# 加入監控指標
 management:
   metrics:
     export:
@@ -418,355 +418,355 @@ management:
       exposure:
         include: health,metrics,prometheus
 
-# Monitor these metrics:
+# 監控這些指標:
 # - resilience4j.ratelimiter.available.permissions
 # - resilience4j.bulkhead.available.concurrent.calls
 # - resilience4j.circuitbreaker.state
 ```
 
-#### 3. Use Different Configs for Different Environments
+#### 3. 不同環境使用不同配置
 ```yaml
 # application-prod.yml
 resilience4j:
   ratelimiter:
     instances:
       api:
-        limit-for-period: 1000              # Production limit
+        limit-for-period: 1000              # 生產限制
 
 # application-staging.yml
 resilience4j:
   ratelimiter:
     instances:
       api:
-        limit-for-period: 500               # Lower for staging
+        limit-for-period: 500               # 測試環境較低
 
 # application-dev.yml
 resilience4j:
   ratelimiter:
     instances:
       api:
-        limit-for-period: 100               # Very low for dev
+        limit-for-period: 100               # 開發環境極低
 ```
 
-#### 4. Document Your Calculations
+#### 4. 記錄配置計算過程
 ```yaml
-# Always add comments explaining your configuration
+# 務必加上註解解釋配置原因
 resilience4j:
   ratelimiter:
     instances:
       product-read:
-        # Calculation: Load test showed 1500 req/s capacity
-        # Applied 75% safety margin: 1500 × 0.75 = 1125
-        # Rounded down to: 1000 req/s
-        # Last updated: 2026-06-03
-        # Load test date: 2026-05-15
+        # 計算: 負載測試顯示 1500 req/s 容量
+        # 應用 75% 安全邊際: 1500 × 0.75 = 1125
+        # 無條件捨去為: 1000 req/s
+        # 最後更新: 2026-06-03
+        # 負載測試日期: 2026-05-15
         limit-for-period: 1000
 ```
 
-#### 5. Fail-Fast Philosophy
+#### 5. 快速失敗哲學 (Fail-Fast)
 ```yaml
-# ✅ RECOMMENDED: Fail-fast (timeout-duration: 0ms)
+# ✅ 推薦: 快速失敗 (timeout-duration: 0ms)
 resilience4j:
   ratelimiter:
     instances:
       api:
-        timeout-duration: 0ms               # Don't wait, fail immediately
+        timeout-duration: 0ms               # 不要等待，立即失敗
   bulkhead:
     instances:
       api:
-        max-wait-duration: 0ms              # Don't queue, fail immediately
+        max-wait-duration: 0ms              # 不要佇列，立即失敗
 
-# ❌ NOT RECOMMENDED: Waiting/queuing
+# ❌ 不推薦: 等待/佇列
 resilience4j:
   ratelimiter:
     instances:
       api:
-        timeout-duration: 5s                # Waiting causes cascading delays
+        timeout-duration: 5s                # 等待會導致級聯延遲
 ```
 
-**Why Fail-Fast?**
-- Prevents cascading delays
-- Better user experience (fast failure vs slow timeout)
-- Easier to debug
-- Prevents resource exhaustion
+**為什麼要快速失敗？**
+- 防止級聯延遲
+- 更好的使用者體驗 (快速失敗優於慢速超時)
+- 易於偵錯
+- 防止資源耗盡
 
 ---
 
-## 🎓 Learning/Demo Configuration
+## 🎓 學習/演示配置
 
-### Goal
-Provide minimal configurations that make it **easy to demonstrate** each pattern with JMeter using small request counts (~20 requests).
+### 目標
+提供最小化配置，讓使用 JMeter 進行模式演示（約 20 個請求）變得 **容易**。
 
 ---
 
-### A. RateLimiter Demo Configuration
+### A. RateLimiter 演示配置
 
-#### 🎯 Purpose
-Demonstrate request rate limiting - only allow X requests per second.
+#### 🎯 用途
+演示請求速率限制 - 僅允許每秒 X 個請求。
 
-#### ⚙️ Configuration
+#### ⚙️ 配置
 ```yaml
-# File: application.yml or application-demo.yml
+# 檔案: application.yml 或 application-demo.yml
 resilience4j:
   ratelimiter:
     instances:
       product-read:
-        limit-for-period: 10                # Allow only 10 requests per second
-        limit-refresh-period: 1s            # Reset every 1 second
-        timeout-duration: 0ms               # Fail immediately if limit exceeded
+        limit-for-period: 10                # 每秒僅允許 10 個請求
+        limit-refresh-period: 1s            # 每 1 秒重置
+        timeout-duration: 0ms               # 超過限制立即失敗
 ```
 
-#### 📊 JMeter Test Plan
+#### 📊 JMeter 測試計畫
 
-**Thread Group Configuration**:
+**Thread Group 配置**:
 ```
-Number of Threads (users): 20
-Ramp-Up Period (seconds): 0                 # All threads start immediately
-Loop Count: 1                               # Each thread sends 1 request
-```
-
-**HTTP Request**:
-```
-Method: GET
-Path: /api/products
+執行緒數 (使用者): 20
+Ramp-Up 期間 (秒): 0                 # 所有執行緒立即啟動
+迴圈計數: 1                               # 每個執行緒發送 1 個請求
 ```
 
-**Expected Results**:
-- ✅ **~10 requests succeed** (HTTP 200)
-- ❌ **~10 requests fail** (HTTP 429 - Too Many Requests)
-- Response body for 429: `{"error": "Rate limit exceeded"}`
+**HTTP 請求**:
+```
+方法: GET
+路徑: /api/products
+```
 
-#### 🔍 How to Verify
+**預期結果**:
+- ✅ **~10 個請求成功** (HTTP 200)
+- ❌ **~10 個請求失敗** (HTTP 429 - Too Many Requests)
+- 429 回應內容: `{"error": "Rate limit exceeded"}`
 
-1. **View Results Tree**:
-   - Green requests (200): Successful
-   - Red requests (429): Rate limited
+#### 🔍 如何驗證
 
-2. **Summary Report**:
-   - Look for "Error %" around 50%
-   - Throughput should be ~10 requests/second
+1. **結果樹檢視器**:
+   - 綠色請求 (200): 成功
+   - 紅色請求 (429): 速率受限
 
-3. **Response Assertion**:
-   - Add assertion to check for HTTP 429
-   - Verify error message contains "Rate limit"
+2. **匯總報告**:
+   - 尋找 "錯誤 %" 約 50%
+   - 吞吐量應為 ~10 個請求/秒
 
-#### 📸 What You Should See
+3. **回應斷言**:
+   - 加入斷言檢查 HTTP 429
+   - 驗證錯誤訊息包含 "Rate limit"
+
+#### 📸 你應該看到的
 
 ```
-Request #1-10:  HTTP 200 ✅ (Allowed)
-Request #11-20: HTTP 429 ❌ (Rate Limited)
+請求 #1-10:  HTTP 200 ✅ (已允許)
+請求 #11-20: HTTP 429 ❌ (速率受限)
 
-Response Time: < 50ms (very fast rejection)
+回應時間: < 50ms (拒絕非常快)
 ```
 
 ---
 
-### B. Bulkhead Demo Configuration
+### B. Bulkhead 演示配置
 
-#### 🎯 Purpose
-Demonstrate concurrent call limiting - only allow X parallel executions.
+#### 🎯 用途
+演示並發呼叫限制 - 僅允許 X 個並行執行。
 
-#### ⚙️ Configuration
+#### ⚙️ 配置
 ```yaml
-# File: application.yml or application-demo.yml
+# 檔案: application.yml 或 application-demo.yml
 resilience4j:
   bulkhead:
     instances:
       product-read:
-        max-concurrent-calls: 15            # Only 15 concurrent requests allowed
-        max-wait-duration: 0ms              # Don't wait, reject immediately
+        max-concurrent-calls: 15            # 僅允許 15 個並發請求
+        max-wait-duration: 0ms              # 不要等待，立即拒絕
 ```
 
-#### 📊 JMeter Test Plan
+#### 📊 JMeter 測試計畫
 
-**Thread Group Configuration**:
+**Thread Group 配置**:
 ```
-Number of Threads (users): 30
-Ramp-Up Period (seconds): 0                 # All threads start simultaneously
-Loop Count: 1
-```
-
-**HTTP Request**:
-```
-Method: GET
-Path: /api/products
+執行緒數 (使用者): 30
+Ramp-Up 期間 (秒): 0                 # 所有執行緒同時啟動
+迴圈計數: 1
 ```
 
-**⚠️ CRITICAL: Add Constant Timer**:
+**HTTP 請求**:
 ```
-Timer: Constant Timer
-Thread Delay (milliseconds): 2000           # Make each request take 2 seconds
+方法: GET
+路徑: /api/products
 ```
 
-**Why Timer is Needed?**
-- Without timer: Requests complete too fast, all 30 might fit in the bulkhead
-- With timer: Requests take 2 seconds, so only 15 can run concurrently
+**⚠️ 關鍵: 加入固定計時器**:
+```
+計時器: 固定計時器 (Constant Timer)
+執行緒延遲 (毫秒): 2000           # 使每個請求花費 2 秒
+```
 
-**Expected Results**:
-- ✅ **~15 requests succeed** (HTTP 200) - Running concurrently
-- ❌ **~15 requests fail** (HTTP 503 - Service Unavailable)
-- Response body for 503: `{"error": "Bulkhead is full"}`
+**為什麼需要計時器？**
+- 若無計時器：請求完成太快，全部 30 個都可能放入 Bulkhead
+- 有計時器：請求需 2 秒，因此同時只能有 15 個運行
 
-#### 🔍 How to Verify
+**預期結果**:
+- ✅ **~15 個請求成功** (HTTP 200) - 並發運行
+- ❌ **~15 個請求失敗** (HTTP 503 - Service Unavailable)
+- 503 回應內容: `{"error": "Bulkhead is full"}`
 
-1. **View Results Tree**:
-   - First 15 requests: Green (200) with ~2000ms response time
-   - Remaining 15: Red (503) with <50ms response time (immediate rejection)
+#### 🔍 如何驗證
 
-2. **Response Time Graph**:
-   - Successful requests: ~2000ms (slow)
-   - Rejected requests: <50ms (fast rejection)
+1. **結果樹檢視器**:
+   - 前 15 個請求: 綠色 (200)，回應時間 ~2000ms
+   - 後 15 個: 紅色 (503)，回應時間 <50ms (立即拒絕)
 
-3. **Aggregate Report**:
-   - Error % around 50% (15 out of 30)
+2. **回應時間圖**:
+   - 成功請求: ~2000ms (慢)
+   - 被拒請求: <50ms (快速拒絕)
 
-#### 📸 What You Should See
+3. **匯總報告**:
+   - 錯誤 % 約 50% (30 個中的 15 個)
+
+#### 📸 你應該看到的
 
 ```
-Thread 1-15:  HTTP 200 ✅ (Running concurrently, ~2000ms)
-Thread 16-30: HTTP 503 ❌ (Rejected immediately, <50ms)
+執行緒 1-15:  HTTP 200 ✅ (並發執行, ~2000ms)
+執行緒 16-30: HTTP 503 ❌ (立即拒絕, <50ms)
 
-Concurrent Calls: 15 (max)
-Rejected Calls: 15
+並發呼叫: 15 (最大)
+被拒呼叫: 15
 ```
 
 ---
 
-### C. CircuitBreaker Demo Configuration
+### C. CircuitBreaker 演示配置
 
-#### 🎯 Purpose
-Demonstrate circuit breaker states: CLOSED → OPEN → HALF_OPEN → CLOSED
+#### 🎯 用途
+演示斷路器狀態：CLOSED → OPEN → HALF_OPEN → CLOSED
 
-#### ⚙️ Configuration
+#### ⚙️ 配置
 ```yaml
-# File: application.yml or application-demo.yml
+# 檔案: application.yml 或 application-demo.yml
 resilience4j:
   circuitbreaker:
     instances:
       ProductService:
-        sliding-window-size: 10             # Small window for quick demo
-        minimum-number-of-calls: 5          # Only need 5 calls to activate
-        failure-rate-threshold: 50          # 50% failure rate opens circuit
-        wait-duration-in-open-state: 10s    # Wait 10 seconds before half-open
+        sliding-window-size: 10             # 演示用小視窗
+        minimum-number-of-calls: 5          # 僅需 5 個呼叫即啟動
+        failure-rate-threshold: 50          # 50% 故障率開啟斷路器
+        wait-duration-in-open-state: 10s    # 恢復前等待 10 秒
         permitted-number-of-calls-in-half-open-state: 3
         automatic-transition-from-open-to-half-open-enabled: true
 ```
 
-#### 📊 JMeter Test Plan - Three Phases
+#### 📊 JMeter 測試計畫 - 三個階段
 
-#### **Phase 1: Trigger Circuit to Open**
+#### **階段 1: 觸發開啟斷路器**
 
 **Thread Group 1**:
 ```
-Number of Threads: 10
-Ramp-Up Period: 0
-Loop Count: 1
+執行緒數: 10
+Ramp-Up 期間: 0
+迴圈計數: 1
 ```
 
-**HTTP Request**:
+**HTTP 請求**:
 ```
-Method: GET
-Path: /api/products/999999                  # Non-existent product (causes 404)
+方法: GET
+路徑: /api/products/999999                  # 不存在的產品 (導致 404)
 ```
 
-**Expected Results**:
-- First 5-10 requests: HTTP 404 (Not Found)
-- Circuit opens after 50% failure rate
-- Subsequent requests: HTTP 503 (Circuit Open)
+**預期結果**:
+- 前 5-10 個請求: HTTP 404 (Not Found)
+- 故障率達 50% 後斷路器開啟
+- 後續請求: HTTP 503 (Circuit Open)
 
-#### **Phase 2: Wait for Half-Open**
+#### **階段 2: 等待半開啟 (HALF_OPEN)**
 
-**Wait 10 seconds** (wait-duration-in-open-state)
+**等待 10 秒** (wait-duration-in-open-state)
 
-**What Happens**:
-- Circuit automatically transitions to HALF_OPEN state
-- Ready to test if service has recovered
+**發生什麼事**:
+- 斷路器自動轉換為 HALF_OPEN 狀態
+- 準備測試服務是否已恢復
 
-#### **Phase 3: Close Circuit with Successful Requests**
+#### **階段 3: 透過成功請求關閉斷路器**
 
 **Thread Group 2**:
 ```
-Number of Threads: 3
-Ramp-Up Period: 0
-Loop Count: 1
+執行緒數: 3
+Ramp-Up 期間: 0
+迴圈計數: 1
 ```
 
-**HTTP Request**:
+**HTTP 請求**:
 ```
-Method: GET
-Path: /api/products/1                       # Valid product (causes 200)
-```
-
-**Expected Results**:
-- All 3 requests: HTTP 200 (Success)
-- Circuit closes after 3 successful calls
-- Circuit is now CLOSED and healthy
-
-#### 🔍 How to Verify
-
-1. **Phase 1 - Circuit Opens**:
-   ```
-   Request 1-5:  HTTP 404 ❌ (Failures counted)
-   Request 6:    HTTP 503 ⚠️ (Circuit OPEN)
-   Request 7-10: HTTP 503 ⚠️ (Circuit still OPEN)
-   ```
-
-2. **Phase 2 - Wait**:
-   ```
-   Wait 10 seconds...
-   Circuit State: OPEN → HALF_OPEN
-   ```
-
-3. **Phase 3 - Circuit Closes**:
-   ```
-   Request 1-3: HTTP 200 ✅ (Success in HALF_OPEN)
-   Circuit State: HALF_OPEN → CLOSED
-   ```
-
-#### 📸 What You Should See
-
-**Circuit States Timeline**:
-```
-Time 0s:    CLOSED (healthy)
-Time 1s:    OPEN (too many failures)
-Time 11s:   HALF_OPEN (testing recovery)
-Time 12s:   CLOSED (recovered)
+方法: GET
+路徑: /api/products/1                       # 有效產品 (導致 200)
 ```
 
-**Response Codes**:
+**預期結果**:
+- 所有 3 個請求: HTTP 200 (成功)
+- 3 次成功呼叫後斷路器關閉
+- 斷路器現在為 CLOSED 且健康
+
+#### 🔍 如何驗證
+
+1. **階段 1 - 斷路器開啟**:
+   ```
+   請求 1-5:  HTTP 404 ❌ (計入故障)
+   請求 6:    HTTP 503 ⚠️ (斷路器 OPEN)
+   請求 7-10: HTTP 503 ⚠️ (斷路器仍為 OPEN)
+   ```
+
+2. **階段 2 - 等待**:
+   ```
+   等待 10 秒...
+   斷路器狀態: OPEN → HALF_OPEN
+   ```
+
+3. **階段 3 - 斷路器關閉**:
+   ```
+   請求 1-3: HTTP 200 ✅ (HALF_OPEN 狀態下的成功)
+   斷路器狀態: HALF_OPEN → CLOSED
+   ```
+
+#### 📸 你應該看到的
+
+**斷路器狀態時間軸**:
 ```
-Phase 1: 404, 404, 404, 404, 404, 503, 503, 503, 503, 503
-Phase 2: (waiting...)
-Phase 3: 200, 200, 200
+時間 0s:    CLOSED (健康)
+時間 1s:    OPEN (故障過多)
+時間 11s:   HALF_OPEN (測試恢復)
+時間 12s:   CLOSED (已恢復)
+```
+
+**回應代碼**:
+```
+階段 1: 404, 404, 404, 404, 404, 503, 503, 503, 503, 503
+階段 2: (等待...)
+階段 3: 200, 200, 200
 ```
 
 ---
 
-### D. Combined Demo Configuration
+### D. 組合演示配置
 
-#### 🎯 Purpose
-Show all three patterns working together with proper parameter relationships.
+#### 🎯 用途
+展示所有三種模式組合運作，並具備正確的參數關係。
 
-#### ⚙️ Configuration
+#### ⚙️ 配置
 ```yaml
-# File: application-demo.yml
+# 檔案: application-demo.yml
 resilience4j:
-  # Pattern 1: RateLimiter (checks first)
+  # 模式 1: RateLimiter (優先檢查)
   ratelimiter:
     instances:
       product-read:
-        limit-for-period: 20                # Allow 20 requests/second
+        limit-for-period: 20                # 允許每秒 20 個請求
         limit-refresh-period: 1s
         timeout-duration: 0ms
   
-  # Pattern 2: Bulkhead (checks second)
+  # 模式 2: Bulkhead (次之檢查)
   bulkhead:
     instances:
       product-read:
-        max-concurrent-calls: 25            # Allow 25 concurrent (≥ RateLimiter)
+        max-concurrent-calls: 25            # 允許 25 個並發 (≥ RateLimiter)
         max-wait-duration: 0ms
   
-  # Pattern 3: CircuitBreaker (checks third)
+  # 模式 3: CircuitBreaker (最後檢查)
   circuitbreaker:
     instances:
       ProductService:
@@ -777,157 +777,157 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 5
 ```
 
-#### 📊 JMeter Test Plan - Combined Test
+#### 📊 JMeter 測試計畫 - 組合測試
 
 **Thread Group**:
 ```
-Number of Threads: 30
-Ramp-Up Period: 0
-Loop Count: 1
+執行緒數: 30
+Ramp-Up 期間: 0
+迴圈計數: 1
 ```
 
-**HTTP Request**:
+**HTTP 請求**:
 ```
-Method: GET
-Path: /api/products
-```
-
-**Add Constant Timer**:
-```
-Thread Delay: 1000ms                        # 1 second per request
+方法: GET
+路徑: /api/products
 ```
 
-#### 🔍 Expected Results
-
-**Request Flow**:
+**加入固定計時器**:
 ```
-Request 1-20:  Pass RateLimiter ✅
-               → All 20 pass Bulkhead ✅ (Bulkhead limit is 25)
-               → All 20 succeed ✅ (HTTP 200)
-
-Request 21-30: Rejected by RateLimiter ❌ (HTTP 429)
+執行緒延遲: 1000ms                        # 每個請求 1 秒
 ```
 
-**Response Distribution**:
-- ✅ **20 requests**: HTTP 200 (Success - passed both RateLimiter and Bulkhead)
-- ❌ **10 requests**: HTTP 429 (Rate limited)
+#### 🔍 預期結果
 
-#### 📸 What You Should See
+**請求流**:
+```
+請求 1-20:  通過 RateLimiter ✅
+               → 20 個通過 Bulkhead ✅ (Bulkhead 限制為 25)
+               → 20 個全部成功 ✅ (HTTP 200)
+
+請求 21-30: 被 RateLimiter 拒絕 ❌ (HTTP 429)
+```
+
+**回應分佈**:
+- ✅ **20 個請求**: HTTP 200 (成功 - 通過 RateLimiter 與 Bulkhead)
+- ❌ **10 個請求**: HTTP 429 (速率受限)
+
+#### 📸 你應該看到的
 
 ```
-Execution Order:
+執行順序:
 ┌─────────────┐
-│ RateLimiter │ → 20 pass, 10 rejected (429)
+│ RateLimiter │ → 20 通過, 10 被拒 (429)
 └──────┬──────┘
        ↓
 ┌─────────────┐
-│  Bulkhead   │ → All 20 pass (limit is 25)
+│  Bulkhead   │ → 20 通過 (限制為 25)
 └──────┬──────┘
        ↓
 ┌─────────────┐
-│CircuitBreaker│ → All 20 pass (circuit closed)
+│CircuitBreaker│ → 20 通過 (斷路器已關閉)
 └──────┬──────┘
        ↓
-   Service Method
+   服務方法
 
 ---
 
-## 📊 Configuration Comparison Tables
+## 📊 配置比較表
 
-### Table 1: Production vs Learning Configuration
+### 表 1: 生產環境 vs 學習配置
 
-| Parameter | Production Value | Learning Value | Reason for Learning Value |
+| 參數 | 生產值 | 學習值 | 學習值原因 |
 |-----------|-----------------|----------------|---------------------------|
 | **RateLimiter** |
-| `limit-for-period` | 1000/s | 10/s | Easy to trigger with 20 requests |
-| `limit-refresh-period` | 1s | 1s | Same (standard interval) |
-| `timeout-duration` | 0ms | 0ms | Same (fail-fast) |
+| `limit-for-period` | 1000/s | 10/s | 20 個請求易於觸發 |
+| `limit-refresh-period` | 1s | 1s | 同上 (標準間隔) |
+| `timeout-duration` | 0ms | 0ms | 同上 (快速失敗) |
 | **Bulkhead** |
-| `max-concurrent-calls` | 1000 | 15 | See rejection quickly with 30 threads |
-| `max-wait-duration` | 0ms | 0ms | Same (fail-fast) |
+| `max-concurrent-calls` | 1000 | 15 | 30 個執行緒易於看到拒絕 |
+| `max-wait-duration` | 0ms | 0ms | 同上 (快速失敗) |
 | **CircuitBreaker** |
-| `sliding-window-size` | 100 | 10 | Fast state changes for demo |
-| `minimum-number-of-calls` | 50 | 5 | Quick activation with few requests |
-| `failure-rate-threshold` | 50% | 50% | Same (standard threshold) |
-| `wait-duration-in-open-state` | 60s | 10s | Shorter wait for demo |
-| `permitted-calls-in-half-open` | 10 | 3 | Fewer requests needed to close |
+| `sliding-window-size` | 100 | 10 | 演示用狀態快速變化 |
+| `minimum-number-of-calls` | 50 | 5 | 少數請求即可快速觸發 |
+| `failure-rate-threshold` | 50% | 50% | 同上 (標準門檻) |
+| `wait-duration-in-open-state` | 60s | 10s | 演示用較短等待時間 |
+| `permitted-calls-in-half-open` | 10 | 3 | 關閉斷路器需較少請求 |
 
-### Table 2: Read vs Write Operations
+### 表 2: 讀取 vs 寫入操作
 
-| Aspect | Read Operations | Write Operations | Reasoning |
+| 方面 | 讀取操作 | 寫入操作 | 原因 |
 |--------|----------------|------------------|-----------|
-| **Typical Response Time** | 50-100ms | 200-500ms | Writes involve DB transactions |
-| **RateLimiter Limit** | 1000/s | 200/s | Reads are faster, can handle more |
-| **Bulkhead Concurrent** | 1000 | 200 | Match RateLimiter, prevent DB exhaustion |
-| **CircuitBreaker Window** | 100 | 50 | Larger window for stable reads |
-| **Minimum Calls** | 50 | 20 | More data for reads, faster detection for writes |
-| **Failure Threshold** | 50% | 50% | Same (standard) |
-| **Wait Duration** | 60s | 30s | Shorter for writes (faster recovery needed) |
-| **Resource Impact** | Low (CPU) | High (DB, locks) | Writes consume more resources |
-| **Cacheability** | Yes | No | Reads can be cached |
+| **典型回應時間** | 50-100ms | 200-500ms | 寫入涉及資料庫事務 |
+| **RateLimiter 限制** | 1000/s | 200/s | 讀取快，可處理更多 |
+| **Bulkhead 並發** | 1000 | 200 | 符合 RateLimiter，防止 DB 耗盡 |
+| **CircuitBreaker 視窗** | 100 | 50 | 讀取視窗大以保持穩定 |
+| **最少呼叫** | 50 | 20 | 讀取需更多資料，寫入需快速偵測 |
+| **故障門檻** | 50% | 50% | 同上 |
+| **等待時間** | 60s | 30s | 寫入需較短等待 (需更快恢復) |
+| **資源影響** | 低 (CPU) | 高 (DB, 鎖) | 寫入消耗更多資源 |
+| **可快取性** | 是 | 否 | 讀取可快取 |
 
-### Table 3: API Endpoint Types
+### 表 3: API 端點類型
 
-| Endpoint Type | RateLimiter | Bulkhead | CircuitBreaker | Example |
+| 端點類型 | RateLimiter | Bulkhead | CircuitBreaker | 範例 |
 |--------------|-------------|----------|----------------|---------|
-| **Public List API** | 1500/s | 1500 | Window: 100 | `GET /api/products` |
-| **Public Detail API** | 1000/s | 1000 | Window: 100 | `GET /api/products/{id}` |
-| **Search API** | 500/s | 300 | Window: 50 | `GET /api/products/search` |
-| **Create API** | 200/s | 200 | Window: 50 | `POST /api/products` |
-| **Update API** | 200/s | 200 | Window: 50 | `PUT /api/products/{id}` |
-| **Delete API** | 100/s | 100 | Window: 30 | `DELETE /api/products/{id}` |
-| **Batch API** | 50/s | 20 | Window: 20 | `POST /api/products/batch` |
-| **External API Call** | 100/s | 50 | Window: 20, Threshold: 30% | Payment gateway |
+| **公開列表 API** | 1500/s | 1500 | 視窗: 100 | `GET /api/products` |
+| **公開詳情 API** | 1000/s | 1000 | 視窗: 100 | `GET /api/products/{id}` |
+| **搜尋 API** | 500/s | 300 | 視窗: 50 | `GET /api/products/search` |
+| **建立 API** | 200/s | 200 | 視窗: 50 | `POST /api/products` |
+| **更新 API** | 200/s | 200 | 視窗: 50 | `PUT /api/products/{id}` |
+| **刪除 API** | 100/s | 100 | 視窗: 30 | `DELETE /api/products/{id}` |
+| **批次 API** | 50/s | 20 | 視窗: 20 | `POST /api/products/batch` |
+| **外部 API 呼叫** | 100/s | 50 | 視窗: 20, 門檻: 30% | 支付閘道 |
 
-### Table 4: Environment-Specific Configuration
+### 表 4: 環境特定配置
 
-| Environment | RateLimiter | Bulkhead | CircuitBreaker | Purpose |
+| 環境 | RateLimiter | Bulkhead | CircuitBreaker | 用途 |
 |-------------|-------------|----------|----------------|---------|
-| **Production** | 1000/s | 1000 | Window: 100, Wait: 60s | Real traffic, high capacity |
-| **Staging** | 500/s | 500 | Window: 50, Wait: 30s | Pre-production testing |
-| **Development** | 100/s | 100 | Window: 20, Wait: 10s | Local development |
-| **Load Testing** | 2000/s | 2000 | Window: 200, Wait: 5s | Stress testing |
-| **Demo/Learning** | 10/s | 15 | Window: 10, Wait: 10s | Easy to demonstrate |
+| **生產** | 1000/s | 1000 | 視窗: 100, 等待: 60s | 真實流量, 高容量 |
+| **預發布** | 500/s | 500 | 視窗: 50, 等待: 30s | 發布前測試 |
+| **開發** | 100/s | 100 | 視窗: 20, 等待: 10s | 本地開發 |
+| **負載測試** | 2000/s | 2000 | 視窗: 200, 等待: 5s | 壓力測試 |
+| **演示/學習** | 10/s | 15 | 視窗: 10, 等待: 10s | 易於演示 |
 
-### Table 5: Failure Response Codes
+### 表 5: 故障回應代碼
 
-| Pattern | HTTP Status | Response Body | When It Happens | Client Action |
+| 模式 | HTTP 狀態 | 回應內容 | 何時發生 | 客戶端動作 |
 |---------|-------------|---------------|-----------------|---------------|
-| **RateLimiter** | 429 | `{"error": "Rate limit exceeded"}` | Too many requests/second | Retry after 1 second |
-| **Bulkhead** | 503 | `{"error": "Bulkhead is full"}` | Too many concurrent calls | Retry immediately or later |
-| **CircuitBreaker (Open)** | 503 | `{"error": "Circuit breaker is open"}` | Too many failures | Wait for circuit to close |
-| **CircuitBreaker (Half-Open)** | 503 | `{"error": "Circuit breaker is half-open"}` | Testing recovery | Wait for circuit to close |
-| **Service Error** | 500 | `{"error": "Internal server error"}` | Actual service failure | Report to support |
+| **RateLimiter** | 429 | `{"error": "Rate limit exceeded"}` | 每秒請求過多 | 1 秒後重試 |
+| **Bulkhead** | 503 | `{"error": "Bulkhead is full"}` | 並發呼叫過多 | 立即或稍後重試 |
+| **CircuitBreaker (開啟)** | 503 | `{"error": "Circuit breaker is open"}` | 故障過多 | 等待斷路器關閉 |
+| **CircuitBreaker (半開啟)** | 503 | `{"error": "Circuit breaker is half-open"}` | 測試恢復中 | 等待斷路器關閉 |
+| **服務錯誤** | 500 | `{"error": "Internal server error"}` | 實際服務失敗 | 回報給技術支援 |
 
 ---
 
-## 🧪 JMeter Testing Guide
+## 🧪 JMeter 測試指南
 
-### Prerequisites
+### 先決條件
 
-1. **Install JMeter**: Download from [Apache JMeter](https://jmeter.apache.org/)
-2. **Start Application**: `./gradlew bootRun`
-3. **Verify Application**: `curl http://localhost:8080/actuator/health`
+1. **安裝 JMeter**: 從 [Apache JMeter](https://jmeter.apache.org/) 下載
+2. **啟動應用程式**: `./gradlew bootRun`
+3. **驗證應用程式**: `curl http://localhost:8080/actuator/health`
 
-### General JMeter Setup
+### JMeter 一般設定
 
-#### Create Test Plan
-1. Open JMeter
-2. Right-click "Test Plan" → Add → Threads (Users) → Thread Group
-3. Right-click "Thread Group" → Add → Sampler → HTTP Request
-4. Right-click "Thread Group" → Add → Listener → View Results Tree
-5. Right-click "Thread Group" → Add → Listener → Summary Report
+#### 建立測試計畫
+1. 開啟 JMeter
+2. 右鍵點選 "Test Plan" → Add → Threads (Users) → Thread Group
+3. 右鍵點選 "Thread Group" → Add → Sampler → HTTP Request
+4. 右鍵點選 "Thread Group" → Add → Listener → View Results Tree
+5. 右鍵點選 "Thread Group" → Add → Listener → Summary Report
 
 ---
 
-### Test 1: RateLimiter Testing
+### 測試 1: RateLimiter 測試
 
-#### 🎯 Goal
-Verify that only 10 requests per second are allowed.
+#### 🎯 目標
+驗證每秒僅允許 10 個請求。
 
-#### 📋 Step-by-Step Instructions
+#### 📋 步驟說明
 
-**Step 1: Configure Application**
+**步驟 1: 配置應用程式**
 ```yaml
 # application.yml
 resilience4j:
@@ -939,61 +939,61 @@ resilience4j:
         timeout-duration: 0ms
 ```
 
-**Step 2: Restart Application**
+**步驟 2: 重啟應用程式**
 ```bash
 ./gradlew bootRun
 ```
 
-**Step 3: Configure JMeter Thread Group**
+**步驟 3: 配置 JMeter Thread Group**
 ```
-Name: RateLimiter Test
-Number of Threads (users): 20
-Ramp-Up Period (seconds): 0
-Loop Count: 1
-```
-
-**Step 4: Configure HTTP Request**
-```
-Protocol: http
-Server Name or IP: localhost
-Port Number: 8080
-HTTP Request Method: GET
-Path: /api/products
+名稱: RateLimiter Test
+執行緒數 (使用者): 20
+Ramp-Up 期間 (秒): 0
+迴圈計數: 1
 ```
 
-**Step 5: Add Response Assertion (Optional)**
+**步驟 4: 配置 HTTP 請求**
 ```
-Right-click Thread Group → Add → Assertions → Response Assertion
-Field to Test: Response Code
-Pattern Matching Rules: Matches
-Patterns to Test: 200|429
+協定: http
+伺服器名稱或 IP: localhost
+連接埠號: 8080
+HTTP 請求方法: GET
+路徑: /api/products
 ```
 
-**Step 6: Run Test**
-1. Click green "Start" button (▶️)
-2. Watch "View Results Tree"
-
-#### ✅ Expected Results
-
-**View Results Tree**:
+**步驟 5: 加入回應斷言 (選用)**
 ```
-✅ Request 1:  HTTP 200 - Response Time: ~50ms
-✅ Request 2:  HTTP 200 - Response Time: ~50ms
+右鍵點選 Thread Group → Add → Assertions → Response Assertion
+測試欄位: Response Code
+匹配規則: Matches
+測試模式: 200|429
+```
+
+**步驟 6: 執行測試**
+1. 點選綠色 "Start" 按鈕 (▶️)
+2. 查看 "View Results Tree"
+
+#### ✅ 預期結果
+
+**結果樹檢視器**:
+```
+✅ 請求 1:  HTTP 200 - 回應時間: ~50ms
+✅ 請求 2:  HTTP 200 - 回應時間: ~50ms
 ...
-✅ Request 10: HTTP 200 - Response Time: ~50ms
-❌ Request 11: HTTP 429 - Response Time: ~10ms
-❌ Request 12: HTTP 429 - Response Time: ~10ms
+✅ 請求 10: HTTP 200 - 回應時間: ~50ms
+❌ 請求 11: HTTP 429 - 回應時間: ~10ms
+❌ 請求 12: HTTP 429 - 回應時間: ~10ms
 ...
-❌ Request 20: HTTP 429 - Response Time: ~10ms
+❌ 請求 20: HTTP 429 - 回應時間: ~10ms
 ```
 
-**Summary Report**:
+**匯總報告**:
 ```
-Label         Samples  Average  Error %  Throughput
-GET /products    20      30ms     50%     20/sec
+標籤           樣本    平均    錯誤 %  吞吐量
+GET /products    20      30ms     50%     20/秒
 ```
 
-**Response Body (429)**:
+**回應內容 (429)**:
 ```json
 {
   "timestamp": "2026-06-03T06:00:00.000+00:00",
@@ -1004,23 +1004,23 @@ GET /products    20      30ms     50%     20/sec
 }
 ```
 
-#### 🔍 How to Verify Success
+#### 🔍 如何驗證成功
 
-1. **Check Error Rate**: Should be ~50% (10 success, 10 failures)
-2. **Check Response Codes**: Mix of 200 and 429
-3. **Check Response Times**: 429 responses should be very fast (<50ms)
-4. **Check Logs**: Look for "Rate limit exceeded" messages
+1. **檢查錯誤率**: 應為 ~50% (10 個成功，10 個失敗)
+2. **檢查回應代碼**: 200 和 429 的混合
+3. **檢查回應時間**: 429 回應應非常快 (<50ms)
+4. **檢查日誌**: 尋找 "Rate limit exceeded" 訊息
 
 ---
 
-### Test 2: Bulkhead Testing
+### 測試 2: Bulkhead 測試
 
-#### 🎯 Goal
-Verify that only 15 concurrent requests are allowed.
+#### 🎯 目標
+驗證僅允許 15 個並發請求。
 
-#### 📋 Step-by-Step Instructions
+#### 📋 步驟說明
 
-**Step 1: Configure Application**
+**步驟 1: 配置應用程式**
 ```yaml
 # application.yml
 resilience4j:
@@ -1031,60 +1031,58 @@ resilience4j:
         max-wait-duration: 0ms
 ```
 
-**Step 2: Restart Application**
+**步驟 2: 重啟應用程式**
 
-**Step 3: Configure JMeter Thread Group**
+**步驟 3: 配置 JMeter Thread Group**
 ```
-Name: Bulkhead Test
-Number of Threads (users): 30
-Ramp-Up Period (seconds): 0
-Loop Count: 1
-```
-
-**Step 4: Configure HTTP Request**
-```
-Protocol: http
-Server Name or IP: localhost
-Port Number: 8080
-HTTP Request Method: GET
-Path: /api/products
+名稱: Bulkhead Test
+執行緒數 (使用者): 30
+Ramp-Up 期間 (秒): 0
+迴圈計數: 1
 ```
 
-**Step 5: ⚠️ CRITICAL - Add Constant Timer**
+**步驟 4: 配置 HTTP 請求**
 ```
-Right-click Thread Group → Add → Timer → Constant Timer
-Name: Slow Request Simulator
-Thread Delay (milliseconds): 2000
+協定: http
+伺服器名稱或 IP: localhost
+連接埠號: 8080
+HTTP 請求方法: GET
+路徑: /api/products
 ```
 
-**Why Timer is Needed?**
-- Without timer: Requests complete in ~50ms, all 30 might fit
-- With timer: Requests take 2000ms, only 15 can run concurrently
-
-**Step 6: Run Test**
-
-#### ✅ Expected Results
-
-**View Results Tree**:
+**步驟 5: ⚠️ 關鍵 - 加入固定計時器**
 ```
-✅ Thread 1:  HTTP 200 - Response Time: ~2000ms (running)
-✅ Thread 2:  HTTP 200 - Response Time: ~2000ms (running)
-✅ Thread 3:  HTTP 200 - Response Time: ~2000ms (running)
+右鍵點選 Thread Group → Add → Timer → Constant Timer
+名稱: Slow Request Simulator
+執行緒延遲 (毫秒): 2000
+```
+
+**為什麼需要計時器？**
+- 若無計時器：請求在 ~50ms 內完成，全部 30 個都可能放入
+- 有計時器：請求花費 2000ms，僅 15 個可並發運行
+
+**步驟 6: 執行測試**
+
+#### ✅ 預期結果
+
+**結果樹檢視器**:
+```
+✅ 執行緒 1:  HTTP 200 - 回應時間: ~2000ms (運行中)
+✅ 執行緒 2:  HTTP 200 - 回應時間: ~2000ms (運行中)
 ...
-✅ Thread 15: HTTP 200 - Response Time: ~2000ms (running)
-❌ Thread 16: HTTP 503 - Response Time: ~10ms (rejected)
-❌ Thread 17: HTTP 503 - Response Time: ~10ms (rejected)
+✅ 執行緒 15: HTTP 200 - 回應時間: ~2000ms (運行中)
+❌ 執行緒 16: HTTP 503 - 回應時間: ~10ms (被拒)
 ...
-❌ Thread 30: HTTP 503 - Response Time: ~10ms (rejected)
+❌ 執行緒 30: HTTP 503 - 回應時間: ~10ms (被拒)
 ```
 
-**Summary Report**:
+**匯總報告**:
 ```
-Label         Samples  Average   Error %  Throughput
-GET /products    30     ~1000ms    50%     ~7.5/sec
+標籤           樣本    平均      錯誤 %  吞吐量
+GET /products    30     ~1000ms    50%     ~7.5/秒
 ```
 
-**Response Body (503)**:
+**回應內容 (503)**:
 ```json
 {
   "timestamp": "2026-06-03T06:00:00.000+00:00",
@@ -1095,25 +1093,25 @@ GET /products    30     ~1000ms    50%     ~7.5/sec
 }
 ```
 
-#### 🔍 How to Verify Success
+#### 🔍 如何驗證成功
 
-1. **Check Error Rate**: Should be ~50% (15 success, 15 failures)
-2. **Check Response Times**:
-   - Success (200): ~2000ms (slow)
-   - Failure (503): <50ms (fast rejection)
-3. **Check Concurrent Calls**: Max 15 running at same time
-4. **Check Logs**: Look for "Bulkhead is full" messages
+1. **檢查錯誤率**: 應為 ~50% (15 個成功，15 個失敗)
+2. **檢查回應時間**:
+   - 成功 (200): ~2000ms (慢)
+   - 失敗 (503): <50ms (快速拒絕)
+3. **檢查並發呼叫**: 最多 15 個同時運行
+4. **檢查日誌**: 尋找 "Bulkhead is full" 訊息
 
 ---
 
-### Test 3: CircuitBreaker Testing
+### 測試 3: CircuitBreaker 測試
 
-#### 🎯 Goal
-Demonstrate circuit breaker state transitions: CLOSED → OPEN → HALF_OPEN → CLOSED
+#### 🎯 目標
+演示斷路器狀態轉換：CLOSED → OPEN → HALF_OPEN → CLOSED
 
-#### 📋 Step-by-Step Instructions
+#### 📋 步驟說明
 
-**Step 1: Configure Application**
+**步驟 1: 配置應用程式**
 ```yaml
 # application.yml
 resilience4j:
@@ -1128,106 +1126,106 @@ resilience4j:
         automatic-transition-from-open-to-half-open-enabled: true
 ```
 
-**Step 2: Restart Application**
+**步驟 2: 重啟應用程式**
 
-#### Phase 1: Trigger Circuit to Open
+#### 階段 1: 觸發斷路器開啟
 
-**Step 3: Create Thread Group 1**
+**步驟 3: 建立 Thread Group 1**
 ```
-Name: Phase 1 - Trigger Failures
-Number of Threads: 10
-Ramp-Up Period: 0
-Loop Count: 1
-```
-
-**Step 4: Configure HTTP Request**
-```
-Protocol: http
-Server Name or IP: localhost
-Port Number: 8080
-HTTP Request Method: GET
-Path: /api/products/999999              # Non-existent product
+名稱: Phase 1 - Trigger Failures
+執行緒數: 10
+Ramp-Up 期間: 0
+迴圈計數: 1
 ```
 
-**Step 5: Run Phase 1**
-1. Click "Start" button
-2. Watch circuit open after 50% failures
-
-#### ✅ Phase 1 Expected Results
-
-**View Results Tree**:
+**步驟 4: 配置 HTTP 請求**
 ```
-❌ Request 1-5:  HTTP 404 (Not Found) - Failures counted
-⚠️ Request 6-10: HTTP 503 (Circuit Open) - Circuit opened
+協定: http
+伺服器名稱或 IP: localhost
+連接埠號: 8080
+HTTP 請求方法: GET
+路徑: /api/products/999999              # 不存在的產品
 ```
 
-**Circuit State**: CLOSED → OPEN
+**步驟 5: 執行階段 1**
+1. 點選 "Start" 按鈕
+2. 觀察故障率達 50% 後斷路器開啟
 
-#### Phase 2: Wait for Half-Open
+#### ✅ 階段 1 預期結果
 
-**Step 6: Wait 10 Seconds**
-- Circuit automatically transitions to HALF_OPEN
-- Check application logs: "CircuitBreaker 'ProductService' changed state from OPEN to HALF_OPEN"
-
-#### Phase 3: Close Circuit
-
-**Step 7: Create Thread Group 2**
+**結果樹檢視器**:
 ```
-Name: Phase 3 - Successful Requests
-Number of Threads: 3
-Ramp-Up Period: 0
-Loop Count: 1
+❌ 請求 1-5:  HTTP 404 (Not Found) - 計入故障
+⚠️ 請求 6-10: HTTP 503 (Circuit Open) - 斷路器已開啟
 ```
 
-**Step 8: Configure HTTP Request**
+**斷路器狀態**: CLOSED → OPEN
+
+#### 階段 2: 等待半開啟
+
+**步驟 6: 等待 10 秒**
+- 斷路器自動轉換為 HALF_OPEN
+- 檢查應用程式日誌: "CircuitBreaker 'ProductService' changed state from OPEN to HALF_OPEN"
+
+#### 階段 3: 關閉斷路器
+
+**步驟 7: 建立 Thread Group 2**
 ```
-Protocol: http
-Server Name or IP: localhost
-Port Number: 8080
-HTTP Request Method: GET
-Path: /api/products/1                   # Valid product
-```
-
-**Step 9: Run Phase 3**
-
-#### ✅ Phase 3 Expected Results
-
-**View Results Tree**:
-```
-✅ Request 1-3: HTTP 200 (Success) - Circuit testing recovery
-```
-
-**Circuit State**: HALF_OPEN → CLOSED
-
-#### 🔍 Complete Test Verification
-
-**Timeline**:
-```
-Time 0s:    Circuit CLOSED (healthy)
-Time 1s:    Send 10 requests to /products/999999
-Time 2s:    Circuit OPEN (50% failure rate reached)
-Time 12s:   Circuit HALF_OPEN (automatic transition)
-Time 13s:   Send 3 requests to /products/1
-Time 14s:   Circuit CLOSED (recovery successful)
+名稱: Phase 3 - Successful Requests
+執行緒數: 3
+Ramp-Up 期間: 0
+迴圈計數: 1
 ```
 
-**Response Code Sequence**:
+**步驟 8: 配置 HTTP 請求**
 ```
-Phase 1: 404, 404, 404, 404, 404, 503, 503, 503, 503, 503
-Phase 2: (waiting 10 seconds)
-Phase 3: 200, 200, 200
+協定: http
+伺服器名稱或 IP: localhost
+連接埠號: 8080
+HTTP 請求方法: GET
+路徑: /api/products/1                   # 有效產品
+```
+
+**步驟 9: 執行階段 3**
+
+#### ✅ 階段 3 預期結果
+
+**結果樹檢視器**:
+```
+✅ 請求 1-3: HTTP 200 (成功) - 斷路器測試恢復中
+```
+
+**斷路器狀態**: HALF_OPEN → CLOSED
+
+#### 🔍 完整測試驗證
+
+**時間軸**:
+```
+時間 0s:    斷路器 CLOSED (健康)
+時間 1s:    發送 10 個請求至 /products/999999
+時間 2s:    斷路器 OPEN (達到 50% 故障率)
+時間 12s:   斷路器 HALF_OPEN (自動轉換)
+時間 13s:   發送 3 個請求至 /products/1
+時間 14s:   斷路器 CLOSED (恢復成功)
+```
+
+**回應代碼順序**:
+```
+階段 1: 404, 404, 404, 404, 404, 503, 503, 503, 503, 503
+階段 2: (等待 10 秒)
+階段 3: 200, 200, 200
 ```
 
 ---
 
-### Test 4: Combined Pattern Testing
+### 測試 4: 組合模式測試
 
-#### 🎯 Goal
-Test all three patterns working together.
+#### 🎯 目標
+測試所有三種模式共同運作。
 
-#### 📋 Step-by-Step Instructions
+#### 📋 步驟說明
 
-**Step 1: Configure Application**
+**步驟 1: 配置應用程式**
 ```yaml
 # application.yml
 resilience4j:
@@ -1251,187 +1249,187 @@ resilience4j:
         wait-duration-in-open-state: 15s
 ```
 
-**Step 2: Configure JMeter**
+**步驟 2: 配置 JMeter**
 ```
 Thread Group:
-  Number of Threads: 30
-  Ramp-Up Period: 0
-  Loop Count: 1
+  執行緒數: 30
+  Ramp-Up 期間: 0
+  迴圈計數: 1
 
-HTTP Request:
-  Path: /api/products
+HTTP 請求:
+  路徑: /api/products
 
-Constant Timer:
-  Thread Delay: 1000ms
+固定計時器:
+  執行緒延遲: 1000ms
 ```
 
-**Step 3: Run Test**
+**步驟 3: 執行測試**
 
-#### ✅ Expected Results
+#### ✅ 預期結果
 
-**Request Distribution**:
+**請求分佈**:
 ```
-Total Requests: 30
+總請求數: 30
 
-RateLimiter Check:
-  ✅ Pass: 20 requests (within 20/s limit)
-  ❌ Fail: 10 requests (HTTP 429 - Rate Limited)
+RateLimiter 檢查:
+  ✅ 通過: 20 個請求 (在每秒 20 個限制內)
+  ❌ 失敗: 10 個請求 (HTTP 429 - 速率受限)
 
-Bulkhead Check (for the 20 that passed RateLimiter):
-  ✅ Pass: 10 requests (within concurrent limit)
-  ❌ Fail: 10 requests (HTTP 503 - Bulkhead Full)
+Bulkhead 檢查 (針對通過 RateLimiter 的 20 個):
+  ✅ 通過: 10 個請求 (在並發限制內)
+  ❌ 失敗: 10 個請求 (HTTP 503 - Bulkhead 已滿)
 
-CircuitBreaker Check (for the 10 that passed Bulkhead):
-  ✅ Pass: 10 requests (Circuit CLOSED)
-  ❌ Fail: 0 requests (no failures)
+CircuitBreaker 檢查 (針對通過 Bulkhead 的 10 個):
+  ✅ 通過: 10 個請求 (斷路器 CLOSED)
+  ❌ 失敗: 0 個請求 (無故障)
 
-Final Results:
-  ✅ Success: 10 requests (HTTP 200)
-  ❌ Rate Limited: 10 requests (HTTP 429)
-  ❌ Bulkhead Full: 10 requests (HTTP 503)
+最終結果:
+  ✅ 成功: 10 個請求 (HTTP 200)
+  ❌ 速率受限: 10 個請求 (HTTP 429)
+  ❌ Bulkhead 已滿: 10 個請求 (HTTP 503)
 ```
 
-**Summary Report**:
+**匯總報告**:
 ```
-Label         Samples  Average  Error %  Throughput
-GET /products    30     ~350ms    66%     ~10/sec
+標籤           樣本    平均    錯誤 %  吞吐量
+GET /products    30     ~350ms    66%     ~10/秒
 ```
 
 ---
 
-### Common JMeter Tips
+### JMeter 常見提示
 
-#### 1. Clear Results Between Tests
+#### 1. 測試間清除結果
 ```
 Run → Clear All (Ctrl+Shift+E)
 ```
 
-#### 2. Save Test Plan
+#### 2. 儲存測試計畫
 ```
 File → Save Test Plan As → resilience4j-test.jmx
 ```
 
-#### 3. View Detailed Logs
+#### 3. 查看詳細日誌
 ```
 Options → Log Viewer
 ```
 
-#### 4. Add HTTP Header Manager
+#### 4. 加入 HTTP Header 管理器
 ```
-Right-click Thread Group → Add → Config Element → HTTP Header Manager
-Add: Content-Type: application/json
-```
-
-#### 5. Add Assertions
-```
-Right-click HTTP Request → Add → Assertions → Response Assertion
+右鍵點選 Thread Group → Add → Config Element → HTTP Header Manager
+加入: Content-Type: application/json
 ```
 
-#### 6. Export Results
+#### 5. 加入斷言
 ```
-Right-click Listener → Save Table Data
+右鍵點選 HTTP Request → Add → Assertions → Response Assertion
+```
+
+#### 6. 匯出結果
+```
+右鍵點選 Listener → Save Table Data
 ```
 
 ---
 
-## 🔧 Troubleshooting Guide
+## 🔧 故障排除指南
 
-### Issue 1: Not Seeing 429 Errors (RateLimiter)
+### 問題 1: 未見 429 錯誤 (RateLimiter)
 
-#### Symptoms
-- All requests return HTTP 200
-- No rate limiting happening
-- Error rate is 0%
+#### 徵兆
+- 所有請求返回 HTTP 200
+- 未發生速率限制
+- 錯誤率為 0%
 
-#### Possible Causes & Solutions
+#### 可能原因與解決方案
 
-**Cause 1: Configuration Not Applied**
+**原因 1: 配置未應用**
 ```yaml
-# ❌ Wrong instance name
+# ❌ 錯誤實例名稱
 resilience4j:
   ratelimiter:
     instances:
-      wrong-name:                           # Doesn't match @RateLimiter annotation
+      wrong-name:                           # 不符合 @RateLimiter 註解
         limit-for-period: 10
 
-# ✅ Correct instance name
+# ✅ 正確實例名稱
 resilience4j:
   ratelimiter:
     instances:
-      product-read:                         # Matches @RateLimiter("product-read")
+      product-read:                         # 符合 @RateLimiter("product-read")
         limit-for-period: 10
 ```
 
-**Cause 2: Application Not Restarted**
+**原因 2: 應用程式未重啟**
 ```bash
-# Solution: Restart the application
+# 解決方案: 重啟應用程式
 ./gradlew bootRun
 ```
 
-**Cause 3: Too Few Requests**
+**原因 3: 請求次數太少**
 ```
-# Problem: Sending 5 requests with limit of 10
-# Solution: Send more requests than the limit
-Number of Threads: 20  (should be > limit-for-period)
-```
-
-**Cause 4: Requests Too Slow**
-```
-# Problem: Ramp-up period spreads requests over time
-Ramp-Up Period: 10s  ❌ (requests spread over 10 seconds)
-
-# Solution: Send all requests at once
-Ramp-Up Period: 0s   ✅ (all requests immediately)
+# 問題: 發送 5 個請求，限制為 10
+# 解決方案: 發送多於限制的請求數
+執行緒數: 20  (應 > limit-for-period)
 ```
 
-**Verification Steps**:
-1. Check application logs for "Rate limit exceeded"
-2. Verify annotation: `@RateLimiter(name = "product-read")`
-3. Check actuator: `curl http://localhost:8080/actuator/ratelimiters`
-4. Increase thread count to 2x the limit
+**原因 4: 請求太慢**
+```
+# 問題: Ramp-up 期間將請求分散在一段時間內
+Ramp-Up 期間: 10s  ❌ (請求分散在 10 秒內)
+
+# 解決方案: 一次發送所有請求
+Ramp-Up 期間: 0s   ✅ (立即發送)
+```
+
+**驗證步驟**:
+1. 檢查應用程式日誌，尋找 "Rate limit exceeded"
+2. 驗證註解: `@RateLimiter(name = "product-read")`
+3. 檢查 Actuator: `curl http://localhost:8080/actuator/ratelimiters`
+4. 將執行緒計數增加到限制的 2 倍
 
 ---
 
-### Issue 2: All Requests Failing (Bulkhead)
+### 問題 2: 所有請求失敗 (Bulkhead)
 
-#### Symptoms
-- All requests return HTTP 503
-- Error rate is 100%
-- No successful requests
+#### 徵兆
+- 所有請求返回 HTTP 503
+- 錯誤率為 100%
+- 無成功請求
 
-#### Possible Causes & Solutions
+#### 可能原因與解決方案
 
-**Cause 1: Missing Constant Timer**
+**原因 1: 缺少固定計時器**
 ```
-# Problem: Requests complete too fast
-# Without timer: All 30 requests complete in <1 second
-# Only 1-2 concurrent at any time
+# 問題: 請求完成太快
+# 若無計時器: 全部 30 個請求在 <1 秒內完成
+# 任何時間點只有 1-2 個並發
 
-# Solution: Add Constant Timer
-Right-click Thread Group → Add → Timer → Constant Timer
-Thread Delay: 2000ms  (make requests slow)
+# 解決方案: 加入固定計時器
+右鍵點選 Thread Group → Add → Timer → Constant Timer
+執行緒延遲: 2000ms  (使請求變慢)
 ```
 
-**Cause 2: Bulkhead Too Small**
+**原因 2: Bulkhead 太小**
 ```yaml
-# ❌ Too restrictive
+# ❌ 太嚴格
 resilience4j:
   bulkhead:
     instances:
       product-read:
-        max-concurrent-calls: 1             # Only 1 concurrent!
+        max-concurrent-calls: 1             # 僅 1 個並發！
 
-# ✅ Reasonable for demo
+# ✅ 演示用合理值
 resilience4j:
   bulkhead:
     instances:
       product-read:
-        max-concurrent-calls: 15            # 15 concurrent
+        max-concurrent-calls: 15            # 15 個並發
 ```
 
-**Cause 3: Wrong Parameter Relationship**
+**原因 3: 錯誤的參數關係**
 ```yaml
-# ❌ Bulkhead < RateLimiter (causes rejections)
+# ❌ Bulkhead < RateLimiter (導致拒絕)
 resilience4j:
   ratelimiter:
     instances:
@@ -1440,7 +1438,7 @@ resilience4j:
   bulkhead:
     instances:
       product-read:
-        max-concurrent-calls: 10            # Too small!
+        max-concurrent-calls: 10            # 太小！
 
 # ✅ Bulkhead >= RateLimiter
 resilience4j:
@@ -1451,267 +1449,267 @@ resilience4j:
   bulkhead:
     instances:
       product-read:
-        max-concurrent-calls: 100           # Matches RateLimiter
+        max-concurrent-calls: 100           # 符合 RateLimiter
 ```
 
-**Verification Steps**:
-1. Add 2000ms Constant Timer
-2. Check thread count < max-concurrent-calls
-3. Verify some requests show ~2000ms response time
-4. Check actuator: `curl http://localhost:8080/actuator/bulkheads`
+**驗證步驟**:
+1. 加入 2000ms 固定計時器
+2. 檢查執行緒數 < max-concurrent-calls
+3. 驗證部分請求顯示 ~2000ms 回應時間
+4. 檢查 Actuator: `curl http://localhost:8080/actuator/bulkheads`
 
 ---
 
-### Issue 3: CircuitBreaker Not Opening
+### 問題 3: 斷路器未開啟
 
-#### Symptoms
-- Circuit stays CLOSED
-- No HTTP 503 errors
-- Failures don't trigger circuit
+#### 徵兆
+- 斷路器保持 CLOSED
+- 無 HTTP 503 錯誤
+- 故障未觸發斷路器
 
-#### Possible Causes & Solutions
+#### 可能原因與解決方案
 
-**Cause 1: Not Enough Failures**
+**原因 1: 故障次數不足**
 ```yaml
-# Problem: Need 50% failure rate with minimum 5 calls
-# Sending only 3 requests with 2 failures = 66% but < minimum
+# 問題: 需要 50% 故障率且最少 5 個呼叫
+# 發送僅 3 個請求且 2 個失敗 = 66% 但小於最小值
 
-# Solution: Send more requests
-minimum-number-of-calls: 5                  # Need at least 5 calls
-# Send at least 10 requests with 50% failures
+# 解決方案: 發送更多請求
+minimum-number-of-calls: 5                  # 需要至少 5 個呼叫
+# 發送至少 10 個請求並達到 50% 故障率
 ```
 
-**Cause 2: Wrong Endpoint**
+**原因 2: 錯誤的端點**
 ```
-# ❌ Endpoint doesn't trigger failures
-Path: /api/products                         # Returns 200 (success)
+# ❌ 端點未觸發故障
+路徑: /api/products                         # 返回 200 (成功)
 
-# ✅ Endpoint that causes failures
-Path: /api/products/999999                  # Returns 404 (failure)
+# ✅ 會導致故障的端點
+路徑: /api/products/999999                  # 返回 404 (故障)
 ```
 
-**Cause 3: Sliding Window Too Large**
+**原因 3: 滑動視窗太大**
 ```yaml
-# ❌ Window too large for demo
+# ❌ 視窗對於演示太大
 resilience4j:
   circuitbreaker:
     instances:
       ProductService:
-        sliding-window-size: 100            # Need 50 failures!
+        sliding-window-size: 100            # 需要 50 個故障！
         minimum-number-of-calls: 50
 
-# ✅ Smaller window for demo
+# ✅ 演示用較小視窗
 resilience4j:
   circuitbreaker:
     instances:
       ProductService:
-        sliding-window-size: 10             # Only need 5 failures
+        sliding-window-size: 10             # 僅需 5 個故障
         minimum-number-of-calls: 5
 ```
 
-**Cause 4: Wrong Service Name**
+**原因 4: 錯誤的服務名稱**
 ```java
-// ❌ Annotation doesn't match config
+// ❌ 註解不符合配置
 @CircuitBreaker(name = "WrongService")
 public List<Product> getProducts() { }
 
-// Config
+// 配置
 resilience4j:
   circuitbreaker:
     instances:
-      ProductService:                       # Doesn't match!
+      ProductService:                       # 不匹配！
 
-// ✅ Matching names
+// ✅ 匹配名稱
 @CircuitBreaker(name = "ProductService")
 public List<Product> getProducts() { }
 ```
 
-**Verification Steps**:
-1. Send 10 requests to non-existent resource
-2. Check logs for "Circuit breaker opened"
-3. Verify failure rate > threshold
-4. Check actuator: `curl http://localhost:8080/actuator/circuitbreakers`
+**驗證步驟**:
+1. 對不存在的資源發送 10 個請求
+2. 檢查日誌，尋找 "Circuit breaker opened"
+3. 驗證故障率 > 門檻
+4. 檢查 Actuator: `curl http://localhost:8080/actuator/circuitbreakers`
 
 ---
 
-### Issue 4: Parameters Not Taking Effect
+### 問題 4: 參數未生效
 
-#### Symptoms
-- Changed configuration but behavior unchanged
-- Old limits still applying
-- New values not working
+#### 徵兆
+- 變更配置但行為不變
+- 舊限制仍在套用
+- 新值未運作
 
-#### Possible Causes & Solutions
+#### 可能原因與解決方案
 
-**Cause 1: Application Not Restarted**
+**原因 1: 應用程式未重啟**
 ```bash
-# Solution: Always restart after config changes
+# 解決方案: 配置變更後務必重啟
 ./gradlew bootRun
 ```
 
-**Cause 2: Wrong Configuration File**
+**原因 2: 錯誤的配置檔案**
 ```bash
-# Check which profile is active
+# 檢查哪個 Profile 處於活動狀態
 # application.yml vs application-dev.yml vs application-prod.yml
 
-# Solution: Verify active profile
+# 解決方案: 驗證活動 Profile
 spring:
   profiles:
-    active: dev                             # Using application-dev.yml
+    active: dev                             # 使用 application-dev.yml
 ```
 
-**Cause 3: Caching/Old State**
+**原因 3: 快取/舊狀態**
 ```bash
-# Solution: Clean build and restart
+# 解決方案: 清除建置並重啟
 ./gradlew clean
 ./gradlew bootRun
 ```
 
-**Cause 4: YAML Indentation Error**
+**原因 4: YAML 縮排錯誤**
 ```yaml
-# ❌ Wrong indentation
+# ❌ 錯誤縮排
 resilience4j:
-ratelimiter:                                # Should be indented!
+ratelimiter:                                # 應當縮排！
   instances:
     product-read:
       limit-for-period: 10
 
-# ✅ Correct indentation
+# ✅ 正確縮排
 resilience4j:
-  ratelimiter:                              # Properly indented
+  ratelimiter:                              # 正確縮排
     instances:
       product-read:
         limit-for-period: 10
 ```
 
-**Verification Steps**:
-1. Check application startup logs for configuration values
-2. Verify YAML syntax with online validator
-3. Check actuator endpoints for current configuration
-4. Add logging to see which config is loaded
+**驗證步驟**:
+1. 檢查應用程式啟動日誌的配置值
+2. 使用在線驗證器驗證 YAML 語法
+3. 檢查 Actuator 端點以取得當前配置
+4. 加入日誌以查看載入的配置
 
 ---
 
-### Issue 5: Inconsistent Results
+### 問題 5: 結果不一致
 
-#### Symptoms
-- Sometimes works, sometimes doesn't
-- Different results on each run
-- Unpredictable behavior
+#### 徵兆
+- 有時運作正常，有時不正常
+- 每次執行結果不同
+- 行為不可預測
 
-#### Possible Causes & Solutions
+#### 可能原因與解決方案
 
-**Cause 1: Race Conditions**
+**原因 1: 競爭條件**
 ```
-# Problem: Threads starting at slightly different times
-Ramp-Up Period: 1s                          # Threads spread over 1 second
+# 問題: 執行緒啟動時間稍有不同
+Ramp-Up 期間: 1s                          # 執行緒分散在 1 秒內
 
-# Solution: Start all threads simultaneously
-Ramp-Up Period: 0s                          # All threads start at once
+# 解決方案: 所有執行緒同時啟動
+Ramp-Up 期間: 0s                          # 所有執行緒立即開始
 ```
 
-**Cause 2: State from Previous Tests**
+**原因 2: 測試遺留狀態**
 ```bash
-# Problem: Circuit still OPEN from previous test
-# Solution: Wait for circuit to close or restart application
+# 問題: 斷路器從上次測試中保持 OPEN
+# 解決方案: 等待斷路器關閉或重啟應用程式
 
-# Check circuit state
+# 檢查斷路器狀態
 curl http://localhost:8080/actuator/circuitbreakers
 
-# Restart application
+# 重啟應用程式
 ./gradlew bootRun
 ```
 
-**Cause 3: Time-Based Limits**
+**原因 3: 基於時間的限制**
 ```yaml
-# Problem: RateLimiter resets every second
-# If test spans multiple seconds, results vary
+# 問題: RateLimiter 每秒重置
+# 若測試跨越多秒，結果會不同
 
-# Solution: Send all requests within 1 second
+# 解決方案: 在 1 秒內發送所有請求
 resilience4j:
   ratelimiter:
     instances:
       product-read:
         limit-for-period: 10
-        limit-refresh-period: 1s            # Resets every second!
+        limit-refresh-period: 1s            # 每秒重置！
 
-# JMeter: Use 0 ramp-up to send all at once
+# JMeter: 使用 0 ramp-up 以一次發送
 ```
 
-**Verification Steps**:
-1. Clear JMeter results between runs
-2. Restart application between tests
-3. Use 0 ramp-up period
-4. Check for consistent error rates
+**驗證步驟**:
+1. 執行間清除 JMeter 結果
+2. 測試間重啟應用程式
+3. 使用 0 ramp-up 期間
+4. 檢查一致的錯誤率
 
 ---
 
-### Issue 6: Wrong HTTP Status Codes
+### 問題 6: 錯誤的 HTTP 狀態代碼
 
-#### Symptoms
-- Getting 500 instead of 429/503
-- Unexpected error responses
-- Wrong error messages
+#### 徵兆
+- 得到 500 而非 429/503
+- 意外的錯誤回應
+- 錯誤的錯誤訊息
 
-#### Possible Causes & Solutions
+#### 可能原因與解決方案
 
-**Cause 1: Exception Not Handled**
+**原因 1: 異常未處理**
 ```java
-// ❌ Exception propagates as 500
+// ❌ 異常傳播為 500
 @GetMapping("/products")
 public List<Product> getProducts() {
-    // RequestNotPermitted exception → 500 error
+    // RequestNotPermitted 異常 → 500 錯誤
 }
 
-// ✅ Global exception handler catches it
+// ✅ 全域異常處理器捕獲它
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     @ExceptionHandler(RequestNotPermitted.class)
     public ResponseEntity<ApiErrorResponse> handleRateLimitExceeded(
         RequestNotPermitted ex) {
-        return ResponseEntity.status(429)   // Return 429
+        return ResponseEntity.status(429)   // 返回 429
             .body(new ApiErrorResponse("Rate limit exceeded"));
     }
 }
 ```
 
-**Cause 2: Wrong Exception Type**
+**原因 2: 錯誤的異常類型**
 ```java
-// Check which exception is thrown:
-// - RequestNotPermitted → RateLimiter (should be 429)
-// - BulkheadFullException → Bulkhead (should be 503)
-// - CallNotPermittedException → CircuitBreaker (should be 503)
+// 檢查拋出哪個異常:
+// - RequestNotPermitted → RateLimiter (應為 429)
+// - BulkheadFullException → Bulkhead (應為 503)
+// - CallNotPermittedException → CircuitBreaker (應為 503)
 ```
 
-**Verification Steps**:
-1. Check GlobalExceptionHandler.java
-2. Verify exception mappings
-3. Check application logs for exception types
-4. Test each pattern individually
+**驗證步驟**:
+1. 檢查 GlobalExceptionHandler.java
+2. 驗證異常對應關係
+3. 檢查應用程式日誌中的異常類型
+4. 分別測試每一種模式
 
 ---
 
-### Debugging Commands
+### 除錯指令
 
-#### Check Resilience4j Configuration
+#### 檢查 Resilience4j 配置
 ```bash
-# View all actuator endpoints
+# 查看所有 Actuator 端點
 curl http://localhost:8080/actuator
 
-# Check RateLimiter status
+# 檢查 RateLimiter 狀態
 curl http://localhost:8080/actuator/ratelimiters
 
-# Check Bulkhead status
+# 檢查 Bulkhead 狀態
 curl http://localhost:8080/actuator/bulkheads
 
-# Check CircuitBreaker status
+# 檢查 CircuitBreaker 狀態
 curl http://localhost:8080/actuator/circuitbreakers
 
-# Check health
+# 檢查健康狀態
 curl http://localhost:8080/actuator/health
 ```
 
-#### Enable Debug Logging
+#### 啟用除錯日誌
 ```yaml
 # application.yml
 logging:
@@ -1720,24 +1718,24 @@ logging:
     com.ibm.demo: DEBUG
 ```
 
-#### Check Metrics
+#### 檢查指標
 ```bash
-# Prometheus metrics
+# Prometheus 指標
 curl http://localhost:8080/actuator/prometheus | grep resilience4j
 ```
 
 ---
 
-## 🚀 Quick Reference
+## 🚀 快速參考
 
-### Quick Start - Learning Configuration
+### 快速開始 - 學習配置
 
-**Copy-paste ready configuration for demos**:
+**複製貼上即可用的演示配置**:
 
 ```yaml
-# File: application-demo.yml
+# 檔案: application-demo.yml
 resilience4j:
-  # RateLimiter: Allow 10 requests/second
+  # RateLimiter: 允許每秒 10 個請求
   ratelimiter:
     instances:
       product-read:
@@ -1749,7 +1747,7 @@ resilience4j:
         limit-refresh-period: 1s
         timeout-duration: 0ms
   
-  # Bulkhead: Allow 15 concurrent calls (≥ RateLimiter)
+  # Bulkhead: 允許 15 個並發呼叫 (≥ RateLimiter)
   bulkhead:
     instances:
       product-read:
@@ -1759,7 +1757,7 @@ resilience4j:
         max-concurrent-calls: 5
         max-wait-duration: 0ms
   
-  # CircuitBreaker: Quick state changes
+  # CircuitBreaker: 快速狀態變更
   circuitbreaker:
     instances:
       ProductService:
@@ -1771,30 +1769,30 @@ resilience4j:
         automatic-transition-from-open-to-half-open-enabled: true
 ```
 
-**JMeter Quick Test**:
+**JMeter 快速測試**:
 ```
-Thread Group: 20 threads, 0 ramp-up, 1 loop
-HTTP Request: GET http://localhost:8080/api/products
-Expected: ~10 success (200), ~10 failures (429)
+Thread Group: 20 個執行緒, 0 ramp-up, 1 迴圈
+HTTP 請求: GET http://localhost:8080/api/products
+預期: ~10 成功 (200), ~10 失敗 (429)
 ```
 
 ---
 
-### Quick Start - Production Configuration
+### 快速開始 - 生產配置
 
-**Copy-paste ready configuration for production**:
+**複製貼上即可用的生產配置**:
 
 ```yaml
-# File: application-prod.yml
+# 檔案: application-prod.yml
 resilience4j:
-  # RateLimiter: Based on load test results
+  # RateLimiter: 根據負載測試結果
   ratelimiter:
     configs:
       default:
         limit-refresh-period: 1s
         timeout-duration: 0ms
     instances:
-      # Read operations (high throughput)
+      # 讀取操作 (高吞吐量)
       product-read:
         limit-for-period: 1000              # 1000 req/s
       account-read:
@@ -1802,7 +1800,7 @@ resilience4j:
       order-read:
         limit-for-period: 500
       
-      # Write operations (lower throughput)
+      # 寫入操作 (低吞吐量)
       product-write:
         limit-for-period: 200               # 200 req/s
       account-write:
@@ -1810,13 +1808,13 @@ resilience4j:
       order-write:
         limit-for-period: 100
   
-  # Bulkhead: Match or exceed RateLimiter limits
+  # Bulkhead: 符合或超過 RateLimiter 限制
   bulkhead:
     configs:
       default:
         max-wait-duration: 0ms
     instances:
-      # Read operations
+      # 讀取操作
       product-read:
         max-concurrent-calls: 1000          # >= RateLimiter
       account-read:
@@ -1824,7 +1822,7 @@ resilience4j:
       order-read:
         max-concurrent-calls: 500
       
-      # Write operations
+      # 寫入操作
       product-write:
         max-concurrent-calls: 200
       account-write:
@@ -1832,7 +1830,7 @@ resilience4j:
       order-write:
         max-concurrent-calls: 100
   
-  # CircuitBreaker: Protect against cascading failures
+  # CircuitBreaker: 保護免受級聯故障影響
   circuitbreaker:
     configs:
       default:
@@ -1855,49 +1853,49 @@ resilience4j:
 
 ---
 
-### Testing Checklist
+### 測試清單
 
-Use this checklist to verify each pattern works correctly:
+使用此清單確認每一種模式皆正確運作：
 
-#### ✅ RateLimiter Verification
-- [ ] Configure limit-for-period: 10
-- [ ] Send 20 requests with 0 ramp-up
-- [ ] Verify ~10 success (HTTP 200)
-- [ ] Verify ~10 failures (HTTP 429)
-- [ ] Check error message: "Rate limit exceeded"
-- [ ] Verify fast rejection (<50ms for 429)
+#### ✅ RateLimiter 驗證
+- [ ] 配置 limit-for-period: 10
+- [ ] 以 0 ramp-up 發送 20 個請求
+- [ ] 驗證 ~10 個成功 (HTTP 200)
+- [ ] 驗證 ~10 個失敗 (HTTP 429)
+- [ ] 檢查錯誤訊息: "Rate limit exceeded"
+- [ ] 驗證快速拒絕 (429 回應時間 <50ms)
 
-#### ✅ Bulkhead Verification
-- [ ] Configure max-concurrent-calls: 15
-- [ ] Add 2000ms Constant Timer
-- [ ] Send 30 requests with 0 ramp-up
-- [ ] Verify ~15 success (HTTP 200, ~2000ms)
-- [ ] Verify ~15 failures (HTTP 503, <50ms)
-- [ ] Check error message: "Bulkhead is full"
+#### ✅ Bulkhead 驗證
+- [ ] 配置 max-concurrent-calls: 15
+- [ ] 加入 2000ms 固定計時器
+- [ ] 以 0 ramp-up 發送 30 個請求
+- [ ] 驗證 ~15 個成功 (HTTP 200, ~2000ms)
+- [ ] 驗證 ~15 個失敗 (HTTP 503, <50ms)
+- [ ] 檢查錯誤訊息: "Bulkhead is full"
 
-#### ✅ CircuitBreaker Verification
-- [ ] Configure sliding-window-size: 10, minimum-calls: 5
-- [ ] Phase 1: Send 10 requests to /products/999999
-- [ ] Verify circuit opens (HTTP 503)
-- [ ] Phase 2: Wait 10 seconds
-- [ ] Verify circuit goes to HALF_OPEN
-- [ ] Phase 3: Send 3 requests to /products/1
-- [ ] Verify circuit closes (HTTP 200)
-- [ ] Check logs for state transitions
+#### ✅ CircuitBreaker 驗證
+- [ ] 配置 sliding-window-size: 10, minimum-calls: 5
+- [ ] 階段 1: 發送 10 個請求至 /products/999999
+- [ ] 驗證斷路器開啟 (HTTP 503)
+- [ ] 階段 2: 等待 10 秒
+- [ ] 驗證斷路器進入 HALF_OPEN
+- [ ] 階段 3: 發送 3 個請求至 /products/1
+- [ ] 驗證斷路器關閉 (HTTP 200)
+- [ ] 檢查狀態變更日誌
 
-#### ✅ Combined Patterns Verification
-- [ ] Configure all three patterns
-- [ ] Send 30 requests with 1000ms timer
-- [ ] Verify 10 success (HTTP 200)
-- [ ] Verify 10 rate limited (HTTP 429)
-- [ ] Verify 10 bulkhead full (HTTP 503)
-- [ ] Check execution order: RateLimiter → Bulkhead → CircuitBreaker
+#### ✅ 組合模式驗證
+- [ ] 配置所有三種模式
+- [ ] 以 1000ms 計時器發送 30 個請求
+- [ ] 驗證 10 個成功 (HTTP 200)
+- [ ] 驗證 10 個速率受限 (HTTP 429)
+- [ ] 驗證 10 個 Bulkhead 已滿 (HTTP 503)
+- [ ] 檢查執行順序: RateLimiter → Bulkhead → CircuitBreaker
 
 ---
 
-### Configuration Templates
+### 配置範本
 
-#### Template 1: Public API (High Traffic)
+#### 範本 1: 公開 API (高流量)
 ```yaml
 resilience4j:
   ratelimiter:
@@ -1920,7 +1918,7 @@ resilience4j:
         wait-duration-in-open-state: 60s
 ```
 
-#### Template 2: Internal API (Medium Traffic)
+#### 範本 2: 內部 API (中流量)
 ```yaml
 resilience4j:
   ratelimiter:
@@ -1943,7 +1941,7 @@ resilience4j:
         wait-duration-in-open-state: 30s
 ```
 
-#### Template 3: External Service Call (Low Traffic, Sensitive)
+#### 範本 3: 外部服務呼叫 (低流量，敏感)
 ```yaml
 resilience4j:
   ratelimiter:
@@ -1962,36 +1960,36 @@ resilience4j:
       ExternalService:
         sliding-window-size: 20
         minimum-number-of-calls: 10
-        failure-rate-threshold: 30          # More sensitive
-        wait-duration-in-open-state: 120s   # Longer recovery
+        failure-rate-threshold: 30          # 更敏感
+        wait-duration-in-open-state: 120s   # 更長恢復時間
         slow-call-duration-threshold: 2s
         slow-call-rate-threshold: 50
 ```
 
 ---
 
-### Useful Links
+### 有用連結
 
-- **Current Configuration**: [`src/main/resources/application.yml`](../src/main/resources/application.yml) (lines 96-194)
-- **Resilience4j Documentation**: https://resilience4j.readme.io/
-- **JMeter Download**: https://jmeter.apache.org/download_jmeter.cgi
+- **當前配置**: [`src/main/resources/application.yml`](../src/main/resources/application.yml) (第 96-194 行)
+- **Resilience4j 文件**: https://resilience4j.readme.io/
+- **JMeter 下載**: https://jmeter.apache.org/download_jmeter.cgi
 - **Spring Boot Actuator**: https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html
 
 ---
 
-### Key Takeaways
+### 關鍵要點
 
-1. **🎯 Pattern Order**: RateLimiter → Bulkhead → CircuitBreaker
-2. **📊 Parameter Rule**: Bulkhead ≥ RateLimiter limit
-3. **⚡ Fail-Fast**: Always use 0ms timeout/wait for immediate rejection
-4. **📈 Start Conservative**: Begin with lower limits, increase based on monitoring
-5. **🔍 Monitor Everything**: Use actuator endpoints and metrics
-6. **🧪 Test Individually**: Verify each pattern works before combining
-7. **📝 Document Calculations**: Always explain why you chose specific values
-8. **🔄 Environment-Specific**: Use different configs for prod/staging/dev
-9. **⏱️ Response Times**: 429/503 should be <50ms (fast rejection)
-10. **🛡️ Defense in Depth**: Use all three patterns together for best protection
+1. **🎯 模式順序**: RateLimiter → Bulkhead → CircuitBreaker
+2. **📊 參數規則**: Bulkhead ≥ RateLimiter 限制
+3. **⚡ 快速失敗**: 一律使用 0ms 逾時/等待以實現立即拒絕
+4. **📈 從保守開始**: 以較低限制開始，根據監控增加
+5. **🔍 監控所有事項**: 使用 Actuator 端點與指標
+6. **🧪 單獨測試**: 組合前驗證每一種模式皆運作正常
+7. **📝 記錄計算**: 務必解釋為何選擇特定數值
+8. **🔄 環境特定**: 生產/預發布/開發環境使用不同配置
+9. **⏱️ 回應時間**: 429/503 應 <50ms (快速拒絕)
+10. **🛡️ 深度防禦**: 組合使用三種模式以達最佳保護
 
 ---
 
-**End of Guide** | Last Updated: 2026-06-03 | Maintained by: Bobby
+**指南結束** | 最後更新: 2026-06-06 | 維護者: Bobby

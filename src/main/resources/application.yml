@@ -114,7 +114,7 @@ resilience4j:
       
       # ProductService 方法級別配置
       product-read:
-        max-concurrent-calls: 1000
+        max-concurrent-calls: 5
         max-wait-duration: 0ms
       product-write:
         max-concurrent-calls: 200

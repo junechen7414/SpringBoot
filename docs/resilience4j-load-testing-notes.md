@@ -130,19 +130,40 @@ resilience4j_ratelimiter_available_permissions{application="demo"}
 
 ## Bulkhead
 
-### 配置
+### 配置 (application.yml)
+
+為了驗證 Bulkhead 的 fail-fast 行為，將並發限制設為較小值以利測試：
 
 ```yaml
-product-read:
-  max-concurrent-calls: 1000
-  max-wait-duration: 0ms    # fail-fast
+resilience4j:
+  bulkhead:
+    instances:
+      product-read:
+        max-concurrent-calls: 5    # 限制同時執行請求數為 5
+        max-wait-duration: 0ms     # fail-fast: 不等待，立即拒絕
 ```
 
-### 行為說明
+### 測試場景與 JMeter 設定
 
-- Bulkhead 限制的是**同時執行中的請求數量**（並發數）
-- 當並發數達到 `max-concurrent-calls` 時，新請求會收到 `BulkheadFullException`（HTTP 503）
-- `max-wait-duration: 0ms` 表示不等待，立即拒絕
+- **目標 API**: `GET /product`
+- **JMeter 參數**:
+  - Number of Threads: 20
+  - Ramp-up Period: 0s
+  - Loop Count: 1
+- **驗證邏輯**: 設定 20 個線程瞬間啟動，並發請求數必定超過 `max-concurrent-calls: 5`，預期會觸發 Bulkhead 拒絕機制。
+
+### 測試結果與解讀
+
+**執行結果**:
+| Label | # Samples | Average | Error % | Throughput |
+|-------|-----------|---------|---------|------------|
+| HTTP Request | 20 | 106ms | 15.00% | 97.08 req/s |
+
+**解讀**:
+1. **Error % (15%)**: 20 個並發請求中有約 3 個觸發了 `BulkheadFullException`。
+2. **HTTP 狀態碼**: 失敗請求均回傳 **503 Service Unavailable**，符合 Bulkhead 預期。
+3. **成功與失敗機制**: 由於 `Average Response Time` (106ms) 很短，線程會快速釋放，因此後面進來的請求有機會搶到 slot，導致錯誤率未達 75% (15/20)。
+4. **Exception 處理**: 透過更新 `GlobalExceptionHandler`，成功攔截錯誤並回傳具體資訊（如 `Bulkhead 'product-read' is full...`），確認 Bulkhead 攔截邏輯正確。
 
 ### 與 RateLimiter 的差異
 
@@ -160,12 +181,6 @@ Resilience4j 預設的裝飾器執行順序（外到內）：
 ```
 Retry → CircuitBreaker → RateLimiter → TimeLimiter → Bulkhead → 實際方法
 ```
-
-即：請求先經過 RateLimiter，通過後再經過 Bulkhead。
-
-### 負載測試觀察
-
-在 `GET /product` 的測試中，Bulkhead (1000 concurrent) 未觸發，原因是 HikariCP (500 connections) 先成為瓶頸，使得實際並發數受限於 DB 連接池大小。
 
 ### 驗證方法
 
