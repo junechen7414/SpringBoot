@@ -192,36 +192,155 @@ GET http://localhost:8787/actuator/metrics/resilience4j.bulkhead.available.concu
 
 ## CircuitBreaker
 
-### 配置
+### 使用時機
+
+CircuitBreaker 的設計目的是**保護呼叫方**，當被呼叫的下游服務持續故障時，避免呼叫方不斷重試造成：
+1. **資源耗盡**：線程池、連接池被等待超時的請求佔滿
+2. **雪崩效應**：一個服務故障拖垮整條呼叫鏈
+3. **延遲放大**：每個請求都要等到超時才失敗，用戶體驗極差
+
+**核心邏輯：「如果下游一直失敗，就別再打了，直接快速失敗，給下游喘息的時間恢復。」**
+
+在本專案中，`OrderService` 透過 HTTP Client 呼叫了 `AccountService` 和 `ProductService`，當這些下游服務持續故障時，CircuitBreaker 會開路保護 OrderService 不被拖垮。
+
+### 配置（生產環境 default）
 
 ```yaml
-ProductService:
-  base-config: default
-  # default 配置：
-  #   sliding-window-type: COUNT_BASED
-  #   sliding-window-size: 100
-  #   minimum-number-of-calls: 50
-  #   failure-rate-threshold: 50%
-  #   wait-duration-in-open-state: 60s
-  #   permitted-number-of-calls-in-half-open-state: 10
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 100
+        minimum-number-of-calls: 50
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 10
+        automatic-transition-from-open-to-half-open-enabled: true
 ```
+
+### 測試用配置（調小參數以利驗證）
+
+為了方便在 JMeter 中觸發 CircuitBreaker，將 `OrderService` 的參數調小：
+
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      OrderService:
+        base-config: default
+        sliding-window-size: 10              # 只看最近 10 個請求（生產: 100）
+        minimum-number-of-calls: 5           # 5 個請求就開始計算（生產: 50）
+        failure-rate-threshold: 50           # 維持 50%
+        wait-duration-in-open-state: 30s     # 縮短為 30 秒（生產: 60s）
+        permitted-number-of-calls-in-half-open-state: 3  # 改小方便觀察（生產: 10）
+```
+
+### 測試場景
+
+- **API**: `GET /order/99999`（查詢不存在的訂單 ID，觸發 `ResourceNotFoundException`）
+- **工具**: JMeter
+- **驗證邏輯**: OrderService 呼叫 `findOrderByIdOrThrow(99999)` 時拋出 `ResourceNotFoundException`，此異常被 CircuitBreaker 記錄為失敗。累積到閾值後 CircuitBreaker 開路，後續請求直接被拒絕。
+
+> **為什麼選擇這個場景？** CircuitBreaker 不像 RateLimiter/Bulkhead 靠「大量並發」觸發，而是靠**持續的失敗**觸發。用不存在的 orderId 查詢是最簡單的方式來模擬「下游持續回傳錯誤」的效果。在真實生產環境中，更常見的觸發場景是下游服務掛掉（網路超時、連接拒絕、5xx 錯誤）。
+
+### JMeter 設定
+
+使用 **setUp Thread Group** 先觸發 CircuitBreaker 開路，再用正式 Thread Group 驗證開路後的行為。
+
+#### 測試計畫結構
+
+```
+Test Plan
+├── setUp Thread Group          ← 觸發 CircuitBreaker 開路
+│   └── HTTP Request: GET /order/99999
+│
+└── Thread Group (正式測試)      ← 驗證開路後的行為
+    └── HTTP Request: GET /order/99999
+```
+
+#### setUp Thread Group（觸發開路）
+
+| 參數 | 值 | 說明 |
+|------|-----|------|
+| Number of Threads | 5 | 等於 `minimum-number-of-calls: 5` |
+| Ramp-up Period | 0s | 同時啟動 |
+| Loop Count | 1 | 每個線程發 1 次，共 5 個請求 |
+| HTTP Request | `GET http://localhost:8787/order/99999` | 不存在的訂單 ID |
+
+#### Thread Group（驗證開路）
+
+| 參數 | 值 | 說明 |
+|------|-----|------|
+| Number of Threads | 10 | 10 個並發用戶 |
+| Ramp-up Period | 0s | 同時啟動 |
+| Loop Count | 1 | 每人發 1 次，共 10 個請求 |
+| HTTP Request | `GET http://localhost:8787/order/99999` | 任何 OrderService 的 endpoint |
+
+### 測試結果與解讀
+
+#### setUp Thread Group 結果
+
+| Label | # Samples | Average | Error % | HTTP Status |
+|-------|-----------|---------|---------|-------------|
+| HTTP Request | 5 | ~50ms | 100% | 404 Not Found |
+
+**解讀**: 5 個請求全部觸發 `ResourceNotFoundException`，失敗率 = 100% > 50%，CircuitBreaker 在第 5 個請求後進入 **OPEN** 狀態。
+
+#### Thread Group 結果
+
+| Label | # Samples | Average | Error % | HTTP Status |
+|-------|-----------|---------|---------|-------------|
+| HTTP Request | 10 | < 5ms | 100% | 503 Service Unavailable |
+
+**解讀**:
+1. **回應時間驟降**：從 setUp 的 ~50ms 降至 < 5ms，因為請求根本沒有到達實際方法，被 CircuitBreaker 直接攔截。
+2. **HTTP 503**: `CallNotPermittedException` 被 `GlobalExceptionHandler` 攔截，回傳 "服務暫時不可用，請稍後再試"。
+3. **100% Error**: 所有請求都被 CircuitBreaker 拒絕，確認開路狀態正常運作。
+
+### CircuitBreaker 狀態生命週期
+
+```
+CLOSED（正常）
+    ↓ 失敗率 ≥ 50%（在 sliding-window-size 個請求中）
+OPEN（開路，所有請求直接 503）
+    ↓ 等待 wait-duration-in-open-state（30s）
+HALF_OPEN（半開，允許 permitted-number-of-calls-in-half-open-state 個請求嘗試）
+    ↓ 嘗試成功 → CLOSED
+    ↓ 嘗試失敗 → OPEN
+```
+
+### 關鍵觀察：哪些異常會被記錄為失敗？
+
+Resilience4j CircuitBreaker **預設會記錄所有 Exception 為失敗**（除非配置了 `record-exceptions` 或 `ignore-exceptions`）。本專案未配置這些，因此：
+
+| 異常類型 | 是否被記錄為失敗 | 範例 |
+|---------|----------------|------|
+| `ResourceNotFoundException` | ✅ 是 | 查詢不存在的訂單/帳戶 |
+| `AccountInactiveException` | ✅ 是 | 帳戶未啟用 |
+| `InvalidRequestException` | ✅ 是 | 重複商品 |
+| HTTP Client 異常（4xx/5xx） | ✅ 是 | ProductClient 回傳 404 |
+
+> ⚠️ **生產環境建議**：考慮加上 `ignore-exceptions` 排除業務異常（如 `ResourceNotFoundException`），讓 CircuitBreaker 只對基礎設施故障（網路超時、連接拒絕、5xx）做反應。
 
 ### 行為說明
 
-- CircuitBreaker 放在**類級別** (`@CircuitBreaker(name = "ProductService")`)
-- 當失敗率超過 50%（在最近 100 個請求中），電路斷開
-- 斷開後等待 60 秒，進入半開狀態，允許 10 個請求嘗試
+- CircuitBreaker 放在**類級別** (`@CircuitBreaker(name = "OrderService")`)
+- 保護整個 Service 的所有方法，不管是哪個方法失敗都會累積到同一個 CircuitBreaker
+- 當失敗率超過 50%（在最近 10 個請求中），電路斷開
+- 斷開後等待 30 秒，進入半開狀態，允許 3 個請求嘗試
 - 如果嘗試成功，電路關閉；如果仍然失敗，繼續斷開
 
 ### 與 RateLimiter/Bulkhead 的協作
 
 ```
-@CircuitBreaker(name = "ProductService")     ← 類級別，保護整個 Service
-public class ProductService {
+@CircuitBreaker(name = "OrderService")       ← 類級別，保護整個 Service
+public class OrderService {
 
-    @RateLimiter(name = "product-read")      ← 方法級別，限制速率
-    @Bulkhead(name = "product-read")         ← 方法級別，限制並發
-    public List<GetProductListResponse> getProductList() { ... }
+    @RateLimiter(name = "order-read")        ← 方法級別，限制速率
+    @Bulkhead(name = "order-read")           ← 方法級別，限制並發
+    public GetOrderDetailResponse getOrderDetailByOrderId(Integer orderId) { ... }
 }
 ```
 
@@ -230,15 +349,42 @@ public class ProductService {
 - **Bulkhead**：防止某個 API 佔用所有系統資源（隔離故障）
 - **CircuitBreaker**：當下游持續失敗時，快速失敗避免雪崩
 
+執行順序（外到內）：`Retry → CircuitBreaker → RateLimiter → TimeLimiter → Bulkhead → 實際方法`
+
 ### 驗證方法
 
 ```bash
-# 查看 CircuitBreaker 狀態
-GET http://localhost:8787/actuator/metrics/resilience4j.circuitbreaker.state?tag=name:ProductService
+# 查看 CircuitBreaker 狀態（CLOSED=0, OPEN=1, HALF_OPEN=2）
+GET http://localhost:8787/actuator/metrics/resilience4j.circuitbreaker.state?tag=name:OrderService
 
 # 查看失敗率
-GET http://localhost:8787/actuator/metrics/resilience4j.circuitbreaker.failure.rate?tag=name:ProductService
+GET http://localhost:8787/actuator/metrics/resilience4j.circuitbreaker.failure.rate?tag=name:OrderService
+
+# 查看被拒絕的請求數
+GET http://localhost:8787/actuator/metrics/resilience4j.circuitbreaker.calls?tag=name:OrderService&tag=kind:not_permitted
 ```
+
+#### Grafana（透過 Prometheus）
+
+```promql
+# CircuitBreaker 狀態
+resilience4j_circuitbreaker_state{name="OrderService", application="demo"}
+
+# 失敗率趨勢
+resilience4j_circuitbreaker_failure_rate{name="OrderService", application="demo"}
+
+# 被拒絕的請求速率
+rate(resilience4j_circuitbreaker_calls_total{name="OrderService", kind="not_permitted"}[1m])
+```
+
+### 結論
+
+| 問題 | 答案 |
+|------|------|
+| CircuitBreaker 配置是否正確？ | ✅ 是 |
+| CircuitBreaker AOP 是否生效？ | ✅ 是（開路後回傳 503） |
+| 開路後回應時間是否驟降？ | ✅ 是（從 ~50ms 降至 < 5ms） |
+| setUp Thread Group 能否有效觸發開路？ | ✅ 是（5 個失敗請求即可觸發） |
 
 ---
 
@@ -269,5 +415,5 @@ GET http://localhost:8787/actuator/metrics/resilience4j.circuitbreaker.failure.r
 
 ---
 
-**最後更新**: 2025-06-06
+**最後更新**: 2025-06-08
 **維護者**: Bobby
