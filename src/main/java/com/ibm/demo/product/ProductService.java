@@ -6,24 +6,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import io.github.resilience4j.bulkhead.annotation.Bulkhead;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
-import com.ibm.demo.product.DTO.internal.OrderItemRequest;
-import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
+import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 import com.ibm.demo.util.DBAssertion;
+import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
@@ -62,17 +65,17 @@ public class ProductService {
     }
 
     /**
-     * 獲取所有商品的列表。
+     * 獲取所有商品的分頁列表。
      *
-     * @return 包含所有商品列表資訊的回應 DTO 列表
+     * @param pageable 分頁參數
+     * @return 包含商品列表資訊的分頁回應
      */
     @Bulkhead(name = "product-read")
     @RateLimiter(name = "product-read")
-    public List<GetProductListResponse> getProductList() {
-        List<Product> products = productRepository.findAllProducts();
-        return products.stream()
-                .map(this::mapProductToListResponse)
-                .toList();
+    public PageResponse<GetProductListResponse> getProductList(Pageable pageable) {
+        Page<GetProductListResponse> page = productRepository.findAllProducts(pageable)
+                .map(this::mapProductToListResponse);
+        return PageResponse.from(page);
     }
 
     /**
@@ -111,7 +114,7 @@ public class ProductService {
     /**
      * 更新現有商品的資訊。
      *
-     * @param id 商品 ID
+     * @param id                      商品 ID
      * @param updateProductRequestDto 包含要更新的商品資訊的請求 DTO
      */
     @Transactional
@@ -156,7 +159,7 @@ public class ProductService {
         ServiceValidator.validateNotNull(request, "Process order items request");
         Set<OrderItemRequest> originalItems = request.originalItems();
         Set<OrderItemRequest> updatedItems = request.updatedItems();
-        
+
         // 0. 驗證輸入的訂單商品明細集合是否為空，且updatedItems中productId要存在，否則拋出ResourceNotFound
         ServiceValidator.validateNotNull(originalItems, "Original order items");
         ServiceValidator.validateNotNull(updatedItems, "Updated order items");
@@ -240,8 +243,7 @@ public class ProductService {
                 product.getName(),
                 product.getPrice(),
                 product.getSaleStatus(),
-                product.getAvailable()
-        );
+                product.getAvailable());
     }
 
     /**

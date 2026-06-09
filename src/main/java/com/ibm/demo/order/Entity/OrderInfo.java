@@ -7,7 +7,6 @@ import org.hibernate.annotations.SQLRestriction;
 import com.ibm.demo.util.AuditMetadata;
 import com.ibm.demo.util.SoftDeleteMetadata;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
@@ -34,27 +33,22 @@ import lombok.ToString;
 @Entity
 @SQLRestriction("DELETED = false AND STATUS=1001") // 只選擇未刪除且已確認的訂單
 @Table(name = "ORDER_INFO") // 指定對應的資料表名稱
-@Schema(description = "訂單資訊")
 public class OrderInfo {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq_gen")
     @SequenceGenerator(name = "order_seq_gen", sequenceName = "order_id_seq", allocationSize = 1)
     @Column(name = "ID", columnDefinition = "NUMBER(10)")
-    @Schema(description = "訂單編號", example = "1")
     private Integer id;
 
     @Column(name = "ACCOUNT_ID", columnDefinition = "NUMBER(10)", nullable = false)
-    @Schema(description = "使用者帳號", example = "1")
     private Integer accountId;
 
     @Column(name = "STATUS", columnDefinition = "NUMBER(4)", nullable = false)
-    @Schema(description = "訂單狀態", example = "1001")
     private Integer status;
 
     @OneToMany(mappedBy = "orderInfo", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude // 避免Entity中有OneToMany或ManyToOne關聯時，因為循環引用導致 StackOverflowError。
-    @Schema(description = "訂單明細清單")
     private List<OrderDetail> orderDetails; // 建立雙向關聯，方便查詢
     // 注意：這裡不能使用@Builder 而是要用SuperBuilder 才能設定accountId 和status
 
@@ -71,7 +65,6 @@ public class OrderInfo {
     // 樂觀鎖版本（@Version 不能在 @Embeddable 中使用，必須直接定義在實體類別）
     @Version
     @Column(name = "VERSION", columnDefinition = "NUMBER(10) DEFAULT 0", nullable = false)
-    @Schema(description = "樂觀鎖版本", example = "0")
     @Builder.Default
     private Integer version = 0;
 

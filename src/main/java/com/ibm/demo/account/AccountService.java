@@ -1,13 +1,10 @@
 package com.ibm.demo.account;
 
-import java.util.List;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import io.github.resilience4j.bulkhead.annotation.Bulkhead;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
@@ -17,8 +14,12 @@ import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDel
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.util.DBAssertion;
+import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -55,16 +56,18 @@ public class AccountService {
     }
 
     /**
-     * @return List<GetAccountListResponse>
+     * 獲取帳戶分頁列表。
+     *
+     * @param pageable 分頁參數
+     * @return PageResponse<GetAccountListResponse>
      */
     @Transactional(readOnly = true)
     @Bulkhead(name = "account-read")
-    @RateLimiter(name = "account-read")
-    public List<GetAccountListResponse> getAccountList() {
-        List<Account> accounts = accountRepository.findAllAccount();
-        return accounts.stream()
-                .map(this::mapAccountToListResponse)
-                .toList();
+    @RateLimiter(name = "account-read")    
+    public PageResponse<GetAccountListResponse> getAccountList(Pageable pageable) {
+        Page<GetAccountListResponse> page = accountRepository.findAllAccount(pageable)
+                .map(this::mapAccountToListResponse);
+        return PageResponse.from(page);
     }
 
     /**
@@ -127,8 +130,7 @@ public class AccountService {
         return new GetAccountListResponse(
                 account.getId(),
                 account.getName(),
-                account.getStatus()
-        );
+                account.getStatus());
     }
 
     /**
@@ -156,7 +158,7 @@ public class AccountService {
      * 更新帳戶狀態，並在需要時執行業務邏輯檢查。
      * 如果狀態從啟用變為停用，會檢查帳戶是否仍有關聯訂單。
      * 
-     * @param account 要更新的帳戶實體
+     * @param account   要更新的帳戶實體
      * @param newStatus 新的狀態碼
      */
     private void updateAccountStatus(Account account, String newStatus) {
