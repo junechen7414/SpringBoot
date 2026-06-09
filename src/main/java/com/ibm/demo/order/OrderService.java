@@ -64,7 +64,7 @@ public class OrderService {
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
                 ServiceValidator.validateNotNull(createOrderRequest.accountId(), "Account ID");
-                ServiceValidator.validateNotEmpty(createOrderRequest.orderDetails(), "Order details");
+                ServiceValidator.validateNotEmpty(createOrderRequest.items(), "Order details");
                 // 驗證帳戶存在且狀態為啟用
                 Integer accountId = createOrderRequest.accountId();
                 if (accountClient.getAccountDetail(accountId).status().equals(AccountStatus.INACTIVE.getCode())) {
@@ -73,7 +73,7 @@ public class OrderService {
 
                 // 驗證並轉換訂單明細，確保同一訂單中同一商品只有一筆明細
                 Set<OrderItemRequest> uniqueItems = validateAndConvertToUniqueItems(
-                                createOrderRequest.orderDetails(),
+                                createOrderRequest.items(),
                                 detail -> detail.productId(),
                                 detail -> detail.quantity());
 
