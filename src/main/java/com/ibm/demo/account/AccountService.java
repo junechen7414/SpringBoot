@@ -24,9 +24,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Bulkhead(name = "AccountService")
 @CircuitBreaker(name = "AccountService")
-@RateLimiter(name = "AccountService")
 public class AccountService {
     private final AccountRepository accountRepository;
     private final OrderClient orderClient;
@@ -43,6 +41,8 @@ public class AccountService {
      * @return CreateAccountResponse
      */
     @Transactional
+    @Bulkhead(name = "account-write")
+    @RateLimiter(name = "account-write")
     public Integer createAccount(CreateAccountRequest account_DTO) {
         ServiceValidator.validateNotNull(account_DTO, "Create account request");
 
@@ -62,6 +62,8 @@ public class AccountService {
      * @return PageResponse<GetAccountListResponse>
      */
     @Transactional(readOnly = true)
+    @Bulkhead(name = "account-read")
+    @RateLimiter(name = "account-read")    
     public PageResponse<GetAccountListResponse> getAccountList(Pageable pageable) {
         Page<GetAccountListResponse> page = accountRepository.findAllAccount(pageable)
                 .map(this::mapAccountToListResponse);
@@ -73,6 +75,8 @@ public class AccountService {
      * @return GetAccountDetailResponse
      */
     @Transactional(readOnly = true)
+    @Bulkhead(name = "account-read")
+    @RateLimiter(name = "account-read")
     public GetAccountDetailResponse getAccountDetail(Integer id) {
         Account existingAccount = findAccountByIdOrThrow(id);
         return mapAccountToDetailResponse(existingAccount);
@@ -82,6 +86,8 @@ public class AccountService {
      * @param updateAccountRequestDto
      */
     @Transactional
+    @Bulkhead(name = "account-write-with-validation")
+    @RateLimiter(name = "account-write-with-validation")
     public void updateAccount(Integer id, UpdateAccountRequest updateAccountRequestDto) {
         ServiceValidator.validateNotNull(updateAccountRequestDto, "Update account request");
         // 1. 取得帳戶實體並驗證帳戶是否存在否則拋出例外
@@ -102,6 +108,8 @@ public class AccountService {
      * @param accountId
      */
     @Transactional
+    @Bulkhead(name = "account-write-with-validation")
+    @RateLimiter(name = "account-write-with-validation")
     public void deleteAccount(Integer accountId) {
         Account existingAccount = findAccountByIdOrThrow(accountId);
         checkAccountHasNoOrdersOrThrow(accountId);

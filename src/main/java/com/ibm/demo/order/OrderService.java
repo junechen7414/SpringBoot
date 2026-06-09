@@ -42,9 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Bulkhead(name = "OrderService")
 @CircuitBreaker(name = "OrderService")
-@RateLimiter(name = "OrderService")
 public class OrderService {
         private final OrderInfoRepository orderInfoRepository;
         private final AccountClient accountClient;
@@ -63,6 +61,8 @@ public class OrderService {
         /**
          * @param createOrderRequest
          */
+        @Bulkhead(name = "order-write")
+        @RateLimiter(name = "order-write")
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
                 ServiceValidator.validateNotNull(createOrderRequest.accountId(), "Account ID");
@@ -113,6 +113,8 @@ public class OrderService {
                 }
         }
 
+        @Bulkhead(name = "order-read")
+        @RateLimiter(name = "order-read")
         /**
          * 分頁獲取指定帳戶的訂單列表。
          *
@@ -149,6 +151,8 @@ public class OrderService {
          * @param orderId
          * @return GetOrderDetailResponse
          */
+        @Bulkhead(name = "order-read")
+        @RateLimiter(name = "order-read")
         public GetOrderDetailResponse getOrderDetailByOrderId(Integer orderId) {
                 // 1. 獲取訂單主檔（找不到直接噴 404）
                 OrderInfo orderInfo = findOrderByIdOrThrow(orderId);
@@ -188,6 +192,8 @@ public class OrderService {
          * @param updateOrderRequest
          * @return UpdateOrderResponse
          */
+        @Bulkhead(name = "order-write")
+        @RateLimiter(name = "order-write")
         public void updateOrder(UpdateOrderRequest request) {
                 ServiceValidator.validateNotNull(request, "Update order request");
                 ServiceValidator.validateNotNull(request.orderId(), "Update order id");
@@ -250,6 +256,8 @@ public class OrderService {
         /**
          * @param orderId
          */
+        @Bulkhead(name = "order-write")
+        @RateLimiter(name = "order-write")
         public void deleteOrder(Integer orderId) {
                 ServiceValidator.validateNotNull(orderId, "Order ID");
                 // 1. 獲取訂單資訊
