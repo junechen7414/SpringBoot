@@ -35,7 +35,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(BulkheadFullException.class)
     public ResponseEntity<ApiErrorResponse> handleBulkheadFull(BulkheadFullException ex) {
-        return createResponseEntity(HttpStatus.SERVICE_UNAVAILABLE, "Service Overloaded", ex.getMessage());
+        return createResponseEntity(HttpStatus.SERVICE_UNAVAILABLE, "Service Overloaded", "系統負載過高，請稍後再試。");
     }
 
     @ExceptionHandler(CallNotPermittedException.class)
