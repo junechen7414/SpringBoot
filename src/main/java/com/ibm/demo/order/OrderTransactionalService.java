@@ -33,7 +33,7 @@ public class OrderTransactionalService {
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 log.debug("開始建立訂單，帳戶ID: {}, 商品數量: {}", 
                         createOrderRequest.accountId(), 
-                        createOrderRequest.orderDetails().size());
+                        createOrderRequest.items().size());
                 
                 // 建立新訂單
                 OrderInfo newOrderInfo = OrderInfo.builder()
@@ -42,7 +42,7 @@ public class OrderTransactionalService {
                                 .build();
 
                 OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
-                List<OrderDetail> orderDetails = createOrderRequest.orderDetails().stream()
+                List<OrderDetail> orderDetails = createOrderRequest.items().stream()
                                 .map(detailRequest -> {
                                         Integer productId = detailRequest.productId();
                                         Integer quantity = detailRequest.quantity();

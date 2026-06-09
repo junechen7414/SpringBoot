@@ -2,6 +2,8 @@ package com.ibm.demo.product;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +16,9 @@ public interface ProductRepository extends JpaRepository<Product, Integer>, Soft
 
     @Query("SELECT p FROM Product p")
     List<Product> findAllProducts();
+
+    @Query("SELECT p FROM Product p")
+    Page<Product> findAllProducts(Pageable pageable);
 
     @Modifying
     @Query("UPDATE Product p SET p.available = p.available - :qty, p.reserved = p.reserved + :qty WHERE p.id = :productId AND p.available >= :qty")

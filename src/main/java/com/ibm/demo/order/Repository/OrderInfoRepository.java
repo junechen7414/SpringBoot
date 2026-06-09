@@ -2,6 +2,8 @@ package com.ibm.demo.order.Repository;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +15,8 @@ import com.ibm.demo.util.SoftDeleteRepository;
 public interface OrderInfoRepository extends JpaRepository<OrderInfo, Integer>, SoftDeleteRepository<Integer> {
     // @Query("SELECT o FROM OrderInfo o WHERE o.accountId = :accountId")
     List<OrderInfo> findByAccountId(@Param("accountId") Integer accountId);
+
+    Page<OrderInfo> findByAccountId(@Param("accountId") Integer accountId, Pageable pageable);
 
     @Override
     @Modifying

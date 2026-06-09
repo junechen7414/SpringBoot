@@ -83,7 +83,7 @@ class OrderServiceTest {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
-                                        .orderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
+                                        .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
                                         .build();
 
                         // 1. 模擬帳號校驗
@@ -117,7 +117,7 @@ class OrderServiceTest {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
-                                        .orderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
+                                        .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
                                         .build();
 
                         when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
@@ -149,7 +149,7 @@ class OrderServiceTest {
                         Integer inactiveId = 2;
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(inactiveId)
-                                        .orderDetails(List.of(CreateOrderDetailRequest.builder()
+                                        .items(List.of(CreateOrderDetailRequest.builder()
                                                         .productId(SELLABLE_PRODUCT_ID)
                                                         .quantity(1)
                                                         .build()))
@@ -174,7 +174,7 @@ class OrderServiceTest {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
-                                        .orderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)))
+                                        .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)))
                                         .build();
 
                         // 模擬帳戶正常
@@ -201,7 +201,7 @@ class OrderServiceTest {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
-                                        .orderDetails(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)))
+                                        .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)))
                                         .build();
 
                         when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))

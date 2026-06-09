@@ -1,20 +1,17 @@
 package com.ibm.demo.order;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
-import io.github.resilience4j.bulkhead.annotation.Bulkhead;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
-import lombok.extern.slf4j.Slf4j;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
@@ -26,16 +23,21 @@ import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.order.DTO.OrderItemDTO;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
-import com.ibm.demo.product.DTO.internal.OrderItemRequest;
-import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
+import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
+import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -64,7 +66,7 @@ public class OrderService {
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
                 ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
                 ServiceValidator.validateNotNull(createOrderRequest.accountId(), "Account ID");
-                ServiceValidator.validateNotEmpty(createOrderRequest.orderDetails(), "Order details");
+                ServiceValidator.validateNotEmpty(createOrderRequest.items(), "Order details");
                 // 驗證帳戶存在且狀態為啟用
                 Integer accountId = createOrderRequest.accountId();
                 if (accountClient.getAccountDetail(accountId).status().equals(AccountStatus.INACTIVE.getCode())) {
@@ -73,7 +75,7 @@ public class OrderService {
 
                 // 驗證並轉換訂單明細，確保同一訂單中同一商品只有一筆明細
                 Set<OrderItemRequest> uniqueItems = validateAndConvertToUniqueItems(
-                                createOrderRequest.orderDetails(),
+                                createOrderRequest.items(),
                                 detail -> detail.productId(),
                                 detail -> detail.quantity());
 
@@ -100,7 +102,8 @@ public class OrderService {
                                                 "帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",
                                                 createOrderRequest.accountId(),
                                                 uniqueItems.stream()
-                                                                .map(item -> String.format("商品%d(數量%d)", item.productId(), item.quantity()))
+                                                                .map(item -> String.format("商品%d(數量%d)",
+                                                                                item.productId(), item.quantity()))
                                                                 .collect(Collectors.joining(", ")),
                                                 e.getMessage(),
                                                 compensationEx.getMessage(),
@@ -110,30 +113,36 @@ public class OrderService {
                 }
         }
 
-        public List<GetOrderListResponse> getOrderListByAccountId(Integer accountId) {
+        /**
+         * 分頁獲取指定帳戶的訂單列表。
+         *
+         * @param accountId 帳戶 ID
+         * @param pageable  分頁參數
+         * @return 包含訂單列表資訊的分頁回應
+         */
+        public PageResponse<GetOrderListResponse> getOrderListByAccountId(Integer accountId, Pageable pageable) {
                 ServiceValidator.validateNotNull(accountId, "Account ID");
-                List<OrderInfo> orderInfoList = orderInfoRepository.findByAccountId(accountId);
-                if (orderInfoList == null || orderInfoList.isEmpty()) {
-                        return new ArrayList<>();
-                }
-                
-                // 收集所有訂單涉及的商品 ID
-                Set<Integer> allProductIds = orderInfoList.stream()
+                Page<OrderInfo> orderInfoPage = orderInfoRepository.findByAccountId(accountId, pageable);
+
+                // 收集當前頁所有訂單涉及的商品 ID
+                Set<Integer> allProductIds = orderInfoPage.getContent().stream()
                                 .flatMap(order -> order.getOrderDetails().stream())
                                 .map(OrderDetail::getProductId)
                                 .collect(Collectors.toSet());
-                
+
                 // 一次性批量查詢所有商品
-                Map<Integer, GetProductDetailResponse> productMap = batchGetProductDetails(allProductIds);
-                
-                // 計算每個訂單的總金額
-                return orderInfoList.stream()
-                                .map(orderInfo -> GetOrderListResponse.builder()
-                                                .orderId(orderInfo.getId())
-                                                .status(orderInfo.getStatus())
-                                                .totalAmount(calculateOrderTotalAmount(orderInfo, productMap))
-                                                .build())
-                                .collect(Collectors.toList());
+                Map<Integer, GetProductDetailResponse> productMap = allProductIds.isEmpty()
+                                ? Collections.emptyMap()
+                                : batchGetProductDetails(allProductIds);
+
+                // 計算每個訂單的總金額並轉換為 DTO
+                Page<GetOrderListResponse> responsePage = orderInfoPage.map(orderInfo -> GetOrderListResponse.builder()
+                                .orderId(orderInfo.getId())
+                                .status(orderInfo.getStatus())
+                                .totalAmount(calculateOrderTotalAmount(orderInfo, productMap))
+                                .build());
+
+                return PageResponse.from(responsePage);
         }
 
         /**
@@ -223,10 +232,12 @@ public class OrderService {
                                                 request.orderId(),
                                                 order.getAccountId(),
                                                 originalItems.stream()
-                                                                .map(item -> String.format("商品%d(數量%d)", item.productId(), item.quantity()))
+                                                                .map(item -> String.format("商品%d(數量%d)",
+                                                                                item.productId(), item.quantity()))
                                                                 .collect(Collectors.joining(", ")),
                                                 uniqueItems.stream()
-                                                                .map(item -> String.format("商品%d(數量%d)", item.productId(), item.quantity()))
+                                                                .map(item -> String.format("商品%d(數量%d)",
+                                                                                item.productId(), item.quantity()))
                                                                 .collect(Collectors.joining(", ")),
                                                 e.getMessage(),
                                                 compensationEx.getMessage(),
@@ -281,7 +292,8 @@ public class OrderService {
                                                 orderId,
                                                 existingOrderInfo.getAccountId(),
                                                 originalItems.stream()
-                                                                .map(item -> String.format("商品%d(數量%d)", item.productId(), item.quantity()))
+                                                                .map(item -> String.format("商品%d(數量%d)",
+                                                                                item.productId(), item.quantity()))
                                                                 .collect(Collectors.joining(", ")),
                                                 e.getMessage(),
                                                 compensationEx.getMessage(),
@@ -335,12 +347,12 @@ public class OrderService {
 
         /**
          * 
-         * @param orderInfo 訂單資訊
+         * @param orderInfo  訂單資訊
          * @param productMap 已批量查詢的商品資訊 Map
          * @return 訂單總金額
          */
-        private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo, 
-                                                     Map<Integer, GetProductDetailResponse> productMap) {
+        private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo,
+                        Map<Integer, GetProductDetailResponse> productMap) {
                 return orderInfo.getOrderDetails().stream()
                                 .map(detail -> {
                                         GetProductDetailResponse product = productMap.get(detail.getProductId());
@@ -363,16 +375,16 @@ public class OrderService {
          * @return 唯一的訂單商品集合
          * @throws InvalidRequestException 當存在重複商品時
          */
-        private <T> Set<OrderItemRequest> validateAndConvertToUniqueItems(List<T> items, 
-                                                                           java.util.function.Function<T, Integer> productIdExtractor,
-                                                                           java.util.function.Function<T, Integer> quantityExtractor) {
+        private <T> Set<OrderItemRequest> validateAndConvertToUniqueItems(List<T> items,
+                        java.util.function.Function<T, Integer> productIdExtractor,
+                        java.util.function.Function<T, Integer> quantityExtractor) {
                 Set<OrderItemRequest> uniqueItems = items.stream()
                                 .map(item -> OrderItemRequest.builder()
                                                 .productId(productIdExtractor.apply(item))
                                                 .quantity(quantityExtractor.apply(item))
                                                 .build())
                                 .collect(Collectors.toSet());
-                
+
                 if (uniqueItems.size() != items.size()) {
                         throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
                 }

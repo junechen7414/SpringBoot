@@ -12,6 +12,10 @@ import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -26,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
+import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
@@ -89,7 +94,7 @@ public class AccountServiceTest {
     class GetAccountSuccessTests {
 
         @Test
-        @DisplayName("查詢所有帳戶應回傳列表")
+        @DisplayName("查詢所有帳戶應回傳分頁列表")
         void getAccountList_Success() {
             // Arrange
             Account account1 = Account.builder()
@@ -103,20 +108,26 @@ public class AccountServiceTest {
                     .status(STATUS_INACTIVE)
                     .build();
             List<Account> accounts = List.of(account1, account2);
-            when(accountRepository.findAllAccount()).thenReturn(accounts);
+            Pageable pageable = PageRequest.of(0, 20);
+            Page<Account> accountPage = new PageImpl<>(accounts, pageable, 2);
+            when(accountRepository.findAllAccount(pageable)).thenReturn(accountPage);
 
             // Act
-            List<GetAccountListResponse> actualList = accountService.getAccountList();
+            PageResponse<GetAccountListResponse> result = accountService.getAccountList(pageable);
 
             // Assert
-            assertThat(actualList).hasSize(2);
-            assertThat(actualList.get(0).id()).isEqualTo(1);
-            assertThat(actualList.get(0).name()).isEqualTo("User1");
-            assertThat(actualList.get(0).status()).isEqualTo(STATUS_ACTIVE);
-            assertThat(actualList.get(1).id()).isEqualTo(2);
-            assertThat(actualList.get(1).name()).isEqualTo("User2");
-            assertThat(actualList.get(1).status()).isEqualTo(STATUS_INACTIVE);
-            verify(accountRepository).findAllAccount();
+            assertThat(result.content()).hasSize(2);
+            assertThat(result.content().get(0).id()).isEqualTo(1);
+            assertThat(result.content().get(0).name()).isEqualTo("User1");
+            assertThat(result.content().get(0).status()).isEqualTo(STATUS_ACTIVE);
+            assertThat(result.content().get(1).id()).isEqualTo(2);
+            assertThat(result.content().get(1).name()).isEqualTo("User2");
+            assertThat(result.content().get(1).status()).isEqualTo(STATUS_INACTIVE);
+            assertThat(result.page()).isEqualTo(0);
+            assertThat(result.size()).isEqualTo(20);
+            assertThat(result.totalElements()).isEqualTo(2);
+            assertThat(result.totalPages()).isEqualTo(1);
+            verify(accountRepository).findAllAccount(pageable);
         }
 
         @Test
