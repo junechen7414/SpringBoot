@@ -1,6 +1,6 @@
 # Swagger / OpenAPI 文件設計指南
 
-> **最後更新**: 2026-06-08  
+> **最後更新**: 2026-06-09  
 > **適用專案**: SpringBoot Demo (Account / Order / Product)
 
 ---
@@ -338,74 +338,60 @@ status:
 
 ## 專案現況評估
 
-### 評估摘要
+### 評估摘要（已更新 2026-06-09）
 
 | 原則 | 符合度 | 說明 |
 |------|--------|------|
 | 1. Schema Object 封裝 | ✅ 良好 | `GetOrderDetailResponse` 使用 `List<OrderItemDTO>` 巢狀物件 |
-| 2. 共用 Schema | ⚠️ 部分 | Entity 有 `@Schema`，但 DTO 完全沒有 |
-| 3. 明確標示 required | ⚠️ 部分 | 有 `@NotBlank`/`@NotNull` validation，但 Swagger 層面未明確標示 |
-| 4. 寫 description | ❌ 不足 | DTO 欄位完全沒有 description |
-| 5. 提供 example | ❌ 不足 | DTO 欄位完全沒有 example |
+| 2. 共用 Schema | ✅ 已改善 | DTO 已加上完整 `@Schema` 註解，Entity 已移除 `@Schema` |
+| 3. 明確標示 required | ✅ 已改善 | DTO 使用 `requiredMode = Schema.RequiredMode.REQUIRED` 明確標示 |
+| 4. 寫 description | ✅ 已改善 | 所有 DTO 欄位皆有 `description` |
+| 5. 提供 example | ✅ 已改善 | 所有 DTO 欄位皆有 `example` |
 | 6. Request/Response DTO 分離 | ✅ 優秀 | 完全分離：`CreateXxxRequest` / `UpdateXxxRequest` / `GetXxxResponse` |
-| 7. Pagination 統一格式 | ⚠️ 未實作 | 目前 List API 直接回傳 `List<T>`，無分頁 |
+| 7. Pagination 統一格式 | ⚠️ 未實作 | 目前 List API 直接回傳 `List<T>`，無分頁（已規劃統一格式） |
 | 8. Error Response 標準化 | ✅ 優秀 | `ApiErrorResponse` 統一格式 + `GlobalExceptionHandler` |
-| 9. Enum 定義清楚 | ⚠️ 部分 | 有 enum class 但 DTO 中使用原始型別，Swagger 未顯示可選值 |
-| 10. Schema 不暴露 Entity | ✅ 優秀 | Controller 回傳 DTO，不直接回傳 Entity |
+| 9. Enum 定義清楚 | ✅ 已改善 | DTO 中使用 `@Schema(description)` 說明可選值含義 |
+| 10. Schema 不暴露 Entity | ✅ 優秀 | Entity 已移除所有 `@Schema`，僅 DTO 有 Swagger 註解 |
 | 11. 善用巢狀物件 | ✅ 良好 | Order items 使用獨立 `OrderItemDTO` |
 | 12. Response Wrapper | ✅ 良好 | 沒有多餘包裝，直接回傳資料 |
 
 ---
 
-### 詳細問題分析
+### 詳細問題分析（已解決）
 
-#### 問題 1：Entity 有 `@Schema` 但 DTO 沒有
+> ✅ 以下問題已於 2026-06-09 全部修正完成。
 
-**現況：**
-- `Account.java`, `Product.java`, `OrderInfo.java` 等 Entity 都有完整的 `@Schema(description, example)`
-- 但實際 API 回傳的 DTO（如 `GetAccountDetailResponse`, `GetProductDetailResponse`）完全沒有任何 `@Schema` 註解
+#### ~~問題 1：Entity 有 `@Schema` 但 DTO 沒有~~ ✅ 已解決
 
-**影響：**
-- Swagger UI 上 API 回傳的 Schema 沒有任何欄位說明
-- Entity 的 `@Schema` 反而可能暴露內部結構（`AuditMetadata`, `SoftDeleteMetadata`, `version`）
+**解決方式：**
+- 所有 DTO 已加上完整 `@Schema(description, example, requiredMode)` 註解
+- Entity（`Account`, `Product`, `OrderInfo`, `OrderDetail`）已移除所有 `@Schema` 註解
 
 ---
 
-#### 問題 2：Controller 缺少 `@ApiResponse` 註解
+#### ~~問題 2：Controller 缺少 `@ApiResponse` 註解~~ ✅ 已解決
 
-**現況：** Controller 只有 `@Operation(summary, description)`，沒有定義各種 HTTP 狀態碼回應。
-
-**影響：** 使用者無法從 Swagger UI 得知：
-- 400 Bad Request 的回應格式
-- 404 Not Found 的回應格式
-- 409 Conflict 的回應格式
+**解決方式：** 所有 Controller 已加上 `@ApiResponses`，定義 200/400/404/409 等回應格式。
 
 ---
 
-#### 問題 3：Controller 缺少 `@Tag` 註解
+#### ~~問題 3：Controller 缺少 `@Tag` 註解~~ ✅ 已解決
 
-**現況：** 沒有對 API 進行分組標記。
-
-**影響：** Swagger UI 上所有 API 混在一起，不易瀏覽。
+**解決方式：** 所有 Controller 已加上 `@Tag(name, description)` 進行 API 分組。
 
 ---
 
-#### 問題 4：PathVariable / RequestParam 缺少 `@Parameter` 描述
+#### ~~問題 4：PathVariable / RequestParam 缺少 `@Parameter` 描述~~ ✅ 已解決
 
-**現況：** `@PathVariable Integer id` 沒有任何描述。
-
-**影響：** 使用者不知道 `id` 代表什麼（帳戶 ID？訂單 ID？商品 ID？）
+**解決方式：** 所有 `@PathVariable` 已加上 `@Parameter(description, example, required)` 描述。
 
 ---
 
-#### 問題 5：Enum 值未在 Swagger 中呈現
+#### ~~問題 5：Enum 值未在 Swagger 中呈現~~ ✅ 已解決
 
-**現況：**
-- `AccountStatus`: Y (啟用) / N (停用)
-- `OrderStatus`: 1001 (訂單建立) / 1003 (訂單取消)
-- `ProductStatus`: 1001 (可銷售) / 1002 (不可銷售)
-
-但 DTO 中使用 `String status` 或 `Integer orderStatus`，Swagger 無法顯示可選值。
+**解決方式：** DTO 中使用 `@Schema(description)` 說明可選值含義，例如：
+- `"帳戶狀態 (Y=啟用, N=停用)"`
+- `"訂單狀態 (1001=訂單建立, 1003=訂單取消)"`
 
 ---
 
@@ -518,12 +504,18 @@ public record PageResponse<T>(
 
 ---
 
-## 優先改善順序
+## 改善進度追蹤
 
-1. **🔴 高優先** — DTO 加上 `@Schema(description, example)`
-2. **🔴 高優先** — Controller 加上 `@ApiResponse` 定義錯誤回應
-3. **🟡 中優先** — Controller 加上 `@Tag` 分組
-4. **🟡 中優先** — PathVariable 加上 `@Parameter`
-5. **🟡 中優先** — Enum 值在 Schema 中明確標示
-6. **🟢 低優先** — 移除 Entity 上的 `@Schema`（避免暴露內部結構）
-7. **🟢 低優先** — 未來分頁格式統一規劃
+| # | 優先度 | 項目 | 狀態 |
+|---|--------|------|------|
+| 1 | 🔴 高 | DTO 加上 `@Schema(description, example)` | ✅ 完成 |
+| 2 | 🔴 高 | Controller 加上 `@ApiResponse` 定義錯誤回應 | ✅ 完成 |
+| 3 | 🟡 中 | Controller 加上 `@Tag` 分組 | ✅ 完成 |
+| 4 | 🟡 中 | PathVariable 加上 `@Parameter` | ✅ 完成 |
+| 5 | 🟡 中 | Enum 值在 Schema 中明確標示 | ✅ 完成 |
+| 6 | 🟢 低 | 移除 Entity 上的 `@Schema`（避免暴露內部結構） | ✅ 完成 |
+| 7 | 🟢 低 | 未來分頁格式統一規劃 | ⏳ 待實作時執行 |
+
+### 待辦：分頁格式統一規劃
+
+當專案需要分頁功能時，建議統一使用以下格式（參考改善 6 中的 `PageResponse<T>`），確保所有 List API 回傳一致的分頁結構。

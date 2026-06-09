@@ -6,7 +6,6 @@ import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.util.AuditMetadata;
 import com.ibm.demo.util.SoftDeleteMetadata;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
@@ -30,22 +29,18 @@ import lombok.Setter;
 @Builder
 @SQLRestriction("STATUS = 'Y' AND DELETED = false") // 只選擇啟用狀態且未被刪除的資料
 @Table(name = "ACCOUNT") // 指定對應的資料表名稱
-@Schema(description = "帳號資訊")
 public class Account {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "account_seq_gen")
     @SequenceGenerator(name = "account_seq_gen", sequenceName = "account_id_seq", allocationSize = 1)
     @Column(name = "ID", columnDefinition = "NUMBER(10)", nullable = false)
-    @Schema(description = "帳⼾編號", example = "1")
     private Integer id;
 
     @Column(name = "NAME", columnDefinition = "NVARCHAR2(50)", nullable = false)
-    @Schema(description = "帳戶名稱", example = "帳戶名稱")
     private String name;
 
     @Column(name = "STATUS", columnDefinition = "VARCHAR2(1)", nullable = false)
-    @Schema(description = "啟用狀態", example = "Y")
     private String status;
 
     // 組合：審計欄位
@@ -61,7 +56,6 @@ public class Account {
     // 樂觀鎖版本（@Version 不能在 @Embeddable 中使用，必須直接定義在實體類別）
     @Version
     @Column(name = "VERSION", columnDefinition = "NUMBER(10) DEFAULT 0", nullable = false)
-    @Schema(description = "樂觀鎖版本", example = "0")
     @Builder.Default
     private Integer version = 0;
 
