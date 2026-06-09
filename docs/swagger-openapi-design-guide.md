@@ -487,20 +487,42 @@ Entity 上的 `@Schema` 會讓 Swagger 文件暴露內部結構。建議：
 
 ---
 
-### 改善 6：未來分頁建議
+### 改善 6：分頁格式統一（已實作）
 
-若未來需要分頁，建議統一使用 Spring Data 的 `Page<T>` 格式：
+已實作統一分頁回應格式，使用自訂 `PageResponse<T>` 包裝 Spring Data 的 `Page<T>`：
+
+**實作位置：** `com.ibm.demo.util.PageResponse`
 
 ```java
 @Schema(description = "分頁回應")
 public record PageResponse<T>(
     @Schema(description = "資料內容") List<T> content,
-    @Schema(description = "當前頁碼", example = "0") int page,
+    @Schema(description = "當前頁碼（從 0 開始）", example = "0") int page,
     @Schema(description = "每頁筆數", example = "20") int size,
     @Schema(description = "總筆數", example = "100") long totalElements,
     @Schema(description = "總頁數", example = "5") int totalPages
-) {}
+) {
+    public static <T> PageResponse<T> from(Page<T> springPage) { ... }
+}
 ```
+
+**已改造的 API：**
+
+| Controller | 端點 | 原回傳 | 新回傳 |
+|-----------|------|--------|--------|
+| `AccountController` | `GET /account` | `List<GetAccountListResponse>` | `PageResponse<GetAccountListResponse>` |
+| `ProductController` | `GET /product` | `List<GetProductListResponse>` | `PageResponse<GetProductListResponse>` |
+| `OrderController` | `GET /order/account/{accountId}` | `List<GetOrderListResponse>` | `PageResponse<GetOrderListResponse>` |
+
+**使用方式：**
+- 預設每頁 20 筆
+- 支援 `page`, `size`, `sort` 查詢參數
+- 範例：`GET /account?page=0&size=10&sort=id,desc`
+
+**設計決策：**
+- 選擇自訂 `PageResponse<T>` 而非直接回傳 `Page<T>`
+- 原因：避免暴露 Spring 內部結構（`pageable`, `sort` 物件等），保持 API Contract 乾淨
+- 保留原有非分頁方法供內部使用（如 `OrderClient` 的帳戶訂單檢查）
 
 ---
 
@@ -514,8 +536,4 @@ public record PageResponse<T>(
 | 4 | 🟡 中 | PathVariable 加上 `@Parameter` | ✅ 完成 |
 | 5 | 🟡 中 | Enum 值在 Schema 中明確標示 | ✅ 完成 |
 | 6 | 🟢 低 | 移除 Entity 上的 `@Schema`（避免暴露內部結構） | ✅ 完成 |
-| 7 | 🟢 低 | 未來分頁格式統一規劃 | ⏳ 待實作時執行 |
-
-### 待辦：分頁格式統一規劃
-
-當專案需要分頁功能時，建議統一使用以下格式（參考改善 6 中的 `PageResponse<T>`），確保所有 List API 回傳一致的分頁結構。
+| 7 | 🟢 低 | 分頁格式統一（`PageResponse<T>`） | ✅ 完成 |

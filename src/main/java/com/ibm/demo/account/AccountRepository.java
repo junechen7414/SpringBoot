@@ -2,6 +2,8 @@ package com.ibm.demo.account;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +16,9 @@ public interface AccountRepository extends JpaRepository<Account, Integer>, Soft
 
     @Query("SELECT a FROM Account a")
     List<Account> findAllAccount();
+
+    @Query("SELECT a FROM Account a")
+    Page<Account> findAllAccount(Pageable pageable);
 
     @Override
     @Modifying

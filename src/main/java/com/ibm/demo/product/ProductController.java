@@ -3,6 +3,8 @@ package com.ibm.demo.product;
 import java.util.List;
 import java.util.Set;
 
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +22,7 @@ import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
+import com.ibm.demo.util.PageResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -42,8 +45,7 @@ public class ProductController {
     @Operation(summary = "新增商品", description = "建立新商品。若已存在同名商品則拋出 ProductAlreadyExistException。成功則新增商品資料，預設銷售狀態為 1001 (AVAILABLE)。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "建立成功，回傳商品 ID"),
-            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在",
-                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PostMapping
     public ResponseEntity<Integer> createProduct(@Valid @RequestBody CreateProductRequest createProductRequest) {
@@ -51,13 +53,14 @@ public class ProductController {
         return ResponseEntity.ok(productId);
     }
 
-    // Read Product List
-    @Operation(summary = "獲取商品列表", description = "獲取所有商品的列表。受限於 SQLRestriction 規則，僅會回傳未被軟刪除且銷售狀態為 1001 (AVAILABLE) 的商品。")
-    @ApiResponse(responseCode = "200", description = "成功取得商品列表")
+    // Read Product List (Paginated)
+    @Operation(summary = "獲取商品列表（分頁）", description = "獲取所有商品的分頁列表。受限於 SQLRestriction 規則，僅會回傳未被軟刪除且銷售狀態為 1001 (AVAILABLE) 的商品。")
+    @ApiResponse(responseCode = "200", description = "成功取得商品分頁列表")
     @GetMapping
-    public ResponseEntity<List<GetProductListResponse>> getProductList() {
-        List<GetProductListResponse> productList = productService.getProductList();
-        return ResponseEntity.ok(productList);
+    public ResponseEntity<PageResponse<GetProductListResponse>> getProductList(
+            @Parameter(description = "分頁參數（page=頁碼從0開始, size=每頁筆數, sort=排序欄位,方向）", example = "page=0&size=20&sort=id,asc") @PageableDefault(size = 20) Pageable pageable) {
+        PageResponse<GetProductListResponse> productPage = productService.getProductList(pageable);
+        return ResponseEntity.ok(productPage);
     }
 
     // Batch Read Product Detail
@@ -65,8 +68,7 @@ public class ProductController {
     @ApiResponse(responseCode = "200", description = "成功取得商品詳細資訊列表")
     @GetMapping("/batch")
     public ResponseEntity<List<GetProductDetailResponse>> getProductBatch(
-            @Parameter(description = "商品 ID 集合（逗號分隔）", example = "1,2,3", required = true)
-            @RequestParam("ids") Set<Integer> ids) {
+            @Parameter(description = "商品 ID 集合（逗號分隔）", example = "1,2,3", required = true) @RequestParam("ids") Set<Integer> ids) {
         return ResponseEntity.ok(productService.getProductDetails(ids).values().stream().toList());
     }
 
@@ -74,13 +76,11 @@ public class ProductController {
     @Operation(summary = "獲取單一商品詳細資訊", description = "根據 ID 獲取商品詳細資訊。受限於 SQLRestriction 規則，若商品不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將回傳 NotFound。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "成功取得商品詳細資訊"),
-            @ApiResponse(responseCode = "404", description = "商品不存在",
-                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @GetMapping("/{id}")
     public ResponseEntity<GetProductDetailResponse> getProductDetail(
-            @Parameter(description = "商品 ID", example = "1", required = true)
-            @PathVariable Integer id) {
+            @Parameter(description = "商品 ID", example = "1", required = true) @PathVariable Integer id) {
         GetProductDetailResponse productDetail = productService.getProductDetail(id);
         return ResponseEntity.ok(productDetail);
     }
@@ -89,15 +89,12 @@ public class ProductController {
     @Operation(summary = "更新商品", description = "更新現有商品資訊。受限於 SQLRestriction 規則，若商品 ID 不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將拋出 NotFound。若嘗試更改為已存在的商品名稱，則拋出 ProductAlreadyExistException。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "更新成功"),
-            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在",
-                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "商品不存在",
-                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PutMapping("/{id}")
     public ResponseEntity<Void> updateProduct(
-            @Parameter(description = "商品 ID", example = "1", required = true)
-            @PathVariable Integer id,
+            @Parameter(description = "商品 ID", example = "1", required = true) @PathVariable Integer id,
             @Valid @RequestBody UpdateProductRequest updateProductRequest) {
         productService.updateProduct(id, updateProductRequest);
         return ResponseEntity.ok().build();
@@ -107,13 +104,11 @@ public class ProductController {
     @Operation(summary = "刪除商品", description = "執行商品軟刪除。受限於 SQLRestriction 規則，若商品 ID 不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將拋出 NotFound。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "刪除成功"),
-            @ApiResponse(responseCode = "404", description = "商品不存在",
-                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProduct(
-            @Parameter(description = "商品 ID", example = "1", required = true)
-            @PathVariable Integer id) {
+            @Parameter(description = "商品 ID", example = "1", required = true) @PathVariable Integer id) {
         productService.deleteProduct(id);
         return ResponseEntity.ok().build();
     }
