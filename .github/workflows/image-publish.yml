@@ -108,15 +108,24 @@ jobs:
       - name: Generate Swagger JSON
         run: ./gradlew generateOpenApiDocs
 
-      # 將產出的檔案推送到另一個 Repo
-      - name: Pushes to another repository
-        uses: cpina/github-action-push-to-another-repository@main        
-        env:
-          API_TOKEN_GITHUB: ${{ secrets.MY_REPO_TOKEN }}
+      # Checkout 目標 repo，保留現有文件不被覆蓋
+      - name: Checkout destination repo
+        uses: actions/checkout@v6
         with:
-          source-directory: 'build/docs'
-          destination-github-username: ${{ vars.DEST_USER }}
-          destination-repository-name: ${{ vars.DEST_REPO }}
-          user-email: ${{ vars.DEST_EMAIL }}
-          target-directory: 'docs/'
-          target-branch: main
+          repository: ${{ vars.DEST_USER }}/${{ vars.DEST_REPO }}
+          token: ${{ secrets.MY_REPO_TOKEN }}
+          path: dest-repo
+          ref: main
+
+      # 只複製 swagger.json，不影響目標 repo docs/ 下的其他文件
+      - name: Copy swagger.json to destination
+        run: cp build/docs/swagger.json dest-repo/docs/swagger.json
+
+      - name: Commit and push
+        run: |
+          cd dest-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "${{ vars.DEST_EMAIL }}"
+          git add docs/swagger.json
+          git diff --staged --quiet || git commit -m "docs: update swagger.json from SpringBoot repo"
+          git push
