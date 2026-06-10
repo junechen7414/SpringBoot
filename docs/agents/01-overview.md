@@ -23,8 +23,9 @@
 3. **樂觀鎖**: 使用 `@Version` 防止併發更新衝突
 4. **全域異常處理**: `@RestControllerAdvice` 統一攔截並格式化錯誤回應
 5. **併發控制**: Resilience4j Bulkhead 取代自定義 Semaphore，實現 fail-fast 資源保護
-6. **環境隔離**: 透過 Spring Profiles 管理多環境配置 (dev, unit-test, integration-test, e2e, openapi)
-7. **監控鏈路**: App (OTLP) → Alloy → Prometheus → Grafana
+6. **統一分頁**: 所有列表查詢使用 `PageResponse<T>` 封裝分頁回應，移除非分頁列表端點
+7. **環境隔離**: 透過 Spring Profiles 管理多環境配置 (dev, unit-test, integration-test, e2e, openapi)
+8. **監控鏈路**: App (OTLP) → Alloy → Prometheus → Grafana
 
 ### 業務領域
 

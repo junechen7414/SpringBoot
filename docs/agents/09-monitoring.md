@@ -22,11 +22,15 @@ Spring Boot App (OTLP) → Grafana Alloy → Prometheus → Grafana
 
 #### GitHub Actions Workflow
 
-1. **單元測試**: 執行 `./gradlew test` 作為 Quality Gate
+1. **單元測試**: 執行 `./gradlew test` 作為 Quality Gate（排除 SanityTest）
 2. **Docker 建置**: 多階段建置，僅在容器內執行 `bootJar`（跳過測試）
 3. **映像檔推送**: 推送至 GitHub Container Registry (GHCR)
-4. **文件生成**: 產生 OpenAPI 文件並推送至 Playwright 專案
-5. **觸發 E2E**: 透過 `repository_dispatch` 通知 E2E 測試專案
+4. **觸發 E2E**: 透過 `repository_dispatch` 通知 E2E 測試專案
+5. **文件生成** (獨立 Job，依賴 build-and-push):
+   - 執行 `./gradlew generateOpenApiDocs` 產生 `swagger.json`
+   - Checkout 目標 repo（保留現有文件）
+   - 僅複製 `swagger.json` 至目標 repo 的 `docs/` 目錄
+   - Commit and push（使用 checkout+copy 方式，避免覆蓋目標 repo 其他文件）
 
 #### 快取策略
 

@@ -24,9 +24,10 @@ git branch -a
 | 改動類型 | 分支前綴 | 說明 | 範例 |
 |---------|---------|------|------|
 | 新功能開發 | `feature/` | 新增業務功能或模組 | `feature/add-payment-module` |
-| Bug 修復 | `bugfix/` | 修復非緊急的程式錯誤 | `bugfix/fix-order-calculation` |
+| Bug 修復 | `fix/` | 修復程式錯誤（通用） | `fix/order-creation-transient-entity-bug` |
 | 緊急修復 | `hotfix/` | 修復生產環境的緊急問題 | `hotfix/security-patch` |
-| 程式碼重構 | `refactor/` | 改善程式結構但不改變功能 | `refactor/optimize-query-performance` |
+| 程式碼重構 | `refactor/` | 改善程式結構但不改變功能 | `refactor/improve-openapi-annotations` |
+| 設定檔變更 | `config/` | 更新應用程式或基礎設施配置 | `config/update-resilience4j-config` |
 | 文件更新 | `docs/` | 僅更新文件內容 | `docs/update-api-guide` |
 | 測試相關 | `test/` | 新增或修改測試案例 | `test/add-integration-tests` |
 | 建置/工具 | `chore/` | 更新建置腳本、依賴版本等 | `chore/upgrade-spring-boot` |
@@ -189,18 +190,20 @@ Agent: [執行 git checkout -b feature/add-payment-module]
 
 類別前綴:
 - feature/  : 新功能開發
-- bugfix/   : Bug 修復
-- hotfix/   : 緊急修復
+- fix/      : Bug 修復（通用）
+- hotfix/   : 緊急修復（生產環境）
 - refactor/ : 程式碼重構
+- config/   : 設定檔變更
 - docs/     : 文件更新
 - test/     : 測試相關
 - chore/    : 建置/工具更新
 
 範例:
 feature/add-payment-module
-bugfix/fix-order-calculation
+fix/order-creation-transient-entity-bug
 hotfix/security-patch
-refactor/optimize-query-performance
+refactor/improve-openapi-annotations
+config/update-resilience4j-config
 docs/update-api-guide
 test/add-integration-tests
 chore/upgrade-spring-boot
