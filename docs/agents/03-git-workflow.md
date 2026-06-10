@@ -229,21 +229,20 @@ chore(deps): upgrade Spring Boot to 3.5.14
 
 ### 分支合併與清理
 
-**推薦方式：使用 Pull Request**
+**推薦方式：使用 Pull Request（手動在 GitHub 網頁建立）**
 
 ```bash
 # 1. 推送分支到遠端
 git push origin feature/add-payment-module
+# push 成功後，終端會顯示 PR 建立連結：
+# https://github.com/junechen7414/SpringBoot/pull/new/feature/add-payment-module
 
-# 2. 使用 Bob 的 /create-pr 指令建立 Pull Request（推薦）
-# Bob 會自動：
-#   - 切換到 Advanced 模式
-#   - 生成 PR 描述
-#   - 詢問目標分支（base branch）
-#   - 建立 Pull Request
-
-# 或手動使用 GitHub CLI
-gh pr create --base main --head feature/add-payment-module --title "feat: add payment module" --body "詳細說明..."
+# 2. 在 GitHub 網頁上手動建立 Pull Request
+#    - 點擊上方連結或前往 GitHub repo 頁面
+#    - 填寫 PR Title（遵循 Conventional Commits 格式）
+#    - 撰寫 PR Description（說明變更內容與原因）
+#    - 選擇適當的 Label（參考下方 Labels 表格）
+#    - 確認 base branch 為 main
 
 # 3. 等待 Code Review 與 CI/CD 通過後，在 GitHub 上合併 PR
 
@@ -292,21 +291,21 @@ git checkout main
 git pull origin main
 git checkout -b feature/user-auth-api
 # ... 開發 & 提交 ...
-# 使用 /create-pr 合併到 main
+# 推送後在 GitHub 網頁建立 PR 合併到 main
 
 # 步驟 2: 等 PR 合併後，開發使用者認證 UI
 git checkout main
 git pull origin main  # 取得最新的 user-auth-api
 git checkout -b feature/user-auth-ui
 # ... 開發 & 提交 ...
-# 使用 /create-pr 合併到 main
+# 推送後在 GitHub 網頁建立 PR 合併到 main
 
 # 步驟 3: 等 PR 合併後，開發支付功能
 git checkout main
 git pull origin main  # 取得完整的 user-auth
 git checkout -b feature/payment
 # ... 開發 & 提交 ...
-# 使用 /create-pr 合併到 main
+# 推送後在 GitHub 網頁建立 PR 合併到 main
 ```
 
 **特殊情況：必須並行開發時**
@@ -322,7 +321,7 @@ git checkout -b feature/payment-on-auth
 git checkout feature/payment-on-auth
 git rebase main  # 將基底改為 main
 git push origin feature/payment-on-auth --force-with-lease
-# 使用 /create-pr 合併到 main
+# 推送後在 GitHub 網頁建立 PR 合併到 main
 ```
 
 **Agent 偵測與建議**
@@ -362,17 +361,11 @@ git branch -d feature/add-payment-module
 1. 確認所有改動已提交
 2. **檢查是否從功能分支建立**：如果是，提醒考慮重新從 main 建立
 3. 建議推送分支到遠端：`git push origin <branch-name>`
-4. **優先建議使用者執行 `/create-pr` 指令**（Bob Agent 專用）或使用 GitHub CLI
-5. 提醒使用者等待 Code Review 與 CI/CD 檢查
-6. 合併後才建議清理本地分支
-
-**Bob Agent 的 /create-pr 指令流程**：
-- 自動切換到 Advanced 模式使用 MCP 工具
-- 分析 git diff 生成 PR 描述
-- 詢問目標分支（從現有分支列表選擇）
-- 生成有意義的 PR 標題
-- 詢問是否要編輯 PR 描述
-- 建立 Pull Request 並返回 URL
+4. 提供 GitHub PR 建立連結：`https://github.com/junechen7414/SpringBoot/pull/new/<branch-name>`
+5. 建議 PR 的 Title、Description 和 Label
+6. 提醒使用者在 GitHub 網頁上手動建立 PR
+7. 提醒使用者等待 Code Review 與 CI/CD 檢查
+8. 合併後才建議清理本地分支
 
 ### 查詢 GitHub Labels
 
