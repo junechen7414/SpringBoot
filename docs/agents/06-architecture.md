@@ -12,6 +12,8 @@ Service (業務邏輯)
 Repository (資料存取)
     ↓
 Entity (資料模型)
+
+Util (跨層工具類別: BaseEntity, PageResponse, ServiceValidator, ErrorCode 等)
 ```
 
 ### Controller 層
@@ -38,6 +40,14 @@ Entity (資料模型)
 - 繼承 `BaseEntity` 獲得審計欄位與軟刪除支援
 - 使用 `@SuperBuilder` 支援建構者模式
 - 關聯關係標註 `@ToString.Exclude` 避免循環引用
+
+### 分頁策略
+
+- **統一分頁回應**: 所有列表查詢使用 `PageResponse<T>` 封裝，不提供非分頁列表端點
+- **Controller 層**: 接收 `Pageable` 參數（`page`, `size`, `sort`）
+- **Service 層**: 回傳 `Page<T>`，由 Controller 轉換為 `PageResponse<T>`
+- **預設值**: `page=0`, `size=20`
+- **詳細指南**: 參考 `docs/pagination-strategies-guide.md`
 
 ### 併發控制與容錯
 

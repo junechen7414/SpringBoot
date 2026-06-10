@@ -22,5 +22,5 @@ This file provides guidance to agents when working with code in this repository.
 
 ---
 
-**最後更新**: 2026-05-30
+**最後更新**: 2026-06-10
 **維護者**: Bobby
