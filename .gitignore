@@ -40,3 +40,6 @@ out/
 ### IBM BOB ###
 .bob
 .agents
+
+### Claude Code ###
+.claude/skills/

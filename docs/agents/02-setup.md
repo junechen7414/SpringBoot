@@ -4,7 +4,7 @@
 
 - **Java 21** (建議使用 Eclipse Temurin)
 - **Podman** 或 Docker (用於容器管理)
-- **Gradle 8.6+** (專案已包含 Gradle Wrapper)
+- **Gradle 8.13** (專案已包含 Gradle Wrapper，無需自行安裝)
 
 ### 本地開發環境啟動
 
@@ -77,8 +77,22 @@ podman compose build app
 ```
 
 **多階段建置說明**:
-- **第一階段**: 使用 `gradle:8.6-jdk21` 編譯並打包 JAR (跳過測試)
+- **第一階段**: 以 `eclipse-temurin:21-jdk-alpine` 為基礎映像（精簡 JDK 21），透過 Gradle Wrapper (8.13) 編譯並打包 JAR (跳過測試)
 - **第二階段**: 使用 `eclipse-temurin:21-jre-alpine` 執行，最終映像檔僅包含 JRE 與應用程式
+
+#### 映像內建 HEALTHCHECK（重要契約）
+
+最終映像在 `Dockerfile` 內定義了 **container-level `HEALTHCHECK`**，以 `wget --spider` 探測 `/actuator/health`：
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8787/actuator/health || exit 1
+```
+
+- **誰依賴它**: 下游自動化測試 / E2E repo 直接消費此映像，並依賴**映像自帶的健康狀態**（`docker ps` 顯示的 `(healthy)`）判斷應用是否就緒。修改或移除此 `HEALTHCHECK` 屬於對下游的**破壞性變更**。
+- **`/actuator/health` 含 `db` 元件**: 容器要等資料庫連線就緒才會回報 `healthy`，這正是下游要的「真正 ready」語意。
+- **`start-period=60s`**: 預留冷啟動緩衝（Spring Boot + DB 連線建立），避免啟動期間的探測失敗被計入 `retries` 而誤判 unhealthy。
+- ⚠️ **Image format 注意事項**: 此 `HEALTHCHECK` 由 **Docker Buildx（CI 發佈管線 `image-publish.yml` 使用）與 Docker runtime 完整保留**；但 **`podman build` 預設的 OCI 格式會將其剝除**（建置時會出現 `HEALTHCHECK is not supported for OCI image format` 警告）。若改用 podman/buildah 發佈映像，必須加上 `--format docker`，否則下游依賴的健康狀態會無聲消失。
 
 ### 環境配置管理
 

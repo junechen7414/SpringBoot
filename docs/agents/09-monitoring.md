@@ -8,7 +8,7 @@ Spring Boot App (OTLP) → Grafana Alloy → Prometheus → Grafana
 
 ### 關鍵端點
 
-- **健康檢查**: `/actuator/health`
+- **健康檢查**: `/actuator/health`（亦為映像內建 `HEALTHCHECK` 的探測目標，下游 E2E repo 依賴此健康狀態判斷就緒；契約細節見 [02-setup.md](./02-setup.md#映像內建-healthcheck重要契約)）
 - **指標**: `/actuator/metrics`
 - **Prometheus**: `/actuator/prometheus`
 
