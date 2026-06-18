@@ -1,5 +1,6 @@
 # 第一階段：編譯 (使用 JDK 21)
-FROM gradle:8.6-jdk21 AS build
+# 僅需 JDK 環境，實際編譯透過 Gradle Wrapper (8.13) 進行，故使用精簡的 temurin JDK 映像
+FROM eclipse-temurin:21-jdk-alpine AS build
 # 設定工作目錄為 /app，後續的命令都會在這個目錄下執行
 WORKDIR /app
 
@@ -28,7 +29,7 @@ COPY --from=build /app/build/libs/*.jar app.jar
 # --no-verbose: 不輸出冗長訊息，保持日誌清晰。
 # --spider: 只檢查 URL 是否可達，不下載內容。
 # alpine 包含 wget，不包含curl
-HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 CMD wget --no-verbose --tries=1 --spider http://localhost:8787/actuator/health || exit 1
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 CMD wget --no-verbose --tries=1 --spider http://localhost:8787/actuator/health || exit 1
 
 EXPOSE 8787
 
