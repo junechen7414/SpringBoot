@@ -1,10 +1,10 @@
 ## 專案概述
 
-這是一個基於 **Spring Boot 3.5.14** 與 **Java 21** 的企業級微服務應用程式，展示現代化的後端開發實踐。專案採用 **Virtual Threads** 提升併發效能，整合 **Oracle Database** 作為主要資料存儲，並透過 **Docker Compose** 實現完整的本地開發與監控環境。
+這是一個基於 **Spring Boot 3.5.15** 與 **Java 21** 的企業級微服務應用程式，展示現代化的後端開發實踐。專案採用 **Virtual Threads** 提升併發效能，整合 **Oracle Database** 作為主要資料存儲，並透過 **Docker Compose** 實現完整的本地開發與監控環境。
 
 ### 核心技術棧
 
-- **框架**: Spring Boot 3.5.14 (Web, Data JPA, Validation, AOP, Actuator)
+- **框架**: Spring Boot 3.5.15 (Web, Data JPA, Validation, AOP, Actuator)
 - **執行環境**: Java 21 with Virtual Threads
 - **資料庫**: Oracle Database (生產) / H2 (測試與文件生成)
 - **資料遷移**: Flyway
