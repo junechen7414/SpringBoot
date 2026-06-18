@@ -1,8 +1,70 @@
 # Git 工作流程
 
-> 本文件說明 Git 分支命名、Commit 訊息規範與 Pull Request 建立流程
+> 本文件說明本專案的 Git 工作模式（主幹開發）、分支命名、Commit 訊息規範，以及何時才需要走分支 / Pull Request。
+
+## 工作模式：主幹開發（Trunk-Based）
+
+本專案是**一人 side project**，採用**主幹開發**：預設直接在 `main` 上小步快跑，只有在「高風險改動」時才另開分支走 PR。
+
+### 為什麼這樣做
+
+- CI（`.github/workflows/image-publish.yml`）在 **push 到 `main`** 與 **開 PR** 時都會觸發測試關卡 —— 不需要靠 PR 才能跑測試。
+- 一人專案沒有多人協作要同步，長命分支只會增加 rebase 成本。
+- `main` **不設 branch protection**，可直接 push；壞了就 fix-forward 或 revert，自己負責。
+
+### 核心原則
+
+1. **預設直接在 `main` 開發**：小修正、文件、低風險改動 → 直接 commit + push。
+2. **push 前一定先過測試**：用 pre-push hook 自動跑（見下方），補回「合併前關卡」這層保險。
+3. **高風險改動才開分支 + PR**（清單見下方）。
+4. **`main` 紅了最優先處理**：立刻 fix-forward 或 `git revert`，不要累積。
+
+### ⚠️ 重要：push `main` 是有副作用的
+
+`main` 不是只跑個測試而已。push 到 `main` 會連帶觸發：
+
+- 推 `latest` tag 的 image 到 `ghcr.io`
+- `repository-dispatch` 觸發**下游 repo 的 E2E**
+- 重新產 `swagger.json` 並推到下游 repo
+
+CI 的 `Run Unit Tests (Gate)` 跑在 build image **之前**，所以**測試抓得到的錯**不會產出壞 image。風險落在**測試抓不到的錯**（執行期 / 整合問題）—— 這正是 pre-push hook 與「高風險走 PR」要補的洞。
+
+## push 前的保險：pre-push hook
+
+專案提供 `.githooks/pre-push`，在你 push **含 `main`** 的內容時，自動跑與 CI gate **完全相同**的指令，做到「**本地綠 = CI 綠**」。
+
+### 一次性啟用（每台機器設定一次）
+
+```bash
+git config core.hooksPath .githooks
+```
+
+> Windows 上 Git 會用內附的 `sh` 執行 hook，無需額外設定；確認 `.githooks/pre-push` 具執行權限（`git update-index --chmod=+x .githooks/pre-push` 已隨檔提交）。
+
+啟用後，每次 `git push` 若推送目標包含 `main`，會先在本地跑：
+
+```bash
+./gradlew test -Djunit.platform.exclude.tags=SanityTest
+```
+
+測試掛掉就**中止 push**，把問題擋在進 `main` 之前。推送非 `main` 分支則略過（交給 PR 的 CI 跑）。
+
+> 趕時間想跳過（自負風險）：`git push --no-verify`。
+
+## 何時才開分支 + PR
+
+以下情況**建議**另開分支走 PR，讓 CI 在合併前先跑完整 build，並留下可回顧的變更紀錄：
+
+- 改 **CI 本身**（`.github/workflows/*`）—— 壞了會影響所有後續流程。
+- 改 **DB migration**（`src/main/resources/db/migration`）。
+- **跨 domain 的重構**或大型功能（多 commit、難以一次驗證）。
+- 任何「測試抓不到、但壞了影響大」、想在合併前多跑一輪 image build 的改動。
+
+其餘日常改動，直接在 `main` 上做。
 
 ## 分支命名規範
+
+> 僅在「開分支」時適用。
 
 ### 格式
 
@@ -43,7 +105,7 @@ chore/upgrade-spring-boot
 
 ## Commit 訊息規範
 
-遵循 **Conventional Commits** 規範。
+遵循 **Conventional Commits** 規範（無論直接 commit 到 `main` 或在分支上都適用）。
 
 ### 格式
 
@@ -84,185 +146,48 @@ Fix bug.  # 不夠具體
 updated readme  # 缺少 type
 ```
 
-## 工作流程建議
-
-1. 從 `main` 分支創建新分支
-2. 進行開發並定期 commit
-3. 推送到遠端並創建 Pull Request
-4. 通過 CI/CD 檢查後合併
-5. 合併後清理本地和遠端分支
-
-## 改動前的分支檢查流程
-
-在進行任何程式碼改動前，必須遵循以下工作流程確保改動在正確的分支上進行。
-
-### 1. 檢查當前分支狀態
+## 日常開發流程（直接在 main）
 
 ```bash
-# 查看當前分支
-git branch --show-current
-
-# 查看工作區狀態
-git status
-
-# 列出所有本地分支
-git branch -a
-```
-
-### 2. 判斷改動類型並選擇分支策略
-
-根據改動性質決定分支類型：
-
-| 改動類型 | 分支前綴 | 說明 | 範例 |
-|---------|---------|------|------|
-| 新功能開發 | `feature/` | 新增業務功能或模組 | `feature/add-payment-module` |
-| Bug 修復 | `fix/` | 修復程式錯誤（通用） | `fix/order-creation-transient-entity-bug` |
-| 緊急修復 | `hotfix/` | 修復生產環境的緊急問題 | `hotfix/security-patch` |
-| 程式碼重構 | `refactor/` | 改善程式結構但不改變功能 | `refactor/improve-openapi-annotations` |
-| 設定檔變更 | `config/` | 更新應用程式或基礎設施配置 | `config/update-resilience4j-config` |
-| 文件更新 | `docs/` | 僅更新文件內容 | `docs/update-api-guide` |
-| 測試相關 | `test/` | 新增或修改測試案例 | `test/add-integration-tests` |
-| 建置/工具 | `chore/` | 更新建置腳本、依賴版本等 | `chore/upgrade-spring-boot` |
-
-### 3. 分支選擇決策流程
-
-**步驟 A: 檢查是否存在相關分支**
-
-```powershell
-# PowerShell 環境
-git branch -a | Select-String -Pattern "關鍵字"
-
-# 範例：搜尋與訂單相關的分支
-git branch -a | Select-String -Pattern "order"
-```
-
-**步驟 B: 決策邏輯**
-
-```
-IF 存在相關且未合併的分支 THEN
-    → 切換到該分支繼續開發
-ELSE IF 當前在 main/master 分支 THEN
-    → 必須建立新分支
-ELSE IF 當前分支與改動類型不符 THEN
-    → 建議建立新分支或切換到適當分支
-ELSE
-    → 可在當前分支繼續開發
-END IF
-```
-
-### 4. 分支操作指令
-
-**情境 1: 切換到已存在的分支**
-
-```bash
-# 切換到本地分支
-git checkout feature/add-payment-module
-
-# 切換到遠端分支（首次）
-git checkout -b feature/add-payment-module origin/feature/add-payment-module
-
-# 更新分支到最新狀態
-git pull origin feature/add-payment-module
-```
-
-**情境 2: 建立新分支**
-
-**基底分支選擇策略**：
-1. **優先選擇相關的功能分支作為基底**：如果新功能依賴於尚未合併的分支
-2. **否則從 main 分支建立**：獨立功能或修復
-
-```bash
-# 策略 A: 從 main 建立新分支（獨立功能）
+# 1. 確認在 main 且為最新
 git checkout main
 git pull origin main
-git checkout -b feature/add-payment-module
 
-# 策略 B: 從現有功能分支建立（依賴關係）
-git checkout feature/add-user-auth
-git pull origin feature/add-user-auth
-git checkout -b feature/add-payment-with-auth
+# 2. 進行改動
 
-# 策略 C: 從當前分支建立（延續當前工作）
-git checkout -b feature/extend-current-work
-```
-
-**情境 3: 有未提交的改動需要切換分支**
-
-```bash
-# 方法 1: 暫存改動（推薦使用具名 stash）
-git stash push -m "WIP: 描述當前工作"
-git checkout target-branch
-git stash list  # 查看 stash 列表
-git stash pop   # 彈出最新的 stash
-
-# 方法 2: 提交到臨時分支
-git checkout -b temp/wip-backup
-git add .
-git commit -m "WIP: temporary backup"
-git checkout target-branch
-```
-
-### 5. 改動提交前的最終檢查
-
-```bash
-# 1. 確認當前分支正確
-git branch --show-current
-
-# 2. 檢查改動內容
+# 3. 提交前檢查
 git status
 git diff
+./gradlew test          # 也可直接交給 pre-push hook
 
-# 3. 確認沒有意外的檔案被追蹤
-git ls-files --others --exclude-standard
-
-# 4. 執行測試（依專案需求）
-./gradlew test
-
-# 5. 提交改動
+# 4. 提交（遵循 Conventional Commits）
 git add <files>
 git commit -m "type(scope): description"
+
+# 5. 推送（pre-push hook 會先跑 CI gate 相同的測試）
+git push origin main
 ```
 
-### 6. Agent 自動化建議流程
+### Agent 自動化建議流程
 
-當 Agent 準備進行程式碼改動時，應自動執行以下檢查：
+當 Agent 準備進行程式碼改動時：
 
-1. **偵測當前分支**: 使用 `execute_command` 執行 `git branch --show-current`
-2. **分析改動性質**: 根據任務描述判斷改動類型（feature/bugfix/refactor 等）
-3. **搜尋相關分支**: 執行 `git branch -a | Select-String -Pattern "關鍵字"` 尋找相關分支
-4. **提供建議**:
-   - 若在 main 分支 → **必須**建議建立新分支
-   - 若存在相關分支 → 建議切換到該分支
-   - 若當前分支類型不符 → 建議建立新分支或切換分支
-   - 若當前分支適合 → 確認後繼續
-5. **等待使用者確認**: 使用 `ask_followup_question` 詢問使用者是否同意建議的分支操作
-6. **執行分支操作**: 獲得確認後使用 `execute_command` 執行 Git 指令
-7. **進行程式碼改動**: 分支確認無誤後才開始使用 `apply_diff` 或 `write_to_file`
+1. **偵測當前分支**：`git branch --show-current`。
+2. **判斷改動風險**：
+   - 低風險（小修正 / 文件 / 單一 domain 的小改動）→ **直接在 `main` 上進行**。
+   - 高風險（改 CI、DB migration、跨 domain 重構、大型功能）→ **建議另開分支走 PR**（前綴見上）。
+3. **若已在某條工作分支**：延續該分支即可，不需特地切回 `main`。
+4. **改動完成後**：依 Conventional Commits 提交，push 前確保測試通過（pre-push hook 會把關）。
 
-**範例對話流程**:
+> 注意：與舊流程相反 —— 在 `main` 上**不需要**為了一般改動而強制建立新分支。
 
-```
-Agent: 偵測到您當前在 main 分支，準備進行新功能開發。
-建議建立新分支: feature/add-payment-module
+## 開分支時的策略：短期分支原則
 
-是否要我執行以下指令？
-git checkout -b feature/add-payment-module
+一旦決定開分支（高風險場景），仍遵循短命分支原則：
 
-User: 是
-
-Agent: [執行 git checkout -b feature/add-payment-module]
-分支建立成功，現在開始進行程式碼改動...
-```
-
-## 分支策略：短期分支原則
-
-### 核心原則
-
-- ✅ **所有功能分支都從 main 建立**，避免分支間依賴
-- ✅ **盡快合併**，減少長期分支的維護成本
-- ✅ **拆分大功能**為多個小 PR，每個獨立可測試
-
-### 實務做法
+- ✅ **所有分支都從最新的 `main` 建立**，避免分支間依賴。
+- ✅ **盡快合併回 `main`**，減少長命分支的維護成本。
+- ✅ **拆分大功能**為多個小 PR，每個獨立可測試。
 
 ```
 # ❌ 避免：建立依賴鏈
@@ -270,79 +195,26 @@ main
  └─ feature/user-auth
      └─ feature/payment (依賴 user-auth)
 
-# ✅ 推薦：拆分獨立 PR
+# ✅ 推薦：拆分獨立 PR，依序從最新 main 建立
 main
  ├─ feature/user-auth-api (先合併)
  ├─ feature/user-auth-ui (等 API 合併後建立)
  └─ feature/payment (等前面都合併後建立)
 ```
 
-### 如何處理功能依賴
-
-1. **拆分功能**：將大功能分解為可獨立交付的小單元
-2. **順序開發**：等前置功能合併後，再從最新的 main 建立新分支
-3. **使用 Feature Flag**：未完成的功能用開關控制，允許提早合併
-
-### 範例：開發支付功能（依賴使用者認證）
+建立新分支：
 
 ```bash
-# 步驟 1: 開發並合併使用者認證 API
 git checkout main
 git pull origin main
-git checkout -b feature/user-auth-api
+git checkout -b feature/add-payment-module
 # ... 開發 & 提交 ...
-# 推送後建立 PR 合併到 main
-
-# 步驟 2: 等 PR 合併後，開發使用者認證 UI
-git checkout main
-git pull origin main
-git checkout -b feature/user-auth-ui
-# ... 開發 & 提交 ...
-
-# 步驟 3: 等 PR 合併後，開發支付功能
-git checkout main
-git pull origin main
-git checkout -b feature/payment
-# ... 開發 & 提交 ...
+git push origin feature/add-payment-module
 ```
 
-### 特殊情況：必須並行開發時
+## 建立 Pull Request（高風險改動才需要）
 
-如果確實需要在功能分支上建立子分支（不推薦，但有時無法避免）：
-
-```bash
-# 從功能分支建立
-git checkout feature/user-auth
-git checkout -b feature/payment-on-auth
-
-# 當 feature/user-auth 合併到 main 後
-git checkout feature/payment-on-auth
-git rebase main
-git push origin feature/payment-on-auth --force-with-lease
-```
-
-## 建立 Pull Request
-
-### 使用 BOB IDE 的 Slash Command
-
-如果您在 BOB IDE 或支援的 shell 環境中工作，可以使用 `/create-pr` slash command 快速建立 PR：
-
-1. 確保已推送分支到遠端
-2. 切換到 **Advanced** mode
-3. 使用指令：`/create-pr`
-4. BOB 會自動：
-   - 分析 commit 歷史
-   - 生成 PR 標題和描述
-   - 建立 Pull Request
-5. **重要**：建立 PR 後，請根據變更類型手動添加適當的 labels（參考下方「Labels 選擇」章節）
-
-> **注意**：目前 `/create-pr` 指令尚未支援自動添加 labels，需要在 GitHub 網頁上手動添加。未來版本可能會加入此功能。
-
-### 手動建立 PR
-
-如果不在 BOB IDE 環境中，或 `/create-pr` command 不可用，請使用以下方式：
-
-#### 方式一：透過 Git 推送訊息中的連結
+### 透過 Git 推送訊息中的連結
 
 推送分支後，Git 會在終端機輸出中提供建立 PR 的連結：
 
@@ -353,40 +225,29 @@ remote:      https://github.com/junechen7414/SpringBoot/pull/new/feature/your-br
 
 直接點擊或複製該連結到瀏覽器即可建立 PR。
 
-#### 方式二：透過 GitHub 網頁介面
-
-1. 前往專案的 GitHub 頁面
-2. 點擊 **Pull requests** 標籤
-3. 點擊 **New pull request** 按鈕
-4. 選擇您的分支
-5. 填寫 PR 標題和描述
-6. 選擇適當的 labels（參考下方「Labels 選擇」章節）
-7. 點擊 **Create pull request**
-
 ### PR 標題和描述建議
 
-#### 標題格式
+**標題**遵循 Conventional Commits 格式：
 
-遵循 Conventional Commits 格式：
 - 範例：`feat(order): add bulk order creation endpoint`
 - 範例：`docs(agents): 更新 Git 工作流程說明`
 
-#### 描述內容
+**描述應該包含：**
 
-**應該包含：**
 - ✅ 變更的目的和背景
 - ✅ 主要功能或改進說明
 - ✅ 相關 issue 連結（使用 `Closes #123`）
 - ✅ 破壞性變更說明（使用 `BREAKING CHANGE`）
 
 **不需要包含：**
+
 - ❌ 修改的檔案列表（GitHub 會自動顯示）
 - ❌ 測試結果（CI/CD 會自動執行並顯示）
 - ❌ 程式碼細節（可在 Files changed 中查看）
 
-#### Labels 選擇
+### Labels 選擇
 
-**必須為 PR 加上適當的 labels**，根據變更性質選擇 1-2 個最相關的：
+為 PR 加上適當的 labels，根據變更性質選擇 1-2 個最相關的：
 
 | 變更類型 | 建議 Label |
 |---------|-----------|
@@ -400,92 +261,9 @@ remote:      https://github.com/junechen7414/SpringBoot/pull/new/feature/your-br
 | 破壞性變更 | `breaking-change` |
 | 建置/工具 | `chore` |
 
-**範例：**
-- 文件更新的 PR → 加上 `documentation` label
-- 新增測試的 PR → 加上 `test` label
-- 重構程式碼的 PR → 加上 `refactor` label
-
-### Agent 建議流程
-
-當改動完成準備合併時，Agent 應：
-1. 確認所有改動已提交
-2. **檢查是否從功能分支建立**：如果是，提醒考慮重新從 main 建立
-3. 建議推送分支到遠端：`git push origin <branch-name>`
-4. 提供 GitHub PR 建立連結：`https://github.com/junechen7414/SpringBoot/pull/new/<branch-name>`
-5. 建議 PR 的 Title、Description 和 Label
-6. 提醒使用者在 GitHub 網頁上手動建立 PR
-7. 提醒使用者等待 Code Review 與 CI/CD 檢查
-8. 合併後才建議清理本地分支
-
-## 分支清理
-
-### 合併後的清理流程
-
-當 Pull Request 被合併到 `main` 後，應該清理本地和遠端的 feature 分支。
-
-### PowerShell 指令
-
-PowerShell 使用分號 (`;`) 來串接多個指令：
+查詢目前 repo 上的所有 labels（PowerShell）：
 
 ```powershell
-# 切換回 main 分支並更新
-git checkout main; git pull
-
-# 刪除本地分支
-git branch -d <branch-name>
-
-# 刪除遠端分支（如果需要）
-git push origin --delete <branch-name>
-```
-
-**完整範例**：
-
-```powershell
-# 假設要清理 feature/add-payment-module 分支
-git checkout main; git pull; git branch -d feature/add-payment-module
-
-# 如果遠端分支還存在，也一併刪除
-git push origin --delete feature/add-payment-module
-```
-
-### CMD 指令
-
-CMD 使用 `&&` 來串接多個指令：
-
-```cmd
-REM 切換回 main 分支並更新
-git checkout main && git pull
-
-REM 刪除本地分支
-git branch -d <branch-name>
-
-REM 刪除遠端分支（如果需要）
-git push origin --delete <branch-name>
-```
-
-**完整範例**：
-
-```cmd
-REM 假設要清理 feature/add-payment-module 分支
-git checkout main && git pull && git branch -d feature/add-payment-module
-
-REM 如果遠端分支還存在，也一併刪除
-git push origin --delete feature/add-payment-module
-```
-
-### 清理注意事項
-
-- ✅ 確認 PR 已經合併後再刪除分支
-- ✅ 使用 `-d` 參數（小寫）進行安全刪除，如果分支未合併會提示警告
-- ✅ 如果確定要強制刪除未合併的分支，使用 `-D` 參數（大寫）
-- ⚠️ 刪除遠端分支前，確認其他團隊成員不再需要該分支
-
-## 查詢 GitHub Labels
-
-在建立 PR 時需要選擇正確的 label。可透過 PowerShell 查詢目前 repo 上的所有 labels：
-
-```powershell
-# 查詢 GitHub repo 的 labels（PowerShell）
 (Invoke-RestMethod -Uri "https://api.github.com/repos/junechen7414/SpringBoot/labels").name
 ```
 
@@ -504,7 +282,15 @@ git push origin --delete feature/add-payment-module
 | `refactor` | 程式碼重構 |
 | `test` | 測試相關 |
 
-**Agent 建議流程**：建立 PR 時應根據改動性質選擇 1-2 個最相關的 labels。
+合併 PR 後，依 [Git 分支清理指南](./04-git-branch-cleanup.md) 清理分支。
+
+## main 紅了怎麼辦
+
+直接 push `main` 的代價是壞 commit 已經在 `main` 上，處理原則：
+
+1. **能快速修好** → 立刻補一個 `fix:` commit 推上去（fix-forward）。
+2. **一時修不好** → `git revert <bad-sha>` 先讓 `main` 恢復綠，再從容處理。
+3. **避免累積**：`main` 紅了就優先處理，不要疊新的改動上去。
 
 ## 相關文件
 

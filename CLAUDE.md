@@ -62,4 +62,11 @@ Config is layered (env/system props > `application-{profile}.yml` > `application
 
 ## Git workflow (summary)
 
-Branch from `main` using `feature/ fix/ hotfix/ refactor/ config/ docs/ test/ chore/` prefixes (lowercase, `-` separated). Commits follow Conventional Commits (`type(scope): subject`, imperative, lowercase, no trailing period). Keep branches short-lived and branch off `main` rather than chaining feature branches. Full rules, PR labels, and cleanup steps are in `docs/agents/03-git-workflow.md` and `04-git-branch-cleanup.md`.
+**Trunk-based, solo project.** Default to committing small steps **directly on `main`** and pushing — CI (`.github/workflows/image-publish.yml`) runs the test gate on both push-to-`main` and PRs, so a PR is not needed just to trigger tests. `main` has no branch protection; if it breaks, fix-forward or `git revert`.
+
+- **Before pushing, tests must pass.** A pre-push hook (`.githooks/pre-push`, enable once with `git config core.hooksPath .githooks`) runs the same command as the CI gate (`./gradlew test -Djunit.platform.exclude.tags=SanityTest`) whenever the push includes `main` — "green locally = green in CI".
+- **Pushing `main` has side effects**: it publishes the `latest` image to ghcr.io, triggers downstream E2E, and regenerates swagger.json. The test gate runs before the image build, so test-caught failures don't ship a bad image.
+- **Open a branch + PR only for high-risk changes**: CI workflow edits, DB migrations, cross-domain refactors / large features — anything you want CI to validate before it reaches `main`.
+- **When branching**, use `feature/ fix/ hotfix/ refactor/ config/ docs/ test/ chore/` prefixes (lowercase, `-` separated), branch off the latest `main`, keep it short-lived. Commits follow Conventional Commits (`type(scope): subject`, imperative, lowercase, no trailing period).
+
+Full rules, the pre-push hook setup, PR labels, and cleanup steps are in `docs/agents/03-git-workflow.md` and `04-git-branch-cleanup.md`.

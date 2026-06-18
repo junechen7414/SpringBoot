@@ -1,0 +1,55 @@
+#!/bin/sh
+#
+# pre-push hook — 主幹開發的本地保險。
+#
+# 當這次 push 的目標包含 refs/heads/main 時，先在本地跑與 CI gate
+# (.github/workflows/image-publish.yml) 完全相同的測試指令，做到
+# 「本地綠 = CI 綠」，把問題擋在進 main 之前。
+# 推送非 main 分支則略過，交給 PR 的 CI 跑。
+#
+# 啟用（每台機器設定一次）：
+#   git config core.hooksPath .githooks
+#
+# 趕時間想跳過（自負風險）：
+#   git push --no-verify
+#
+# 參考：docs/agents/03-git-workflow.md
+
+remote="$1"
+zero="0000000000000000000000000000000000000000"
+pushing_main=0
+
+# stdin 每行格式：<local ref> <local sha> <remote ref> <remote sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+	# 跳過刪除分支的情況（local_sha 全為 0）
+	if [ "$local_sha" = "$zero" ]; then
+		continue
+	fi
+	if [ "$remote_ref" = "refs/heads/main" ]; then
+		pushing_main=1
+	fi
+done
+
+if [ "$pushing_main" -eq 0 ]; then
+	echo "pre-push: 非 main 分支，略過本地測試（交給 PR 的 CI）。"
+	exit 0
+fi
+
+echo "pre-push: 偵測到推送 main，執行 CI gate 相同的測試..."
+
+# 與 CI 的 Run Unit Tests (Gate) 一致：排除 SanityTest
+if [ -x ./gradlew ]; then
+	GRADLEW=./gradlew
+else
+	GRADLEW=gradlew
+fi
+
+if ! "$GRADLEW" test -Djunit.platform.exclude.tags=SanityTest; then
+	echo ""
+	echo "pre-push: ❌ 測試失敗，已中止 push 到 main。"
+	echo "          修好再推，或 git push --no-verify 跳過（自負風險）。"
+	exit 1
+fi
+
+echo "pre-push: ✅ 測試通過，繼續 push。"
+exit 0
