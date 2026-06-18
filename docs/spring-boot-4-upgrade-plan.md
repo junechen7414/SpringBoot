@@ -19,6 +19,8 @@
 | Hibernate | 6.x | **7.x** | JPA 3.2 |
 | Jackson | 2.x | **3.x** | 🔴 重大變更 |
 
+> **官方 baseline 註記**：Boot 4 最低需求為 **Java 17**（本專案 21 已滿足）、Jakarta EE 11 / Servlet 6.1、Kotlin 2.2+、GraalVM native-image 25+。Gradle 具體最低版本以官方 [system-requirements](https://docs.spring.io/spring-boot/system-requirements.html) 為準，升級前實際確認，勿憑記憶寫死。
+
 ---
 
 ## Phase 0：前置準備
@@ -72,7 +74,7 @@
 
 ---
 
-## Phase 2：升級 Spring Boot 4.0.6
+## Phase 2：升級 Spring Boot 4.0.7
 
 ### 目標
 完成核心框架升級，解決編譯錯誤。
@@ -83,11 +85,34 @@
 |---|------|------|
 | 2.1 | 更新 `build.gradle` plugin 版本 | `id 'org.springframework.boot' version '4.0.7'` |
 | 2.2 | 評估移除 `io.spring.dependency-management` | Boot 4 建議直接使用 Gradle BOM，用 `./gradlew dependencyInsight` 確認版本來源 |
-| 2.3 | 更新 Resilience4j artifact | `resilience4j-spring-boot3` → `resilience4j-spring-boot4` |
-| 2.4 | 更新 SpringDoc 版本 | 升級到支援 Boot 4 的版本 |
-| 2.5 | 加入 properties-migrator | `runtimeOnly 'org.springframework.boot:spring-boot-properties-migrator'` |
-| 2.6 | 執行編譯 | `./gradlew compileJava` |
-| 2.7 | 逐一修復編譯錯誤 | 根據錯誤訊息修正 |
+| 2.3 | **套用 starter 模組化改名** | 見下方「Boot 4 模組化 / Starter 改名」表 🔴 |
+| 2.4 | 更新 Resilience4j artifact | `resilience4j-spring-boot3` → `resilience4j-spring-boot4` |
+| 2.5 | 更新 SpringDoc 版本 | 升級到支援 Boot 4 的版本 |
+| 2.6 | 加入 properties-migrator | `runtimeOnly 'org.springframework.boot:spring-boot-properties-migrator'` |
+| 2.7 | 執行編譯 | `./gradlew compileJava` |
+| 2.8 | 逐一修復編譯錯誤 | 根據錯誤訊息修正 |
+
+### Boot 4 模組化 / Starter 改名 🔴
+
+> Boot 4 最大的結構性變更：拆成更多小模組，多個 starter 改名，**過去只需第三方依賴的技術現在必須走專屬 starter**。以下是對照本專案 `build.gradle` 實際會中斷的項目。
+
+| 現在 (build.gradle) | Boot 4 目標 | 說明 |
+|------|------|------|
+| `spring-boot-starter-web` | **`spring-boot-starter-webmvc`** | starter 改名 |
+| `spring-boot-starter-aop` | **`spring-boot-starter-aspectj`** | 改名；先確認是否真的使用 `org.aspectj.lang.annotation.Aspect`，沒用到可直接移除 |
+| `flyway-core` + `flyway-database-oracle` | **`spring-boot-starter-flyway`**（+ Oracle 方言） | 官方：Flyway 現需透過 starter 提供 auto-config |
+| `spring-boot-starter-webflux` | **移除** | 程式碼已全面改用 RestClient（無 WebClient/Mono/Flux 使用），此依賴為殘留，直接刪除 |
+| `spring-boot-starter-actuator` | 不變（名稱保留） | 但 observability 子模組已拆分，見 Phase 3.5 |
+
+#### 過渡策略：Classic Starters（官方建議）
+
+官方提供 classic starters 作為過渡手段，可在大量改名時先還原 classpath、再逐步收斂：
+
+1. 暫時改用 `spring-boot-starter-classic` / `spring-boot-starter-test-classic`（提供完整模組但排除遞移依賴）
+2. 修復 broken imports，確認應用可正常運作
+3. 移除 classic starters，依編譯錯誤逐一補上正確的細分 starter POM
+
+> 不強制使用此策略；本專案依賴不多，也可直接照上表逐一替換。Classic starters 僅為過渡，最終仍應移除。
 
 ### build.gradle 變更範例
 
@@ -101,7 +126,14 @@ plugins {
 dependencies {
     // 升級期間暫時加入 — 偵測已改名/移除的 configuration properties
     runtimeOnly 'org.springframework.boot:spring-boot-properties-migrator'
-    
+
+    // Starter 改名（Boot 4 模組化）
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'   // 原 starter-web
+    implementation 'org.springframework.boot:spring-boot-starter-aspectj'  // 原 starter-aop（確認確實用到 AspectJ）
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'   // 原 flyway-core，改走 starter
+    runtimeOnly 'org.flywaydb:flyway-database-oracle'                      // Oracle 方言仍需保留
+    // 移除：spring-boot-starter-webflux（已改用 RestClient，無 WebClient 使用）
+
     // Resilience4j - 改用 boot4 artifact
     implementation 'io.github.resilience4j:resilience4j-spring-boot4'
     
@@ -222,6 +254,8 @@ protected ResponseEntity<Object> handleMethodArgumentNotValid(
 - Metrics 名稱是否有變化（影響 Grafana dashboard）
 - OTLP exporter 配置是否有變化
 - Boot 4 升級了 Micrometer 2.x，確認 metrics API 相容性
+- **Liveness / Readiness probes 預設開啟** 🔴：`/actuator/health` 會新增 `liveness`/`readiness` group，影響 k8s probe 與 Grafana。若不需要，用 `management.endpoint.health.probes.enabled=false` 關閉
+- **Observability 子模組已拆分**：`spring-boot-micrometer-metrics`、`-micrometer-observation`、`-micrometer-tracing`（`-brave`/`-opentelemetry`）、`spring-boot-opentelemetry`、`spring-boot-zipkin`；確認 BOM 帶入的模組組合是否符合現有監控鏈路
 
 ---
 
@@ -229,12 +263,20 @@ protected ResponseEntity<Object> handleMethodArgumentNotValid(
 
 **影響範圍**: 所有 API Response 的 JSON 序列化
 
-**Boot 4 的 Jackson 3 重大變更**:
-- 套件名可能從 `com.fasterxml.jackson` 變為 `tools.jackson`
+**Boot 4 的 Jackson 3 重大變更**（依官方遷移指南）:
+- 套件名 `com.fasterxml.jackson` → `tools.jackson`（例外：`jackson-annotations` 仍保留 `com.fasterxml.jackson.annotation`）
 - 日期格式：預設輸出為 ISO-8601 字串（不再是 Numeric Timestamps）
-- 欄位排序：可能預設改為字母排序
-- `@JsonFormat`、`@JsonProperty` 行為可能有微調
+- 類別/註解改名：`@JsonComponent` → `@JacksonComponent`、`@JsonMixin` → `@JacksonMixin`、`Jackson2ObjectMapperBuilderCustomizer` → `JsonMapperBuilderCustomizer`
+- 屬性搬移：`spring.jackson.read/write.*` → `spring.jackson.json.read/write`、`spring.jackson.parser.*` → `spring.jackson.json.read`
+- Jackson 現在會自動偵測 classpath 上**所有**模組（過去僅 well-known），如需關閉：`spring.jackson.find-and-add-modules=false`
 - 序列化異常改為 Unchecked Exception
+
+> ⚠️ 計畫先前列的「欄位預設改字母排序」官方遷移指南**未提及**，已移除以免誤導測試重點。
+
+**降風險逃生門（官方建議，可分階段切換）**:
+- `spring.jackson.use-jackson2-defaults=true`：讓預設行為對齊 Jackson 2，先升級套件、暫時保留舊行為
+- 過渡期可暫用 `spring-boot-jackson2` 模組（屬性在 `spring.jackson2.*` 下），但官方標記為 deprecated、未來移除，**仍強烈建議盡快全面採用 Jackson 3**
+- 建議流程：先開 `use-jackson2-defaults` 確認可啟動 → 跑 JSON 回歸測試 → 逐步關閉旗標、修正差異
 
 **需要檢查的檔案**:
 - 所有 DTO / Response 類別中的 `@JsonFormat`、`@JsonProperty`
@@ -273,6 +315,21 @@ class JacksonSerializationTest {
 - `server.*`
 
 **完成後**: 移除 `spring-boot-properties-migrator` 依賴（僅升級期間使用）。
+
+---
+
+### 3.8 測試框架 Breaking Changes
+
+**檢查點**（官方 Testing Feature Changes）:
+- 🔴 **`@SpringBootTest` 不再自動提供 MockMVC** — 需明確加 `@AutoConfigureMockMvc`。逐一檢查所有使用 MockMvc 的測試類（本計畫 3.6 的 `JacksonSerializationTest` 範例已含此註解）
+- **`@MockBean` / `@SpyBean` 已移除** → `@MockitoBean` / `@MockitoSpyBean`
+  - 本專案現況：grep 確認**未使用**（採 constructor injection + Mockito），無影響
+  - 注意新註解可用於測試類欄位，但**不可用於 `@Configuration` 類**
+- **`TestRestTemplate`**：若使用需加 `@AutoConfigureTestRestTemplate` + `spring-boot-resttestclient`/`spring-boot-restclient` 依賴，package 改為 `org.springframework.boot.resttestclient.TestRestTemplate`；本專案現況**未使用**
+- **`@WithMockUser` / `@WithUserDetails`**：現需 `spring-boot-starter-security-test`（本專案目前無 Spring Security，不適用）
+- Mockito：已移除 deprecated `MockitoTestExecutionListener`，`@Mock`/`@Captor` 改用 `MockitoExtension`
+
+**偵測方式**: `./gradlew test --tests "*"`，依編譯/啟動錯誤逐一修正。
 
 ---
 
@@ -337,6 +394,9 @@ class JacksonSerializationTest {
 | 🔴 高 | **Jackson 3** | 所有 API JSON 輸出格式 | JSON 序列化回歸測試、比對升級前後輸出 |
 | 🔴 高 | **Hibernate 7 / @SQLRestriction** | Entity 查詢邏輯 | DataJpaTest 驗證 generated SQL |
 | 🔴 高 | **SpringDoc OpenAPI 相容性** | Swagger UI 無法使用 | 查找 Boot 4 相容版本，必要時暫時移除 |
+| 🔴 高 | **模組化 / Starter 改名** | `web`→`webmvc`、`aop`→`aspectj`、Flyway 需 starter | 依 Phase 2 改名表逐一替換，必要時用 classic starters 過渡 |
+| 🟡 中 | **Actuator liveness/readiness 預設開啟** | k8s probe / health endpoint 輸出 | 確認 probe group，必要時用 `management.endpoint.health.probes.enabled` 關閉 |
+| 🟡 中 | **測試自動配置變更** | `@SpringBootTest` 不再自動給 MockMVC | 補 `@AutoConfigureMockMvc`；`@MockBean`→`@MockitoBean` |
 | 🟡 中高 | Observability (OTLP/Micrometer 2.x) | 監控鏈路 | 交給 Boot BOM 管理版本 |
 | 🟡 中高 | Resilience4j artifact 變更 | 限流/熔斷 | 改用 `resilience4j-spring-boot4` |
 | 🟡 中高 | Flyway Oracle parser | Migration 驗證 | `flywayValidate` + 修正 SQL |
