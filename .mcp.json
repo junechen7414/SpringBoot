@@ -1,3 +1,26 @@
 {
-  "mcpServers": {}
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_PAT}"
+      }
+    },
+    "browser-use": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "browser-use[cli]",
+        "browser-use",
+        "--mcp"
+      ],
+      "env": {
+        "ANTHROPIC_BASE_URL": "${ANTHROPIC_BASE_URL}",
+        "ANTHROPIC_AUTH_TOKEN": "${ANTHROPIC_AUTH_TOKEN}",
+        "ANTHROPIC_MODEL": "${ANTHROPIC_MODEL}"
+      }
+    }
+  }
 }
