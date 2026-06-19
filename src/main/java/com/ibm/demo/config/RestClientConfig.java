@@ -12,9 +12,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.support.RestClientAdapter;
-import org.springframework.web.service.invoker.HttpServiceProxyFactory;
+import org.springframework.web.client.support.RestClientHttpServiceGroupConfigurer;
+import org.springframework.web.service.registry.ImportHttpServices;
 
 import com.ibm.demo.RestClientErrorHandler;
 import com.ibm.demo.account.AccountClient;
@@ -25,19 +24,26 @@ import com.ibm.demo.product.ProductClient;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * 透過 Boot 4 HTTP Service Clients 自動註冊 {@code @HttpExchange} 介面為 bean。
+ * {@code @ImportHttpServices} 將三個 client 歸入 "internal" group；底層 RestClient
+ * （baseUrl / 自訂連線池 / 錯誤轉譯）由下方的 group configurer 統一設定。
+ */
 @Configuration
 @RequiredArgsConstructor
 @EnableConfigurationProperties({ AppProperties.class, HttpClientProperties.class })
+@ImportHttpServices(group = "internal", types = { AccountClient.class, OrderClient.class, ProductClient.class })
 public class RestClientConfig {
 
     private final AppProperties appProperties;
     private final HttpClientProperties httpClientProperties;
 
-    // 建立一個自訂的 ClientHttpRequestFactory，使用 Apache HttpClient 並配置連線池和超時
+    // 自訂 ClientHttpRequestFactory：Apache HttpClient5 連線池 + 超時。
+    // 連線池上限 / evict-idle / connection-request-timeout 等屬性無法以原生 group 設定表達，故保留手動配置。
     private ClientHttpRequestFactory clientHttpRequestFactory() {
         PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
         connectionManager.setMaxTotal(httpClientProperties.getMaxTotal()); // 總連線池上限
-        connectionManager.setDefaultMaxPerRoute(httpClientProperties.getDefaultMaxPerRoute()); // 每個單一服務 (如 Account) 的上限
+        connectionManager.setDefaultMaxPerRoute(httpClientProperties.getDefaultMaxPerRoute()); // 每個單一服務的上限
 
         HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory();
 
@@ -58,30 +64,18 @@ public class RestClientConfig {
         return factory;
     }
 
-    // 建立 HttpServiceProxyFactory，並將自訂的 ClientHttpRequestFactory 注入 RestClient
+    /**
+     * 設定 "internal" group 中所有 client 共用的 RestClient：base URL、自訂連線池 factory、
+     * 以及將 HTTP error 轉譯為領域例外的 status handler。
+     * <p>
+     * factory 在 lambda 外建立一次後共用，讓三個 client 共享同一個連線池（與重構前行為一致）。
+     */
     @Bean
-    public HttpServiceProxyFactory httpServiceProxyFactory(RestClient.Builder builder,
-            RestClientErrorHandler errorHandler) {
-        RestClient restClient = builder
-                .requestFactory(clientHttpRequestFactory()) // 顯式指定底層引擎
+    RestClientHttpServiceGroupConfigurer internalHttpServiceGroupConfigurer(RestClientErrorHandler errorHandler) {
+        ClientHttpRequestFactory requestFactory = clientHttpRequestFactory();
+        return groups -> groups.forEachClient((group, clientBuilder) -> clientBuilder
                 .baseUrl(appProperties.getBaseUrl())
-                .defaultStatusHandler(HttpStatusCode::isError, (request, response) -> errorHandler.handle(response))
-                .build();
-        return HttpServiceProxyFactory.builderFor(RestClientAdapter.create(restClient)).build();
-    }
-
-    @Bean
-    public AccountClient accountClient(HttpServiceProxyFactory factory) {
-        return factory.createClient(AccountClient.class);
-    }
-
-    @Bean
-    public OrderClient orderClient(HttpServiceProxyFactory factory) {
-        return factory.createClient(OrderClient.class);
-    }
-
-    @Bean
-    public ProductClient productClient(HttpServiceProxyFactory factory) {
-        return factory.createClient(ProductClient.class);
+                .requestFactory(requestFactory)
+                .defaultStatusHandler(HttpStatusCode::isError, (request, response) -> errorHandler.handle(response)));
     }
 }
