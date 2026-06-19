@@ -123,7 +123,7 @@ chore/upgrade-spring-boot
 | `style` | 程式碼格式 | `style: format code with spotless` |
 | `refactor` | 重構 | `refactor(service): replace WebClient with RestClient` |
 | `test` | 測試 | `test(order): add integration tests for order creation` |
-| `chore` | 雜項 | `chore(deps): upgrade Spring Boot to 3.5.15` |
+| `chore` | 雜項 | `chore(deps): upgrade Spring Boot to 4.0.7` |
 
 ### 撰寫原則
 

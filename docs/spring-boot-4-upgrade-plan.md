@@ -1,5 +1,8 @@
 # Spring Boot 4 升級計畫
 
+> [!NOTE]
+> 此計畫已於 **2026-06-19 完成執行**（Boot 4.0.7 / SF 7.0.8 / Hibernate 7.2 / Tomcat 11 / Jackson 3），保留作歷史記錄。實際關鍵調整：新增 `spring-boot-starter-restclient`（RestClient.Builder autoconfig 已模組化拆出）、`RestClientErrorHandler` 改用 `tools.jackson` ObjectMapper。
+
 > **建立日期**: 2026-06-17  
 > **目標版本**: Spring Boot 4.0.7 / Spring Framework 7.0.7+ / Jakarta EE 11  
 > **當前版本**: Spring Boot 3.5.15 / Java 21 / Gradle 8.13  
