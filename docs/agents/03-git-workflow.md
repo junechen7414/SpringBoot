@@ -123,7 +123,7 @@ chore/upgrade-spring-boot
 | `style` | 程式碼格式 | `style: format code with spotless` |
 | `refactor` | 重構 | `refactor(service): replace WebClient with RestClient` |
 | `test` | 測試 | `test(order): add integration tests for order creation` |
-| `chore` | 雜項 | `chore(deps): upgrade Spring Boot to 3.5.15` |
+| `chore` | 雜項 | `chore(deps): upgrade Spring Boot to 4.0.7` |
 
 ### 撰寫原則
 
@@ -281,6 +281,23 @@ remote:      https://github.com/junechen7414/SpringBoot/pull/new/feature/your-br
 | `enhancement` | 功能增強 |
 | `refactor` | 程式碼重構 |
 | `test` | 測試相關 |
+
+#### 為 PR 加上 Labels（工具方式）
+
+PR 在 GitHub API 中本質上也是 issue，但各工具加 label 的方式不同：
+
+- **`gh` CLI**（最直接）：
+
+  ```bash
+  gh pr edit <PR 號> --add-label "dependencies,breaking-change"
+  # 或建立 PR 時一併指定
+  gh pr create --label dependencies --label breaking-change ...
+  ```
+
+- **GitHub MCP**：`create_pull_request` / `update_pull_request` **沒有 labels 欄位**，無法直接加。改用 **`issue_write`**（`method: "update"`、`issue_number` 填 **PR 號**、`labels: [...]`）——因為 PR 在 API 中也是 issue。流程：先 `create_pull_request` 取得 PR 號 → 再 `issue_write` 補上 labels。
+  > 注意：label 必須**已存在於 repo**（MCP 工具集只有 `get_label`，無法新建 label）。確認某 PR 目前的 labels 用 `pull_request_read`（`get_labels` 只適用純 issue，傳 PR 號會回 "Could not resolve to an Issue"）。
+
+- **GitHub 網頁**：PR 頁面右側 Labels 區塊手動勾選。
 
 合併 PR 後，依 [Git 分支清理指南](./04-git-branch-cleanup.md) 清理分支。
 

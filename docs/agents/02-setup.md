@@ -4,7 +4,7 @@
 
 - **Java 21** (建議使用 Eclipse Temurin)
 - **Podman** 或 Docker (用於容器管理)
-- **Gradle 8.13** (專案已包含 Gradle Wrapper，無需自行安裝)
+- **Gradle 8.14** (專案已包含 Gradle Wrapper，無需自行安裝)
 
 ### 本地開發環境啟動
 
@@ -77,7 +77,7 @@ podman compose build app
 ```
 
 **多階段建置說明**:
-- **第一階段**: 以 `eclipse-temurin:21-jdk-alpine` 為基礎映像（精簡 JDK 21），透過 Gradle Wrapper (8.13) 編譯並打包 JAR (跳過測試)
+- **第一階段**: 以 `eclipse-temurin:21-jdk-alpine` 為基礎映像（精簡 JDK 21），透過 Gradle Wrapper (8.14) 編譯並打包 JAR (跳過測試)
 - **第二階段**: 使用 `eclipse-temurin:21-jre-alpine` 執行，最終映像檔僅包含 JRE 與應用程式
 
 #### 映像內建 HEALTHCHECK（重要契約）

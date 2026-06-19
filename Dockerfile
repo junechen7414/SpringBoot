@@ -1,5 +1,5 @@
 # 第一階段：編譯 (使用 JDK 21)
-# 僅需 JDK 環境，實際編譯透過 Gradle Wrapper (8.13) 進行，故使用精簡的 temurin JDK 映像
+# 僅需 JDK 環境，實際編譯透過 Gradle Wrapper (8.14) 進行，故使用精簡的 temurin JDK 映像
 FROM eclipse-temurin:21-jdk-alpine AS build
 # 設定工作目錄為 /app，後續的命令都會在這個目錄下執行
 WORKDIR /app
