@@ -40,6 +40,7 @@ Notes:
 - Integration tests extend `BaseIntegrationTest` (auto-starts a `gvenzl/oracle-free` container via `@ServiceConnection`, profile `integration-test`); first run downloads the image and startup can take minutes.
 - `test` task forces `maxParallelForks = 1` to avoid Oracle container contention — don't expect parallel test execution.
 - Tag filtering is driven by the `junit.platform.exclude.tags` system property (wired in `build.gradle`).
+- **Windows + podman**: before running integration tests, run `podman compose stop` first — two concurrent Oracle containers (compose + Testcontainers) exhaust the default 2GiB podman machine and the second silently refuses connections. Also point `~/.testcontainers.properties` `docker.host` at the podman pipe. Pure-docs pushes skip this (test task is UP-TO-DATE, no container). See `docs/agents/08-testing.md`.
 
 ## Architecture big picture
 
@@ -69,4 +70,4 @@ Config is layered (env/system props > `application-{profile}.yml` > `application
 - **Open a branch + PR only for high-risk changes**: CI workflow edits, DB migrations, cross-domain refactors / large features — anything you want CI to validate before it reaches `main`.
 - **When branching**, use `feature/ fix/ hotfix/ refactor/ config/ docs/ test/ chore/` prefixes (lowercase, `-` separated), branch off the latest `main`, keep it short-lived. Commits follow Conventional Commits (`type(scope): subject`, imperative, lowercase, no trailing period).
 
-Full rules, the pre-push hook setup, PR labels, and cleanup steps are in `docs/agents/03-git-workflow.md` and `04-git-branch-cleanup.md`.
+Full rules, the pre-push hook setup, PR labels, and cleanup steps are in `docs/agents/03-git-workflow.md` and `04-git-branch-cleanup.md`. When adding PR labels via GitHub MCP, use `issue_write` (method `update`) with the PR number — `create_pull_request`/`update_pull_request` have no labels field.
