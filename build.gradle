@@ -1,6 +1,6 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '3.5.15'
+	id 'org.springframework.boot' version '4.0.7'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id "org.springdoc.openapi-gradle-plugin" version "1.9.0"
 }
@@ -31,22 +31,23 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	runtimeOnly 'com.oracle.database.jdbc:ojdbc11'	
-	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// Boot 4 模組化：RestClient autoconfig（RestClient.Builder bean）已拆到專屬 starter
+	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-	compileOnly 'org.projectlombok:lombok:1.18.36'
-	implementation 'org.springframework.boot:spring-boot-starter-webflux'
-	annotationProcessor 'org.projectlombok:lombok:1.18.36'
+	compileOnly 'org.projectlombok:lombok:1.18.46'
+	annotationProcessor 'org.projectlombok:lombok:1.18.46'
 	developmentOnly "org.springframework.boot:spring-boot-devtools"
-	implementation 'org.springframework.boot:spring-boot-starter-aop'
+	implementation 'org.springframework.boot:spring-boot-starter-aspectj'
 	implementation 'org.apache.httpcomponents.client5:httpclient5'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
-	// Resilience4j for rate limiting and bulkhead
-	implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.3.0'
-	// Flyway for database migration
-	implementation 'org.flywaydb:flyway-core'
+	// Resilience4j for rate limiting and bulkhead（Boot 4 artifact）
+	implementation 'io.github.resilience4j:resilience4j-spring-boot4:2.4.0'
+	// Flyway for database migration（Boot 4 改走 starter）
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	runtimeOnly 'org.flywaydb:flyway-database-oracle'
 	// 關鍵：將 Micrometer 指標透過 OTLP 格式導出
     implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
