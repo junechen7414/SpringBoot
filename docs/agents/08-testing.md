@@ -40,6 +40,10 @@ CI（GitHub Actions）環境正常，以下僅為**本機 Windows + podman machi
    - 成因：podman machine 預設僅 2GiB 記憶體。若 `podman compose` 的 `oracle-db` 與 Testcontainers 另起的 `oracle-free` **同時運行**，兩個 Oracle 會記憶體不足，新容器起得來卻無法接受連線。**這是環境資源競爭，不是程式或 SQL 回歸。**
    - 解法：跑整合測試前先 `podman compose stop`（釋放記憶體），或 `podman machine set --memory 4096` 加大記憶體。
 
+3. **純文件變更 push 不會啟動 Testcontainers**
+   - 推送 `main` 時 pre-push hook 會跑 `./gradlew test`，但若沒有任何測試輸入（程式碼／資源）變更，test task 為 **UP-TO-DATE 快取**（數秒完成），**不會啟動 Testcontainers Oracle**。
+   - 因此推送純文件（docs）變更時，**不需要先停 compose**，也不會撞上第 2 點的記憶體競爭。
+
 > **`stop` 不是 `down`**：要暫停本機 compose 服務時用 `podman compose stop`（保留容器、網路、資料卷，可快速 `start` 回來）；`podman compose down` 會移除容器與網路、需重建，僅在明確要重建時才用。
 
 > 發現新的環境坑與解法時，請補進本節，讓知識留在 repo 內供團隊與 CI 共享。
