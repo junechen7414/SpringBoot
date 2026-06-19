@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/ai-doc-sync-check.js\"",
+            "timeout": 10,
+            "statusMessage": "檢查跨 AI 工具文件同步…"
+          }
+        ]
+      }
+    ]
+  }
+}
