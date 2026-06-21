@@ -9,6 +9,18 @@
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PAT}"
       }
+    },
+    "browser-use": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "browser-use[cli]",
+        "browser-use",
+        "--mcp"
+      ],
+      "env": {
+        "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+      }
     }
   }
 }
