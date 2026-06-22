@@ -35,11 +35,14 @@ out/
 /.nb-gradle/
 
 ### VS Code ###
-.vscode/
+# Project-level config (mcp.json, launch.json, settings.json) is tracked and synced.
 
 ### IBM BOB ###
-.bob
+# Project-level config (mcp.json, custom_modes.yaml, settings.json, skills/) is tracked.
+# Only transient/local artifacts are ignored:
+.bob/.bob-errors/
+.bob/notes/
 
 
 ### Claude Code ###
-.claude/skills/
+# Project-level skills are tracked and synced (see docs/agents/11-mcp-tools.md).
