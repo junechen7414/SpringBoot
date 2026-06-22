@@ -38,6 +38,9 @@ description: Every conversation
 @../../docs/agents/09-monitoring.md
 @../../docs/agents/10-troubleshooting.md
 
+<!-- 工具設定 -->
+@../../docs/agents/11-ai-tools-overview.md
+
 ## 文檔管理規範
 
 1. **文檔放置位置**

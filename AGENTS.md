@@ -20,7 +20,10 @@ This file provides guidance to agents when working with code in this repository.
 @./docs/agents/09-monitoring.md
 @./docs/agents/10-troubleshooting.md
 
+<!-- 工具設定 -->
+@./docs/agents/11-ai-tools-overview.md
+
 ---
 
-**最後更新**: 2026-06-10
+**最後更新**: 2026-06-22
 **維護者**: Bobby

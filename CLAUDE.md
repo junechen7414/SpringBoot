@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Authoritative docs
 
-Detailed guidance already lives in **`AGENTS.md`**, which `@`-imports the modular docs under **`docs/agents/`** (overview, setup, git workflow, branch cleanup, code standards, architecture, dependency-check, testing, monitoring, troubleshooting). Read those for depth; this file is the fast-start summary. When project conventions change, keep `AGENTS.md`, `docs/agents/*`, and `.github/instructions/Global.instructions.md` in sync (the code-standards doc requires it).
+Detailed guidance already lives in **`AGENTS.md`**, which `@`-imports the modular docs under **`docs/agents/`** (overview, setup, git workflow, branch cleanup, code standards, architecture, dependency-check, testing, monitoring, troubleshooting, ai-tools-overview). Read those for depth; this file is the fast-start summary. When project conventions change, keep `AGENTS.md`, `docs/agents/*`, and `.github/instructions/Global.instructions.md` in sync (the code-standards doc requires it).
 
 ## Conventions that affect every task
 
