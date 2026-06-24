@@ -55,7 +55,6 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-otlp'
 	implementation 'io.micrometer:micrometer-java21'
 	runtimeOnly 'com.h2database:h2'
-	testImplementation 'com.h2database:h2'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation "org.testcontainers:testcontainers-oracle-free:2.0.5"
 	testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
