@@ -21,7 +21,8 @@ import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
-import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
+import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
+import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.util.PageResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -113,11 +114,25 @@ public class ProductController {
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "處理訂單中的商品庫存", description = "內部使用：處理訂單建立/更新時的商品庫存扣除與歸還。")
-    @ApiResponse(responseCode = "200", description = "處理成功")
-    @PostMapping("/processOrderItems")
-    public void processOrderItems(@RequestBody ProcessOrderItemsRequest request) {
-        productService.processOrderItems(request);
+    @Operation(summary = "預留商品庫存", description = "內部使用：建立訂單時預留(reserve)商品庫存。")
+    @ApiResponse(responseCode = "200", description = "預留成功")
+    @PostMapping("/reserve")
+    public void reserveStock(@RequestBody Set<OrderItemRequest> items) {
+        productService.reserveStock(items);
+    }
+
+    @Operation(summary = "釋放商品庫存", description = "內部使用：刪除訂單時釋放(release)商品庫存。")
+    @ApiResponse(responseCode = "200", description = "釋放成功")
+    @PostMapping("/release")
+    public void releaseStock(@RequestBody Set<OrderItemRequest> items) {
+        productService.releaseStock(items);
+    }
+
+    @Operation(summary = "調整商品庫存", description = "內部使用：更新訂單時依新舊項目差值調整(adjust)商品庫存的預留量。")
+    @ApiResponse(responseCode = "200", description = "調整成功")
+    @PostMapping("/adjustStock")
+    public void adjustStock(@RequestBody AdjustStockRequest request) {
+        productService.adjustStock(request);
     }
 
 }

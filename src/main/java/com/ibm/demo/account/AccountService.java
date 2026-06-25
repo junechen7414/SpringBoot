@@ -10,6 +10,7 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.enums.AccountStatus;
+import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.OrderClient;
@@ -80,6 +81,23 @@ public class AccountService {
     public GetAccountDetailResponse getAccountDetail(Integer id) {
         Account existingAccount = findAccountByIdOrThrow(id);
         return mapAccountToDetailResponse(existingAccount);
+    }
+
+    /**
+     * 驗證帳戶是否具下單資格（存在且為啟用狀態）。下單資格規則收斂於帳戶領域，
+     * 呼叫端（如訂單服務）只需表達意圖，無須知道帳戶的狀態欄位或代碼。
+     *
+     * @param id 帳戶 ID
+     */
+    @Transactional(readOnly = true)
+    @Bulkhead(name = "account-read")
+    @RateLimiter(name = "account-read")
+    public void assertCanPlaceOrder(Integer id) {
+        // findAccountByIdOrThrow 受 @SQLRestriction 限制，停用/已刪除帳戶會查無 -> ResourceNotFoundException
+        Account account = findAccountByIdOrThrow(id);
+        if (AccountStatus.INACTIVE.getCode().equals(account.getStatus())) {
+            throw new AccountInactiveException("帳戶狀態:" + AccountStatus.INACTIVE.getDescription());
+        }
     }
 
     /**

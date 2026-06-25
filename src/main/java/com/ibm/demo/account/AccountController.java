@@ -71,6 +71,20 @@ public class AccountController {
                 return ResponseEntity.ok(accountDetail);
         }
 
+        // Assert Account Order Eligibility (internal)
+        @Operation(summary = "驗證帳戶下單資格", description = "內部使用：驗證帳戶是否存在且為啟用狀態而可下單。受限於 SQLRestriction 規則，若帳戶不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound；若帳戶為停用狀態則拋出 AccountInactiveException。")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "帳戶具下單資格"),
+                        @ApiResponse(responseCode = "400", description = "帳戶停用，不可下單", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+                        @ApiResponse(responseCode = "404", description = "帳戶不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+        })
+        @GetMapping("/{id}/order-eligibility")
+        public ResponseEntity<Void> assertCanPlaceOrder(
+                        @Parameter(description = "帳戶 ID", example = "1", required = true) @PathVariable Integer id) {
+                accountService.assertCanPlaceOrder(id);
+                return ResponseEntity.ok().build();
+        }
+
         // Update Account
         @Operation(summary = "更新帳戶", description = "更新現有帳戶資訊。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若欲將狀態從啟用 'Y' 變更為停用 'N'，會先檢查該帳戶是否仍有關聯訂單，若有則拋出 AccountStillHasOrderCanNotBeDeleteException。")
         @ApiResponses(value = {

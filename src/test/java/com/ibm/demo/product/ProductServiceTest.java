@@ -10,7 +10,9 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,9 +28,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
+import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
+import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
+import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 
 @Tag("UnitTest")
 @ExtendWith(MockitoExtension.class)
@@ -51,6 +56,114 @@ class ProductServiceTest {
         void setUp() {
                 // 手動建立物件，確保測試不受 Mockito 自動注入行為的靜默錯誤影響
                 productService = new ProductService(productRepository);
+        }
+
+        @Nested
+        @DisplayName("庫存命令 (reserve / release / adjust)")
+        class StockCommandTests {
+
+                @Test
+                @DisplayName("reserveStock 應對每項商品預留對應數量的庫存")
+                void reserveStock_ShouldReserveEachItem() {
+                        // Arrange
+                        Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2));
+                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
+                                        .thenReturn(List.of(productWithId(ACTIVE_PRODUCT_ID)));
+                        when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 2)).thenReturn(1);
+
+                        // Act
+                        productService.reserveStock(items);
+
+                        // Assert
+                        verify(productRepository).reserveProduct(ACTIVE_PRODUCT_ID, 2);
+                        verify(productRepository, never()).releaseProduct(any(), any());
+                }
+
+                @Test
+                @DisplayName("reserveStock 庫存不足時應拋出 ProductStockNotEnoughException")
+                void reserveStock_WhenStockNotEnough_ShouldThrow() {
+                        // Arrange
+                        Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 999));
+                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
+                                        .thenReturn(List.of(productWithId(ACTIVE_PRODUCT_ID)));
+                        when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 999)).thenReturn(0);
+
+                        // Act & Assert
+                        assertThatThrownBy(() -> productService.reserveStock(items))
+                                        .isInstanceOf(ProductStockNotEnoughException.class);
+                }
+
+                @Test
+                @DisplayName("reserveStock 商品不存在時應拋出 ResourceNotFoundException")
+                void reserveStock_WhenProductMissing_ShouldThrow() {
+                        // Arrange
+                        Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 1));
+                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
+                                        .thenReturn(List.of());
+
+                        // Act & Assert
+                        assertThatThrownBy(() -> productService.reserveStock(items))
+                                        .isInstanceOf(ResourceNotFoundException.class);
+                }
+
+                @Test
+                @DisplayName("releaseStock 應對每項商品釋放對應數量的庫存")
+                void releaseStock_ShouldReleaseEachItem() {
+                        // Arrange
+                        Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2));
+                        when(productRepository.releaseProduct(ACTIVE_PRODUCT_ID, 2)).thenReturn(1);
+
+                        // Act
+                        productService.releaseStock(items);
+
+                        // Assert
+                        verify(productRepository).releaseProduct(ACTIVE_PRODUCT_ID, 2);
+                        verify(productRepository, never()).reserveProduct(any(), any());
+                }
+
+                @Test
+                @DisplayName("adjustStock 應依新舊差值，數量增加時預留差額")
+                void adjustStock_WhenQuantityIncreases_ShouldReserveDelta() {
+                        // Arrange：同一商品由 2 調整為 5，差值 +3 應預留
+                        AdjustStockRequest request = AdjustStockRequest.builder()
+                                        .from(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2)))
+                                        .to(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 5)))
+                                        .build();
+                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
+                                        .thenReturn(List.of(productWithId(ACTIVE_PRODUCT_ID)));
+                        when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 3)).thenReturn(1);
+
+                        // Act
+                        productService.adjustStock(request);
+
+                        // Assert
+                        verify(productRepository).reserveProduct(ACTIVE_PRODUCT_ID, 3);
+                        verify(productRepository, never()).releaseProduct(any(), any());
+                }
+
+                @Test
+                @DisplayName("adjustStock 數量減少時應釋放差額")
+                void adjustStock_WhenQuantityDecreases_ShouldReleaseDelta() {
+                        // Arrange：同一商品由 5 調整為 2，差值 -3 應釋放
+                        AdjustStockRequest request = AdjustStockRequest.builder()
+                                        .from(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 5)))
+                                        .to(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2)))
+                                        .build();
+                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
+                                        .thenReturn(List.of(productWithId(ACTIVE_PRODUCT_ID)));
+                        when(productRepository.releaseProduct(ACTIVE_PRODUCT_ID, 3)).thenReturn(1);
+
+                        // Act
+                        productService.adjustStock(request);
+
+                        // Assert
+                        verify(productRepository).releaseProduct(ACTIVE_PRODUCT_ID, 3);
+                        verify(productRepository, never()).reserveProduct(any(), any());
+                }
+
+                private Product productWithId(Integer id) {
+                        return Product.builder().id(id).build();
+                }
         }
 
         @Nested

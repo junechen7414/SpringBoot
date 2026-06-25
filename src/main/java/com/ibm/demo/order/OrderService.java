@@ -12,9 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
-import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
@@ -28,8 +26,8 @@ import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
+import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
-import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
 
@@ -67,11 +65,9 @@ public class OrderService {
                 ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
                 ServiceValidator.validateNotNull(createOrderRequest.accountId(), "Account ID");
                 ServiceValidator.validateNotEmpty(createOrderRequest.items(), "Order details");
-                // 驗證帳戶存在且狀態為啟用
+                // 驗證帳戶具下單資格（資格規則由帳戶領域負責）
                 Integer accountId = createOrderRequest.accountId();
-                if (accountClient.getAccountDetail(accountId).status().equals(AccountStatus.INACTIVE.getCode())) {
-                        throw new AccountInactiveException("帳戶狀態:" + AccountStatus.INACTIVE.getDescription());
-                }
+                accountClient.assertCanPlaceOrder(accountId);
 
                 // 驗證並轉換訂單明細，確保同一訂單中同一商品只有一筆明細
                 Set<OrderItemRequest> uniqueItems = validateAndConvertToUniqueItems(
@@ -79,24 +75,15 @@ public class OrderService {
                                 detail -> detail.productId(),
                                 detail -> detail.quantity());
 
-                ProcessOrderItemsRequest request = ProcessOrderItemsRequest.builder()
-                                .originalItems(Collections.emptySet())
-                                .updatedItems(uniqueItems)
-                                .build();
-
-                productClient.processOrderItems(request);
+                productClient.reserveStock(uniqueItems);
 
                 // 將資料庫操作委派給交易服務，若失敗則補償歸還庫存
                 try {
                         return orderTransactionalService.createOrder(createOrderRequest);
                 } catch (Exception e) {
-                        // 補償: 歸還已扣除的庫存 (反轉 original 和 updated)
-                        ProcessOrderItemsRequest rollbackRequest = ProcessOrderItemsRequest.builder()
-                                        .originalItems(uniqueItems)
-                                        .updatedItems(Collections.emptySet())
-                                        .build();
+                        // 補償: 釋放已預留的庫存
                         try {
-                                productClient.processOrderItems(rollbackRequest);
+                                productClient.releaseStock(uniqueItems);
                         } catch (Exception compensationEx) {
                                 log.error("建立訂單失敗後，補償歸還庫存也失敗，需人工介入處理。" +
                                                 "帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",
@@ -214,24 +201,21 @@ public class OrderService {
                                 detail -> detail.productId(),
                                 detail -> detail.quantity());
 
-                ProcessOrderItemsRequest processRequest = ProcessOrderItemsRequest.builder()
-                                .originalItems(originalItems)
-                                .updatedItems(uniqueItems)
-                                .build();
-
-                productClient.processOrderItems(processRequest);
+                productClient.adjustStock(AdjustStockRequest.builder()
+                                .from(originalItems)
+                                .to(uniqueItems)
+                                .build());
 
                 // 將資料庫操作委派給交易服務，若失敗則補償反轉庫存操作
                 try {
                         orderTransactionalService.updateOrder(request, order);
                 } catch (Exception e) {
-                        // 補償: 反轉庫存操作 (將 original 和 updated 互換)
-                        ProcessOrderItemsRequest rollbackRequest = ProcessOrderItemsRequest.builder()
-                                        .originalItems(uniqueItems)
-                                        .updatedItems(originalItems)
-                                        .build();
+                        // 補償: 將庫存調整回原狀 (from 與 to 互換)
                         try {
-                                productClient.processOrderItems(rollbackRequest);
+                                productClient.adjustStock(AdjustStockRequest.builder()
+                                                .from(uniqueItems)
+                                                .to(originalItems)
+                                                .build());
                         } catch (Exception compensationEx) {
                                 log.error("更新訂單失敗後，補償反轉庫存也失敗，需人工介入處理。" +
                                                 "訂單ID: {}, 帳戶ID: {}, 原商品清單: {}, 新商品清單: {}, 原始異常: {}, 補償異常: {}",
@@ -276,24 +260,15 @@ public class OrderService {
                                                 .build())
                                 .collect(Collectors.toSet());
 
-                ProcessOrderItemsRequest processRequest = ProcessOrderItemsRequest.builder()
-                                .originalItems(originalItems)
-                                .updatedItems(Collections.emptySet())
-                                .build();
-
-                productClient.processOrderItems(processRequest);
+                productClient.releaseStock(originalItems);
 
                 // 4. 再刪除訂單，若失敗則補償重新扣回庫存
                 try {
                         orderTransactionalService.deleteOrder(existingOrderInfo, existingOrderInfo.getVersion());
                 } catch (Exception e) {
-                        // 補償: 重新扣回已歸還的庫存
-                        ProcessOrderItemsRequest rollbackRequest = ProcessOrderItemsRequest.builder()
-                                        .originalItems(Collections.emptySet())
-                                        .updatedItems(originalItems)
-                                        .build();
+                        // 補償: 重新預留已歸還的庫存
                         try {
-                                productClient.processOrderItems(rollbackRequest);
+                                productClient.reserveStock(originalItems);
                         } catch (Exception compensationEx) {
                                 log.error("刪除訂單失敗後，補償重新扣回庫存也失敗，需人工介入處理。" +
                                                 "訂單ID: {}, 帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",
