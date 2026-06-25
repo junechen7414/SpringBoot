@@ -32,7 +32,6 @@ import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.OrderClient;
@@ -110,24 +109,7 @@ public class AccountServiceTest {
         }
 
         @Test
-        @DisplayName("帳戶為停用狀態時，應拋出 AccountInactiveException")
-        void assertCanPlaceOrder_WhenInactive_ShouldThrow() {
-            // Arrange：mock repository 回傳停用帳戶（繞過 @SQLRestriction），以驗證服務層的資格規則
-            Account inactiveAccount = Account.builder()
-                    .id(ACTIVE_ACCOUNT_ID)
-                    .name(DEFAULT_NAME)
-                    .status(STATUS_INACTIVE)
-                    .build();
-            when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(inactiveAccount));
-
-            // Act & Assert
-            assertThatThrownBy(() -> accountService.assertCanPlaceOrder(ACTIVE_ACCOUNT_ID))
-                    .isInstanceOf(AccountInactiveException.class)
-                    .hasMessageContaining("帳戶狀態");
-        }
-
-        @Test
-        @DisplayName("帳戶不存在時，應拋出 ResourceNotFoundException")
+        @DisplayName("帳戶不存在或停用（受 @SQLRestriction 濾除而查無）時，應拋出 ResourceNotFoundException")
         void assertCanPlaceOrder_WhenNotFound_ShouldThrow() {
             // Arrange
             Integer missingId = 999;

@@ -72,11 +72,10 @@ public class AccountController {
         }
 
         // Assert Account Order Eligibility (internal)
-        @Operation(summary = "驗證帳戶下單資格", description = "內部使用：驗證帳戶是否存在且為啟用狀態而可下單。受限於 SQLRestriction 規則，若帳戶不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound；若帳戶為停用狀態則拋出 AccountInactiveException。")
+        @Operation(summary = "驗證帳戶下單資格", description = "內部使用：驗證帳戶是否具下單資格。受限於 SQLRestriction 規則，停用或已軟刪除的帳戶查詢即不可見，故帳戶不存在、已軟刪除或狀態非啟用 'Y' 時一律回傳 NotFound。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "帳戶具下單資格"),
-                        @ApiResponse(responseCode = "400", description = "帳戶停用，不可下單", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
-                        @ApiResponse(responseCode = "404", description = "帳戶不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "404", description = "帳戶不存在或不可下單", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         @GetMapping("/{id}/order-eligibility")
         public ResponseEntity<Void> assertCanPlaceOrder(

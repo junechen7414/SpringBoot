@@ -37,11 +37,11 @@ public class OrderController {
         private final OrderService orderService;
 
         // Create Order
-        @Operation(summary = "建立新訂單", description = "建立新訂單。先驗證帳戶是否啟用（不啟用則拋出 AccountInactiveException），檢查訂單內是否有重複商品（重複則拋出 InvalidRequestException），最後透過商品服務處理庫存（若狀態不可銷售或庫存不足由商品服務拋出異常）。成功則新增訂單主檔（預設狀態 1001）與明細。")
+        @Operation(summary = "建立新訂單", description = "建立新訂單。先驗證帳戶具下單資格（受 SQLRestriction 限制，停用或不存在的帳戶一律回傳 NotFound），檢查訂單內是否有重複商品（重複則拋出 InvalidRequestException），最後透過商品服務預留庫存（商品不可銷售視為 NotFound、庫存不足則拋出 ProductStockNotEnoughException）。成功則新增訂單主檔（預設狀態 1001）與明細。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "建立成功，回傳訂單 ID"),
-                        @ApiResponse(responseCode = "400", description = "參數驗證失敗、帳戶未啟用、重複商品或庫存不足", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
-                        @ApiResponse(responseCode = "404", description = "帳戶或商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+                        @ApiResponse(responseCode = "404", description = "帳戶不具下單資格或商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         @PostMapping
         public ResponseEntity<Integer> createOrder(@Valid @RequestBody CreateOrderRequest createOrderRequest) {

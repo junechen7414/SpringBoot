@@ -26,9 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
@@ -134,33 +132,33 @@ class OrderServiceTest {
         class CreateOrderTests {
 
                 @Test
-                @DisplayName("建立訂單時，若帳號不具下單資格，應拋出 AccountInactiveException")
-                void createOrder_WhenAccountIsInactive_ShouldThrowException() {
+                @DisplayName("建立訂單時，若帳號不具下單資格(停用或不存在，受 SQLRestriction 濾除而查無)，應傳播 ResourceNotFoundException")
+                void createOrder_WhenAccountIneligible_ShouldThrowException() {
                         // Arrange
-                        Integer inactiveId = 2;
+                        Integer ineligibleId = 2;
                         CreateOrderRequest request = CreateOrderRequest.builder()
-                                        .accountId(inactiveId)
+                                        .accountId(ineligibleId)
                                         .items(List.of(CreateOrderDetailRequest.builder()
                                                         .productId(SELLABLE_PRODUCT_ID)
                                                         .quantity(1)
                                                         .build()))
                                         .build();
 
-                        // 關鍵：帳戶領域判定不具資格並拋出例外
-                        doThrow(new AccountInactiveException("帳戶狀態:停用"))
-                                        .when(accountClient).assertCanPlaceOrder(inactiveId);
+                        // 關鍵：帳戶領域判定不具資格，停用/不存在均查無 -> ResourceNotFoundException
+                        doThrow(new ResourceNotFoundException("Account not found with id: " + ineligibleId))
+                                        .when(accountClient).assertCanPlaceOrder(ineligibleId);
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
-                                        .isInstanceOf(AccountInactiveException.class)
-                                        .hasMessageContaining("帳戶狀態");
+                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .hasMessageContaining("Account not found");
 
                         verifyNoInteractions(productClient);
                         verifyNoInteractions(orderTransactionalService);
                 }
 
                 @Test
-                @DisplayName("建立訂單時，若商品不可銷售，應由 ProductClient 拋出異常")
+                @DisplayName("建立訂單時，若商品不可銷售(受 SQLRestriction 濾除而查無)，應由 ProductClient 拋出 ResourceNotFoundException")
                 void createOrder_WhenProductNotSellable_ShouldThrowException() {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
@@ -168,15 +166,15 @@ class OrderServiceTest {
                                         .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)))
                                         .build();
 
-                        // 關鍵：模擬 reserveStock 發現商品不可售並拋出異常
-                        doThrow(new ProductInactiveException("商品不可銷售"))
+                        // 關鍵：不可售商品受 @SQLRestriction 濾除，reserveStock 視為查無而拋出 ResourceNotFoundException
+                        doThrow(new ResourceNotFoundException("Products not found with IDs: " + SELLABLE_PRODUCT_ID))
                                         .when(productClient)
                                         .reserveStock(any());
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
-                                        .isInstanceOf(ProductInactiveException.class)
-                                        .hasMessageContaining("商品不可銷售");
+                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .hasMessageContaining("Products not found");
 
                         // 驗證：既然拋異常了，後面的交易服務絕對不該執行
                         verifyNoInteractions(orderTransactionalService);

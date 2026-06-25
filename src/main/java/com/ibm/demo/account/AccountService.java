@@ -10,7 +10,6 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.OrderClient;
@@ -84,8 +83,12 @@ public class AccountService {
     }
 
     /**
-     * 驗證帳戶是否具下單資格（存在且為啟用狀態）。下單資格規則收斂於帳戶領域，
-     * 呼叫端（如訂單服務）只需表達意圖，無須知道帳戶的狀態欄位或代碼。
+     * 驗證帳戶是否具下單資格。下單資格規則收斂於帳戶領域，呼叫端（如訂單服務）
+     * 只需表達意圖，無須知道帳戶的狀態欄位或代碼。
+     * <p>
+     * 帳戶實體受 {@code @SQLRestriction("STATUS = 'Y' AND DELETED = false")} 限制，
+     * 停用或已軟刪除的帳戶查詢即不可見，故「存在且可載入」等同於「具下單資格」；
+     * 不符者一律由 {@code findAccountByIdOrThrow} 拋出 ResourceNotFoundException(404)。
      *
      * @param id 帳戶 ID
      */
@@ -93,11 +96,7 @@ public class AccountService {
     @Bulkhead(name = "account-read")
     @RateLimiter(name = "account-read")
     public void assertCanPlaceOrder(Integer id) {
-        // findAccountByIdOrThrow 受 @SQLRestriction 限制，停用/已刪除帳戶會查無 -> ResourceNotFoundException
-        Account account = findAccountByIdOrThrow(id);
-        if (AccountStatus.INACTIVE.getCode().equals(account.getStatus())) {
-            throw new AccountInactiveException("帳戶狀態:" + AccountStatus.INACTIVE.getDescription());
-        }
+        findAccountByIdOrThrow(id);
     }
 
     /**
