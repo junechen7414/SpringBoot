@@ -10,7 +10,8 @@ import org.springframework.web.service.annotation.HttpExchange;
 import org.springframework.web.service.annotation.PostExchange;
 
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
-import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
+import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
+import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 
 @HttpExchange("/product")
 public interface ProductClient {
@@ -23,8 +24,20 @@ public interface ProductClient {
     List<GetProductDetailResponse> getProductDetails(@RequestParam("ids") Set<Integer> ids);
 
     /**
-     * 處理訂單商品庫存
+     * 預留庫存（建立訂單）
      */
-    @PostExchange("/processOrderItems")
-    void processOrderItems(@RequestBody ProcessOrderItemsRequest request);
+    @PostExchange("/reserve")
+    void reserveStock(@RequestBody Set<OrderItemRequest> items);
+
+    /**
+     * 釋放庫存（刪除訂單）
+     */
+    @PostExchange("/release")
+    void releaseStock(@RequestBody Set<OrderItemRequest> items);
+
+    /**
+     * 調整庫存（更新訂單，依新舊差值處理）
+     */
+    @PostExchange("/adjustStock")
+    void adjustStock(@RequestBody AdjustStockRequest request);
 }

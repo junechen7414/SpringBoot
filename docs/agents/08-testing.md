@@ -24,6 +24,16 @@
 - **完整驗證**: 支援所有 SQL 語法、Stored Procedures
 - **CI/CD 友善**: 無需預先安裝資料庫，容器自動管理生命週期
 
+### `BaseIntegrationTest` 為何採用 Singleton Container Pattern
+
+`BaseIntegrationTest` 的 `OracleContainer` 是在 `static {}` 區塊手動 `start()` 的單例，**刻意不使用 `@Testcontainers` / `@Container`**。請勿改回 JUnit 的容器生命週期管理。
+
+- **原因**：`@Container` 的生命週期會在**第一個**整合測試類別跑完後就停掉容器。但多個整合測試類別（如 `DemoApplicationTests`、`OptimisticLockingIntegrationTest`）的 `@SpringBootTest` + `@ActiveProfiles` 設定相同，Spring 會**快取並跨類別重用同一個 ApplicationContext**。被重用的 context（含 `@ServiceConnection` 連到的 DataSource）仍指向**已被停掉的舊容器 port**，於是後續類別的所有測試在 `beforeTestMethod` 取連線時打到死掉的 listener，整批 `ORA-12541 沒有監聽器` 失敗。
+- **症狀**：`./gradlew test --tests "*OptimisticLockingIntegrationTest"` **單獨跑會過**，但完整 `./gradlew test` **必爆**；log 裡「容器啟動的 port」與「連線失敗的 port」**不一致**（連到的是前一個類別那個已停掉的容器）。
+- **解法（現行做法）**：單例容器整個 JVM 只啟動一次、全程不被停，快取的 context 永遠指向活著的容器；容器由 Ryuk 在 JVM 結束時回收。`@ServiceConnection` 不需要 `@Container` 也能被 Spring Boot 掃描到（在 context 建立前容器已 `start()`）。
+
+> 判讀提示：整合測試的失敗若「單跑會過、合跑才爆」且 port 對不上，幾乎都是容器生命週期與 context 快取的衝突，而非程式回歸。
+
 ### 本機跑整合測試（Windows + podman）注意事項
 
 CI（GitHub Actions）環境正常，以下僅為**本機 Windows + podman machine** 的已知坑與解法：

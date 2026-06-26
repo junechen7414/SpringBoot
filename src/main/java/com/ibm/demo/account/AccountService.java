@@ -83,6 +83,23 @@ public class AccountService {
     }
 
     /**
+     * 驗證帳戶是否具下單資格。下單資格規則收斂於帳戶領域，呼叫端（如訂單服務）
+     * 只需表達意圖，無須知道帳戶的狀態欄位或代碼。
+     * <p>
+     * 帳戶實體受 {@code @SQLRestriction("STATUS = 'Y' AND DELETED = false")} 限制，
+     * 停用或已軟刪除的帳戶查詢即不可見，故「存在且可載入」等同於「具下單資格」；
+     * 不符者一律由 {@code findAccountByIdOrThrow} 拋出 ResourceNotFoundException(404)。
+     *
+     * @param id 帳戶 ID
+     */
+    @Transactional(readOnly = true)
+    @Bulkhead(name = "account-read")
+    @RateLimiter(name = "account-read")
+    public void assertCanPlaceOrder(Integer id) {
+        findAccountByIdOrThrow(id);
+    }
+
+    /**
      * @param updateAccountRequestDto
      */
     @Transactional

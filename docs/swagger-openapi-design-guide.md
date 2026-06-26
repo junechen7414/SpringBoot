@@ -217,8 +217,8 @@ UserResponse:
 {
   "timestamp": "2026-06-08T12:00:00",
   "status": 400,
-  "error": "ACCOUNT_001",
-  "message": "帳戶尚未啟用"
+  "error": "PRODUCT_003",
+  "message": "商品庫存不足"
 }
 ```
 

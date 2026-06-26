@@ -25,12 +25,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.AccountClient;
-import com.ibm.demo.account.DTO.GetAccountDetailResponse;
-import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductInactiveException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
@@ -38,8 +34,8 @@ import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderInfo;
-import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
+import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
 import com.ibm.demo.product.ProductClient;
 
 @Tag("UnitTest")
@@ -60,8 +56,6 @@ class OrderServiceTest {
         // 測試常數
         private final Integer STATUS_CREATED = OrderStatus.CREATED.getCode();
         private final Integer STATUS_CANCELLED = OrderStatus.CANCELLED.getCode();
-        private final String STATUS_ACTIVE = AccountStatus.ACTIVE.getCode();
-        private final String STATUS_INACTIVE = AccountStatus.INACTIVE.getCode();
         private final Integer ACTIVE_ACCOUNT_ID = 1;
         private final Integer SELLABLE_PRODUCT_ID = 1;
         private final Integer EXISTING_ORDER_ID = 101;
@@ -78,7 +72,7 @@ class OrderServiceTest {
         class CreateOrderSuccessTests {
 
                 @Test
-                @DisplayName("建立訂單完整流程：校驗帳號、商品、庫存後，成功存檔並扣庫存")
+                @DisplayName("建立訂單完整流程：校驗帳號資格、預留庫存後，成功存檔")
                 void createOrder_FullProcess_Success() {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
@@ -86,11 +80,9 @@ class OrderServiceTest {
                                         .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
                                         .build();
 
-                        // 1. 模擬帳號校驗
-                        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
-                                        .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
+                        // 帳號資格校驗為 void，預設不拋例外即代表通過，無須 stub。
 
-                        // 2. 模擬交易服務層的行為
+                        // 模擬交易服務層的行為
                         when(orderTransactionalService.createOrder(any(CreateOrderRequest.class))).thenReturn(888);
 
                         // Act
@@ -100,10 +92,10 @@ class OrderServiceTest {
                         assertThat(orderId).isEqualTo(888);
 
                         // Verify: 驗證核心依賴的互動
-                        verify(accountClient).getAccountDetail(ACTIVE_ACCOUNT_ID);
-                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
+                        verify(accountClient).assertCanPlaceOrder(ACTIVE_ACCOUNT_ID);
+                        verify(productClient).reserveStock(any());
 
-                        // Verify: 驗證對交易服務的呼叫，並用 ArgumentCaptor 捕獲傳遞的 OrderInfo 內容
+                        // Verify: 驗證對交易服務的呼叫，並用 ArgumentCaptor 捕獲傳遞的內容
                         ArgumentCaptor<CreateOrderRequest> requestCaptor = ArgumentCaptor
                                         .forClass(CreateOrderRequest.class);
                         verify(orderTransactionalService).createOrder(requestCaptor.capture());
@@ -112,16 +104,13 @@ class OrderServiceTest {
                 }
 
                 @Test
-                @DisplayName("建立訂單時交易服務失敗，應觸發補償歸還庫存並拋出原始異常")
+                @DisplayName("建立訂單時交易服務失敗，應觸發補償釋放庫存並拋出原始異常")
                 void createOrder_WhenTransactionFails_ShouldCompensateAndThrow() {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
                                         .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
                                         .build();
-
-                        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
-                                        .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
 
                         // 模擬交易服務拋出異常
                         doThrow(new RuntimeException("DB connection failed"))
@@ -132,9 +121,9 @@ class OrderServiceTest {
                                         .isInstanceOf(RuntimeException.class)
                                         .hasMessageContaining("DB connection failed");
 
-                        // Verify: processOrderItems 被呼叫兩次（一次扣庫存，一次補償歸還）
-                        verify(productClient, org.mockito.Mockito.times(2))
-                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
+                        // Verify: 先預留庫存，交易失敗後補償釋放庫存
+                        verify(productClient).reserveStock(any());
+                        verify(productClient).releaseStock(any());
                 }
         }
 
@@ -143,33 +132,33 @@ class OrderServiceTest {
         class CreateOrderTests {
 
                 @Test
-                @DisplayName("建立訂單時，若帳號非活躍(N)，應拋出 AccountInactiveException")
-                void createOrder_WhenAccountIsInactive_ShouldThrowException() {
+                @DisplayName("建立訂單時，若帳號不具下單資格(停用或不存在，受 SQLRestriction 濾除而查無)，應傳播 ResourceNotFoundException")
+                void createOrder_WhenAccountIneligible_ShouldThrowException() {
                         // Arrange
-                        Integer inactiveId = 2;
+                        Integer ineligibleId = 2;
                         CreateOrderRequest request = CreateOrderRequest.builder()
-                                        .accountId(inactiveId)
+                                        .accountId(ineligibleId)
                                         .items(List.of(CreateOrderDetailRequest.builder()
                                                         .productId(SELLABLE_PRODUCT_ID)
                                                         .quantity(1)
                                                         .build()))
                                         .build();
 
-                        GetAccountDetailResponse inactiveResponse = GetAccountDetailResponse.builder()
-                                        .status(STATUS_INACTIVE).build();
-                        when(accountClient.getAccountDetail(inactiveId)).thenReturn(inactiveResponse);
+                        // 關鍵：帳戶領域判定不具資格，停用/不存在均查無 -> ResourceNotFoundException
+                        doThrow(new ResourceNotFoundException("Account not found with id: " + ineligibleId))
+                                        .when(accountClient).assertCanPlaceOrder(ineligibleId);
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
-                                        .isInstanceOf(AccountInactiveException.class)
-                                        .hasMessageContaining("帳戶狀態");
+                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .hasMessageContaining("Account not found");
 
                         verifyNoInteractions(productClient);
                         verifyNoInteractions(orderTransactionalService);
                 }
 
                 @Test
-                @DisplayName("建立訂單時，若商品不可銷售，應由 ProductClient 拋出異常")
+                @DisplayName("建立訂單時，若商品不可銷售(受 SQLRestriction 濾除而查無)，應由 ProductClient 拋出 ResourceNotFoundException")
                 void createOrder_WhenProductNotSellable_ShouldThrowException() {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
@@ -177,19 +166,15 @@ class OrderServiceTest {
                                         .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)))
                                         .build();
 
-                        // 模擬帳戶正常
-                        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
-                                        .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
-
-                        // 關鍵：模擬 processOrderItems 發現商品不可售並拋出異常
-                        doThrow(new ProductInactiveException("商品不可銷售"))
+                        // 關鍵：不可售商品受 @SQLRestriction 濾除，reserveStock 視為查無而拋出 ResourceNotFoundException
+                        doThrow(new ResourceNotFoundException("Products not found with IDs: " + SELLABLE_PRODUCT_ID))
                                         .when(productClient)
-                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
+                                        .reserveStock(any());
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
-                                        .isInstanceOf(ProductInactiveException.class)
-                                        .hasMessageContaining("商品不可銷售");
+                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .hasMessageContaining("Products not found");
 
                         // 驗證：既然拋異常了，後面的交易服務絕對不該執行
                         verifyNoInteractions(orderTransactionalService);
@@ -204,13 +189,10 @@ class OrderServiceTest {
                                         .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)))
                                         .build();
 
-                        when(accountClient.getAccountDetail(ACTIVE_ACCOUNT_ID))
-                                        .thenReturn(GetAccountDetailResponse.builder().status(STATUS_ACTIVE).build());
-
-                        // 關鍵：模擬 processOrderItems 發現庫存不足
+                        // 關鍵：模擬 reserveStock 發現庫存不足
                         doThrow(new ProductStockNotEnoughException("庫存不足"))
                                         .when(productClient)
-                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
+                                        .reserveStock(any());
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
                                         .isInstanceOf(ProductStockNotEnoughException.class)
@@ -244,7 +226,7 @@ class OrderServiceTest {
                         // Assert
                         // 驗證呼叫了交易層服務來儲存
                         verify(orderTransactionalService).updateOrder(request, existingOrder);
-                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class)); // 庫存處理依然由
+                        verify(productClient).adjustStock(any(AdjustStockRequest.class)); // 庫存處理依然由商品服務負責
                 }
 
                 @Test
@@ -269,9 +251,9 @@ class OrderServiceTest {
                                         .isInstanceOf(RuntimeException.class)
                                         .hasMessageContaining("DB update failed");
 
-                        // Verify: processOrderItems 被呼叫兩次（一次調整庫存，一次補償反轉）
+                        // Verify: adjustStock 被呼叫兩次（一次調整庫存，一次補償調整回原狀）
                         verify(productClient, org.mockito.Mockito.times(2))
-                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
+                                        .adjustStock(any(AdjustStockRequest.class));
                 }
         }
 
@@ -317,10 +299,10 @@ class OrderServiceTest {
 
                         when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
 
-                        // 關鍵：模擬 processOrderItems 拋出庫存不足異常
+                        // 關鍵：模擬 adjustStock 拋出庫存不足異常
                         doThrow(new ProductStockNotEnoughException("庫存不足"))
                                         .when(productClient)
-                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
+                                        .adjustStock(any(AdjustStockRequest.class));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.updateOrder(request))
@@ -347,8 +329,8 @@ class OrderServiceTest {
                         orderService.deleteOrder(EXISTING_ORDER_ID);
 
                         // Assert
-                        verify(orderTransactionalService).deleteOrder(order,order.getVersion());
-                        verify(productClient).processOrderItems(any(ProcessOrderItemsRequest.class));
+                        verify(orderTransactionalService).deleteOrder(order, order.getVersion());
+                        verify(productClient).releaseStock(any());
                 }
         }
 
@@ -398,7 +380,7 @@ class OrderServiceTest {
                 }
 
                 @Test
-                @DisplayName("刪除時若發生樂觀鎖衝突，應觸發補償重新扣回庫存並拋出原始異常")
+                @DisplayName("刪除時若發生樂觀鎖衝突，應觸發補償重新預留庫存並拋出原始異常")
                 void deleteOrder_WhenOptimisticLockingConflict_ShouldCompensateAndThrow() {
                         // Arrange
                         OrderInfo order = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED);
@@ -414,9 +396,9 @@ class OrderServiceTest {
                                         .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
 
                         verify(orderTransactionalService).deleteOrder(order, 1);
-                        // Verify: processOrderItems 被呼叫兩次（一次歸還庫存，一次補償重新扣回）
-                        verify(productClient, org.mockito.Mockito.times(2))
-                                        .processOrderItems(any(ProcessOrderItemsRequest.class));
+                        // Verify: 先釋放庫存，補償時再重新預留庫存
+                        verify(productClient).releaseStock(any());
+                        verify(productClient).reserveStock(any());
                 }
         }
 

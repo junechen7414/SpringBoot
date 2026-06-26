@@ -97,7 +97,7 @@ read_file("src/main/java/.../ProductController.java")
 read_file("src/main/java/.../ProductClient.java")
 
 # 4. 檢查是否有新的 DTO 需要 import
-search_file_content("ProcessOrderItemsRequest", "src/main/java")
+search_file_content("AdjustStockRequest", "src/main/java")
 
 # 5. 編譯驗證
 execute_command("./gradlew compileJava")

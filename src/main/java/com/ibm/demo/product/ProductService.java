@@ -18,8 +18,8 @@ import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
+import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
-import com.ibm.demo.product.DTO.internal.ProcessOrderItemsRequest;
 import com.ibm.demo.util.DBAssertion;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
@@ -152,14 +152,51 @@ public class ProductService {
         DBAssertion.assertUpdated(updated, Product.class, productId);
     }
 
+    /**
+     * 預留庫存（建立訂單時使用）。
+     *
+     * @param items 要預留的訂單項目集合
+     */
     @Transactional
     @Bulkhead(name = "product-inventory")
     @RateLimiter(name = "product-inventory")
-    public void processOrderItems(ProcessOrderItemsRequest request) {
-        ServiceValidator.validateNotNull(request, "Process order items request");
-        Set<OrderItemRequest> originalItems = request.originalItems();
-        Set<OrderItemRequest> updatedItems = request.updatedItems();
+    public void reserveStock(Set<OrderItemRequest> items) {
+        applyStockDelta(Set.of(), items);
+    }
 
+    /**
+     * 釋放庫存（刪除訂單時使用）。
+     *
+     * @param items 要釋放的訂單項目集合
+     */
+    @Transactional
+    @Bulkhead(name = "product-inventory")
+    @RateLimiter(name = "product-inventory")
+    public void releaseStock(Set<OrderItemRequest> items) {
+        applyStockDelta(items, Set.of());
+    }
+
+    /**
+     * 調整庫存（更新訂單時使用）：將庫存從 from 的預留狀態調整為 to 的預留狀態。
+     *
+     * @param request 包含調整前(from)與調整後(to)訂單項目集合的請求
+     */
+    @Transactional
+    @Bulkhead(name = "product-inventory")
+    @RateLimiter(name = "product-inventory")
+    public void adjustStock(AdjustStockRequest request) {
+        ServiceValidator.validateNotNull(request, "Adjust stock request");
+        applyStockDelta(request.from(), request.to());
+    }
+
+    /**
+     * 庫存差值計算與套用：對每個涉及的商品計算 (新數量 - 舊數量) 的差值，
+     * 正值代表需預留(reserve)、負值代表需釋放(release)、零則不處理。
+     *
+     * @param originalItems 調整前的預留項目集合
+     * @param updatedItems  調整後的預留項目集合
+     */
+    private void applyStockDelta(Set<OrderItemRequest> originalItems, Set<OrderItemRequest> updatedItems) {
         // 0. 驗證輸入的訂單商品明細集合是否為空，且updatedItems中productId要存在，否則拋出ResourceNotFound
         ServiceValidator.validateNotNull(originalItems, "Original order items");
         ServiceValidator.validateNotNull(updatedItems, "Updated order items");

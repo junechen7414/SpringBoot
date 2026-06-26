@@ -90,6 +90,39 @@ public class AccountServiceTest {
     }
 
     @Nested
+    @DisplayName("下單資格驗證")
+    class AssertCanPlaceOrderTests {
+
+        @Test
+        @DisplayName("帳戶存在且為啟用狀態時，應通過驗證不拋例外")
+        void assertCanPlaceOrder_WhenActive_ShouldPass() {
+            // Arrange
+            Account activeAccount = Account.builder()
+                    .id(ACTIVE_ACCOUNT_ID)
+                    .name(DEFAULT_NAME)
+                    .status(STATUS_ACTIVE)
+                    .build();
+            when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
+
+            // Act & Assert：不應拋出任何例外
+            accountService.assertCanPlaceOrder(ACTIVE_ACCOUNT_ID);
+        }
+
+        @Test
+        @DisplayName("帳戶不存在或停用（受 @SQLRestriction 濾除而查無）時，應拋出 ResourceNotFoundException")
+        void assertCanPlaceOrder_WhenNotFound_ShouldThrow() {
+            // Arrange
+            Integer missingId = 999;
+            when(accountRepository.findById(missingId)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> accountService.assertCanPlaceOrder(missingId))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("Account not found");
+        }
+    }
+
+    @Nested
     @DisplayName("查詢帳戶成功流程")
     class GetAccountSuccessTests {
 
