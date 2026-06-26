@@ -37,7 +37,7 @@ Tests:
 ```
 
 Notes:
-- Integration tests extend `BaseIntegrationTest` (auto-starts a `gvenzl/oracle-free` container via `@ServiceConnection`, profile `integration-test`); first run downloads the image and startup can take minutes.
+- Integration tests extend `BaseIntegrationTest`, which starts a single `gvenzl/oracle-free` container via a **singleton `static` block** + `@ServiceConnection` (profile `integration-test`); first run downloads the image and startup can take minutes. **Do NOT switch this to `@Testcontainers`/`@Container`** — that lifecycle stops the container after the first test class while Spring reuses the cached context, breaking later integration test classes. See `docs/agents/08-testing.md`.
 - `test` task forces `maxParallelForks = 1` to avoid Oracle container contention — don't expect parallel test execution.
 - Tag filtering is driven by the `junit.platform.exclude.tags` system property (wired in `build.gradle`).
 - **Windows + podman**: before running integration tests, run `podman compose stop` first — two concurrent Oracle containers (compose + Testcontainers) exhaust the default 2GiB podman machine and the second silently refuses connections. Also point `~/.testcontainers.properties` `docker.host` at the podman pipe. Pure-docs pushes skip this (test task is UP-TO-DATE, no container). See `docs/agents/08-testing.md`.
