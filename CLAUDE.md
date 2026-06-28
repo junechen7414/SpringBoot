@@ -25,7 +25,7 @@ podman compose up -d                  # app + Oracle + Alloy + Prometheus + Graf
 podman compose up oracle-db -d        # DB only, then run DemoApplication.java from IDE
 ```
 
-App listens on **http://localhost:8787**. Requires a `.env` with `ORACLE_DEV_USERNAME` / `ORACLE_DEV_PASSWORD` (see `.env.example`).
+App listens on **http://localhost:8787**. Requires a `.env` with `ORACLE_DEV_USERNAME` / `ORACLE_DEV_PASSWORD` (see `.env.example`). `ORACLE_DB_HOST` is optional — omit it for local IDE/`bootRun` (the dev datasource URL falls back to `localhost`); `podman compose up` injects `oracle-db` automatically. See `docs/agents/02-setup.md`.
 
 Tests:
 

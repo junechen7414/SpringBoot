@@ -31,7 +31,14 @@ docker compose up -d
 podman compose up oracle-db -d
 ```
 
-然後在 IDE 中執行 `DemoApplication.java`，應用會連接到容器內的 Oracle DB。
+然後在 IDE 中執行 `DemoApplication.java`，應用會透過 `localhost:1521`（compose 已將容器 1521 埠映射到宿主機）連接到 Oracle DB。
+
+> **資料庫主機名如何切換（`ORACLE_DB_HOST`）**：`application-dev.yml` 的 datasource URL 寫成
+> `jdbc:oracle:thin:@//${ORACLE_DB_HOST:localhost}:1521/FREEPDB1`，只把「主機名」抽成可覆寫的變數：
+> - **本地 IDE / `bootRun`**：不設定該變數，自動 fallback 成 `localhost`（需先 `podman compose up oracle-db -d` 把 1521 埠映射出來）。
+> - **容器內（`podman compose up`）**：`docker-compose.yml` 自動帶入 `ORACLE_DB_HOST=oracle-db`（服務名），容器間透過內建 DNS 解析連線。
+>
+> 之所以這樣設計，是因為本地直連時用容器服務名 `oracle-db` 無法解析；URL 格式集中在 yml 一份，只有主機名隨環境不同。
 
 #### 3. 環境變數配置
 
