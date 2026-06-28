@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:oracle:thin:@//oracle-db:1521/FREEPDB1
+    url: jdbc:oracle:thin:@//${ORACLE_DB_HOST:localhost}:1521/FREEPDB1
     username: ${ORACLE_DEV_USERNAME}
     password: ${ORACLE_DEV_PASSWORD}
     driver-class-name: oracle.jdbc.driver.OracleDriver

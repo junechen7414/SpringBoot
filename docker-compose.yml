@@ -8,8 +8,10 @@ services:
     ports:
       - "8787:8787" # Access via localhost:8787 from host machine
     environment:
-      # Internal communication: use service name 'oracle-db' instead of localhost
-      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521/FREEPDB1
+      # Internal communication: use service name 'oracle-db' instead of localhost.
+      # Only the host differs between container and local runs; the URL format lives
+      # in application-dev.yml (defaults to localhost when ORACLE_DB_HOST is unset).
+      - ORACLE_DB_HOST=oracle-db
       - SPRING_DATASOURCE_USERNAME=${ORACLE_DEV_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${ORACLE_DEV_PASSWORD}
     networks:
