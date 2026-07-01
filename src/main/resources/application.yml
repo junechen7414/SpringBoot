@@ -84,6 +84,12 @@ management:
 
 app:
   base-url: http://localhost:${server.port}
+  # HTTP Basic 認證帳密（env 覆寫）。預設值僅供本地 bootRun 開箱即用；正式環境務必以 env 覆蓋。
+  auth:
+    api-username: ${API_USERNAME:api}
+    api-password: ${API_PASSWORD:local-api-secret}
+    internal-username: ${INTERNAL_USERNAME:internal}
+    internal-password: ${INTERNAL_PASSWORD:local-internal-secret}
 
 http:
   client:

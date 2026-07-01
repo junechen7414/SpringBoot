@@ -69,3 +69,26 @@ public class ProductService {
     }
 }
 ```
+
+### 安全（Spring Security）
+
+- **設定位置**：`config/SecurityConfig.java`，提供 **stateless HTTP Basic** 的 `SecurityFilterChain`。
+- **授權規則**：`anyRequest().authenticated()`；放行監控與文件端點：
+  - actuator：`/actuator/health/**`、`/actuator/info`（`/actuator/prometheus` 一併放行，但本專案監控走 **OTLP push**，實際沒有該 scrape 端點）。
+  - springdoc：`/v3/api-docs/**`、`/swagger-ui/**`、`/swagger-ui.html`。
+- **使用者**：in-memory（`api`、`internal` 兩帳號），帳密來自 `app.auth.*`（env 覆寫；見 `AppProperties.Auth`）。**不建 DB 使用者表**。
+- **分層界線**：Security filter chain 只攔 **inbound HTTP** —— Oracle/Hikari 連線、OTLP metric 推送、容器間網路都不受影響。
+- **內部 `*Client` 自呼叫**：因 `*Client` 透過 loopback HTTP 打回本應用，`RestClientConfig` 為其掛上 `internal` 帳號的 Basic 憑證，讓自呼叫能通過 filter chain（否則會 401）。
+- **openapi profile**：`@Profile("openapi")` 另有一條全 `permitAll` 的 chain，確保 `generateOpenApiDocs`（打 `/v3/api-docs`）不被擋。
+
+```java
+// 授權規則骨架
+http
+    .csrf(csrf -> csrf.disable())
+    .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+    .authorizeHttpRequests(auth -> auth
+        .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
+        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+        .anyRequest().authenticated())
+    .httpBasic(Customizer.withDefaults());
+```

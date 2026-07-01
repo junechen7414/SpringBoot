@@ -47,7 +47,18 @@ podman compose up oracle-db -d
 ```env
 ORACLE_DEV_USERNAME=your_username
 ORACLE_DEV_PASSWORD=your_password
+
+# HTTP Basic 認證（Spring Security）。本地 bootRun 未設定時，application.yml 有 dev 友善預設值；
+# 正式/共享環境務必覆蓋。api-*：一般 API 呼叫端；internal-*：內部 *Client loopback 自呼叫服務帳號。
+API_USERNAME=api
+API_PASSWORD=change_me_api
+INTERNAL_USERNAME=internal
+INTERNAL_PASSWORD=change_me_internal
 ```
+
+> **呼叫受保護的 API**：加了 Spring Security 後，除了 `actuator health/info` 與 springdoc 文件端點外，
+> 其餘端點都需要 HTTP Basic 認證，例如 `curl -u api:<密碼> http://localhost:8787/account/1`。
+> 內部 `*Client` 的 loopback 自呼叫由 `RestClientConfig` 自動帶入 `internal` 帳號憑證，無須手動處理。
 
 ### 測試執行
 
