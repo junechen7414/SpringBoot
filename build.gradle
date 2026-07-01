@@ -1,6 +1,6 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '4.0.7'
+	id 'org.springframework.boot' version '4.1.0'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id "org.springdoc.openapi-gradle-plugin" version "1.9.0"
 }
@@ -29,32 +29,48 @@ repositories {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	runtimeOnly 'com.oracle.database.jdbc:ojdbc11'	
+	// ---- Web / MVC ----
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	// Boot 4 模組化：RestClient autoconfig（RestClient.Builder bean）已拆到專屬 starter
 	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-	compileOnly 'org.projectlombok:lombok:1.18.46'
-	annotationProcessor 'org.projectlombok:lombok:1.18.46'
-	developmentOnly "org.springframework.boot:spring-boot-devtools"
-	implementation 'org.springframework.boot:spring-boot-starter-aspectj'
+	// RestClient 底層 HTTP client
 	implementation 'org.apache.httpcomponents.client5:httpclient5'
-	implementation 'org.springframework.boot:spring-boot-starter-actuator'
-	// Resilience4j for rate limiting and bulkhead（Boot 4 artifact）
-	implementation 'io.github.resilience4j:resilience4j-spring-boot4:2.4.0'
+
+	// ---- OpenAPI / Swagger ----
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+	// ---- 持久層 / 資料庫 ----
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	runtimeOnly 'com.oracle.database.jdbc:ojdbc11'
 	// Flyway for database migration（Boot 4 改走 starter）
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	runtimeOnly 'org.flywaydb:flyway-database-oracle'
-	// 關鍵：將 Micrometer 指標透過 OTLP 格式導出
-    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
-    // 讓 Micrometer 支持 OTLP
-    implementation 'io.micrometer:micrometer-registry-otlp'
-	implementation 'io.micrometer:micrometer-java21'
+	// H2：測試與 OpenAPI 文件生成使用
 	runtimeOnly 'com.h2database:h2'
+
+	// ---- AOP ----
+	implementation 'org.springframework.boot:spring-boot-starter-aspectj'
+
+	// ---- 韌性（Resilience4j：rate limiting、bulkhead，Boot 4 artifact）----
+	implementation 'io.github.resilience4j:resilience4j-spring-boot4:2.4.0'
+
+	// ---- 可觀測性（Observability）----
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	// 關鍵：將 Micrometer 指標透過 OTLP 格式導出
+	implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+	// 讓 Micrometer 支持 OTLP
+	implementation 'io.micrometer:micrometer-registry-otlp'
+	implementation 'io.micrometer:micrometer-java21'
+
+	// ---- 開發工具 ----
+	compileOnly 'org.projectlombok:lombok:1.18.46'
+	annotationProcessor 'org.projectlombok:lombok:1.18.46'
+	developmentOnly "org.springframework.boot:spring-boot-devtools"
+
+	// ---- 測試 ----
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation "org.testcontainers:testcontainers-oracle-free:2.0.5"
 	testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
