@@ -25,10 +25,10 @@ import lombok.RequiredArgsConstructor;
  *
  * Security 是 servlet filter chain，只攔截「進入本應用的 HTTP 請求」，因此：
  * - Oracle/Hikari 連線、往外推的 OTLP metrics、容器間網路都不經過此 chain，不受影響。
- * - actuator health/info 與 Swagger 文件端點是 inbound HTTP，預設會被擋，故在下方明確 permitAll。
+ * - actuator health 與 Swagger 文件端點是 inbound HTTP，預設會被擋，故在下方明確 permitAll。
+ *   （health 是給 Dockerfile HEALTHCHECK 的 wget 探針用——它也走這條 filter chain，不放行就會 401。）
  *
- * 監控走 OTLP push（app → Alloy），並無 /actuator/prometheus scrape 端點；仍一併放行該路徑
- * 屬防禦性設定（未來若加 prometheus registry 也不會被擋）。
+ * 監控走 OTLP push（app → Alloy），沒有需要放行的 actuator scrape 端點。
  *
  * 使用者以 in-memory 定義（帳密走 env），不建立 DB 使用者表 —— DB schema 零改動。
  */
@@ -41,21 +41,23 @@ public class SecurityConfig {
     private final AppProperties appProperties;
 
     /**
-     * 一般 profile 的 filter chain：純 REST、無狀態、HTTP Basic。放行監控與文件端點，其餘一律需認證。
-     * actuator 以路徑比對（預設 base path /actuator）放行 health/info/prometheus；
-     * metrics 等其餘 actuator 端點落入 anyRequest().authenticated()。
+     * 一般 profile 的 filter chain：純 REST、無狀態、HTTP Basic。放行健康檢查與文件端點，其餘一律需認證。
+     * 只放行 /actuator/health（Dockerfile 探針）；其餘 actuator 端點落入 anyRequest().authenticated()。
      */
     @Bean
     @Profile("!openapi")
     SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                // STATELESS：不建 session、不發 JSESSIONID。預設 IF_REQUIRED 會為每個認證請求建 session；
+                // 但這裡的 *Client 是 loopback 自呼叫、每次都自帶 Basic 憑證，不需要「記住登入」。若留著 session，
+                // 每通自呼叫要嘛各建一個 session 造成爆量堆積，要嘛共用一份 cookie 產生隱藏的黏性狀態——
+                // 在高併發自呼叫下純屬負擔。STATELESS 讓模型對齊「機器對機器、每次帶憑證」的真實語義。
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 監控：放行健康檢查（prometheus 路徑防禦性放行，目前走 OTLP push 無此端點）
-                        .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus")
-                        .permitAll()
-                        // 文件：Swagger UI 與 OpenAPI JSON
+                        // 健康檢查：Dockerfile HEALTHCHECK 探針（wget /actuator/health）。這是唯一硬需求的放行。
+                        .requestMatchers("/actuator/health/**").permitAll()
+                        // 文件：讓 Swagger UI / OpenAPI JSON 執行時免登入即可瀏覽
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
                         .anyRequest().authenticated())
