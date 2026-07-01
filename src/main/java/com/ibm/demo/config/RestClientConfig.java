@@ -67,15 +67,21 @@ public class RestClientConfig {
     /**
      * 設定 "internal" group 中所有 client 共用的 RestClient：base URL、自訂連線池 factory、
      * 以及將 HTTP error 轉譯為領域例外的 status handler。
-     * <p>
+     *
      * factory 在 lambda 外建立一次後共用，讓三個 client 共享同一個連線池（與重構前行為一致）。
+     *
+     * base URL 指向本應用自己（loopback），因此加了 Spring Security 後這些自呼叫會撞上自己的
+     * filter chain；為此掛上 internal 服務帳號的 HTTP Basic 憑證（見 SecurityConfig），讓自呼叫
+     * 能通過認證。憑證由 app.auth.internal-* 提供，可由 env 覆寫。
      */
     @Bean
     RestClientHttpServiceGroupConfigurer internalHttpServiceGroupConfigurer(RestClientErrorHandler errorHandler) {
         ClientHttpRequestFactory requestFactory = clientHttpRequestFactory();
+        AppProperties.Auth auth = appProperties.getAuth();
         return groups -> groups.forEachClient((group, clientBuilder) -> clientBuilder
                 .baseUrl(appProperties.getBaseUrl())
                 .requestFactory(requestFactory)
+                .defaultHeaders(headers -> headers.setBasicAuth(auth.getInternalUsername(), auth.getInternalPassword()))
                 .defaultStatusHandler(HttpStatusCode::isError, (request, response) -> errorHandler.handle(response)));
     }
 }
