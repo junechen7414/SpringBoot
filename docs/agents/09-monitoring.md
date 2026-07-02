@@ -10,7 +10,7 @@ Spring Boot App (OTLP) → Grafana Alloy → Prometheus → Grafana
 
 - **健康檢查**: `/actuator/health`（亦為映像內建 `HEALTHCHECK` 的探測目標，下游 E2E repo 依賴此健康狀態判斷就緒；契約細節見 [02-setup.md](./02-setup.md#映像內建-healthcheck重要契約)）
 - **指標**: `/actuator/metrics`
-- **Prometheus**: `/actuator/prometheus`
+- **Prometheus scrape 端點**: 無。本專案只引入 `micrometer-registry-otlp`（見 `build.gradle`），未引入 `micrometer-registry-prometheus`，故 `/actuator/prometheus` 端點不存在（即使 `application.yml` 的 `exposure.include` 列出 prometheus，無 registry 也不會 materialize，實際回 404）。指標一律走 **OTLP push**（app → Alloy），非 Prometheus 主動 scrape。
 
 ### 健康檢查（HEALTHCHECK）的運作機制
 
