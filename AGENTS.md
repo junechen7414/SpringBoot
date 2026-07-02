@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to agents when working with code in this repository.
+本檔案為各種 agent 在此儲存庫工作時提供指引。
 
 <!-- 專案基礎 -->
 @./docs/agents/01-overview.md
