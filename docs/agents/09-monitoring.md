@@ -12,6 +12,32 @@ Spring Boot App (OTLP) → Grafana Alloy → Prometheus → Grafana
 - **指標**: `/actuator/metrics`
 - **Prometheus**: `/actuator/prometheus`
 
+### 健康檢查（HEALTHCHECK）的運作機制
+
+映像的 `HEALTHCHECK`（見 `Dockerfile`）**不是建置指令**，而是烙進 image 的 runtime metadata；容器跑起來後才由容器 runtime 反覆執行。
+
+**三個對象（誰、在哪、扮演什麼）**
+
+| 對象 | 位置 | 角色 |
+|------|------|------|
+| 容器 runtime（Podman / Docker） | 主機上，容器**外** | 監工：建容器、定時檢查、判定 healthy/unhealthy。**不對 app 發 HTTP** |
+| Spring Boot app | 容器**內**，聽 8787 | HTTP **server** |
+| wget | 容器**內**（runtime 派出的探針行程） | HTTP **client** |
+
+**流程**
+
+1. runtime 讀 image 的 HEALTHCHECK 設定（每 30s、timeout 30s、啟動 60s 後開始、連續失敗 3 次判 unhealthy）。
+2. 每次 runtime 在容器內生一個 wget 行程，執行 `wget --spider http://localhost:8787/actuator/health`。
+3. wget 對**同一容器內**的 app 發 HTTP（`localhost` = 容器自身的網路命名空間）。
+4. wget 依結果給退出碼（0 成功／非 0 失敗）。
+5. runtime **只看退出碼**（看不到 HTTP 內容），據此更新容器健康狀態。
+
+也就是說：runtime 是「觸發者/裁判」，wget 才是「實際發 HTTP 的 client」，app 是 server。runtime 與 Spring Boot **不是** HTTP 的 client/server 關係，而是「監工 → 被監管的行程」。
+
+**與 Spring Security 的關係（重要）**
+
+wget 的請求跟外部請求走**同一條** servlet filter chain。若 `/actuator/health` 未 `permitAll`，wget 無憑證 → 回 **401** → 退出碼非 0 → 連續失敗 → 容器被標 **unhealthy**。因此 `SecurityConfig` 明確放行 `/actuator/health`（見 [06-architecture.md](./06-architecture.md) 安全段）。
+
 ### Resilience4j 監控指標
 
 - `resilience4j.circuitbreaker.state`: 熔斷器狀態

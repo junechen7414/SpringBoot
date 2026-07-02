@@ -26,9 +26,14 @@ WORKDIR /app
 # Gradle 預設產出路徑在 build/libs/
 COPY --from=build /app/build/libs/*.jar app.jar
 
+# HEALTHCHECK 是 runtime metadata，非建置指令：容器跑起來後，由容器 runtime（Podman/Docker，容器「外」的監工）
+# 每 30s 在容器「內」生一個 wget 行程，對同容器的 app（localhost:8787）發健康檢查。runtime 只看 wget 的退出碼
+# 判定 healthy/unhealthy；wget 才是實際發 HTTP 的 client、app 是 server。
+# 注意：此請求同樣走 Spring Security filter chain，故 /actuator/health 必須 permitAll
+# （見 SecurityConfig 與 docs/agents/09-monitoring.md 的健康檢查機制說明）。
 # --no-verbose: 不輸出冗長訊息，保持日誌清晰。
 # --spider: 只檢查 URL 是否可達，不下載內容。
-# alpine 包含 wget，不包含curl
+# alpine 包含 wget，不包含 curl
 HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 CMD wget --no-verbose --tries=1 --spider http://localhost:8787/actuator/health || exit 1
 
 EXPOSE 8787
