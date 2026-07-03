@@ -54,8 +54,6 @@ spring:
     active: dev
   application:
     name: demo
-  main:
-    web-application-type: servlet
   threads:
     virtual:
       enabled: true
@@ -107,34 +105,36 @@ resilience4j:
       default:
         max-wait-duration: 0ms    # fail-fast: 不等待，立即拒絕
     instances:
+      # 並發上限對齊 DB pool(10)：讀熱路徑給 ~2×pool 容許短暫排隊，寫收緊避免搶樂觀鎖。
+      # 這些是「合理起點」，非終值 — 依 docs/resilience4j-load-testing-notes.md 壓測後收斂。
       # AccountService 方法級別配置
       account-read:
-        max-concurrent-calls: 500
+        max-concurrent-calls: 20
         max-wait-duration: 0ms
       account-write:
-        max-concurrent-calls: 200
+        max-concurrent-calls: 15
         max-wait-duration: 0ms
       account-write-with-validation:
-        max-concurrent-calls: 150
+        max-concurrent-calls: 10
         max-wait-duration: 0ms
-      
+
       # ProductService 方法級別配置
       product-read:
-        max-concurrent-calls: 5
+        max-concurrent-calls: 20   # 下單巢狀熱路徑；原本誤設為 5
         max-wait-duration: 0ms
       product-write:
-        max-concurrent-calls: 200
+        max-concurrent-calls: 15
         max-wait-duration: 0ms
       product-inventory:
-        max-concurrent-calls: 100
+        max-concurrent-calls: 10   # 高競爭寫入（樂觀鎖），收緊
         max-wait-duration: 0ms
-      
+
       # OrderService 方法級別配置
       order-read:
-        max-concurrent-calls: 300
+        max-concurrent-calls: 20
         max-wait-duration: 0ms
       order-write:
-        max-concurrent-calls: 100
+        max-concurrent-calls: 10
         max-wait-duration: 0ms
   
   ratelimiter:
@@ -143,37 +143,39 @@ resilience4j:
         limit-refresh-period: 1s   # 每秒刷新限制
         timeout-duration: 0ms      # fail-fast: 不等待，立即拒絕
     instances:
+      # 速率(每秒放行數)與並發脫鉤：讀 200/s、寫 100/s。dev 放寬以免壓測誤擋；
+      # 正式環境依「單機可扛 QPS」壓測後調整。
       # AccountService 方法級別配置
       account-read:
-        limit-for-period: 500
+        limit-for-period: 200
         limit-refresh-period: 1s
         timeout-duration: 0ms
       account-write:
-        limit-for-period: 200
+        limit-for-period: 100
         limit-refresh-period: 1s
         timeout-duration: 0ms
       account-write-with-validation:
-        limit-for-period: 150
+        limit-for-period: 100
         limit-refresh-period: 1s
         timeout-duration: 0ms
-      
+
       # ProductService 方法級別配置
       product-read:
-        limit-for-period: 1000
+        limit-for-period: 200
         limit-refresh-period: 1s
         timeout-duration: 0ms
       product-write:
-        limit-for-period: 200
+        limit-for-period: 100
         limit-refresh-period: 1s
         timeout-duration: 0ms
       product-inventory:
         limit-for-period: 100
         limit-refresh-period: 1s
         timeout-duration: 0ms
-      
+
       # OrderService 方法級別配置
       order-read:
-        limit-for-period: 300
+        limit-for-period: 200
         limit-refresh-period: 1s
         timeout-duration: 0ms
       order-write:
@@ -191,6 +193,10 @@ resilience4j:
         wait-duration-in-open-state: 60s    # 給予下游 60 秒恢復時間
         permitted-number-of-calls-in-half-open-state: 10
         automatic-transition-from-open-to-half-open-enabled: true
+        # 只對「下游真的壞了」反應：正常業務拒絕（餘額不足、查無資源…）不算失敗，
+        # 否則一波驗證失敗會誤把斷路器打開、擋掉合法請求。
+        ignore-exceptions:
+          - com.ibm.demo.exception.BusinessLogicCheck.BusinessException
     instances:
       OrderService:
         base-config: default

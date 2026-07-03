@@ -5,17 +5,14 @@ spring:
     password: ${ORACLE_DEV_PASSWORD}
     driver-class-name: oracle.jdbc.driver.OracleDriver
     hikari:
-      maximum-pool-size: 500      # 支援高並發測試
-      minimum-idle: 100           # 保持 100 個空閒連接
+      maximum-pool-size: 10      # dev 本機連線池（固定大小）；依 (核心數×2)+spindle 公式，對齊 DB 核心數
       connection-timeout: 5000    # 5 秒連接超時
-      idle-timeout: 300000        # 5 分鐘空閒超時
       max-lifetime: 1800000       # 30 分鐘最大生命週期
   jpa:
     hibernate:
       ddl-auto: validate  
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.OracleDialect
         format_sql: true
         jdbc:
           lob:
