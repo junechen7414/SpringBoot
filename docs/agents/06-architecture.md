@@ -3,18 +3,25 @@
 ### 專案分層架構
 
 ```
-Client (跨模組呼叫介面)
+呼叫方 (外部請求端: browser / curl / 另一服務)
+    │  inbound HTTP
     ↓
 Controller (HTTP 端點)
     ↓
-Service (業務邏輯)
-    ↓
-Repository (資料存取)
+Service (業務邏輯) ──── outbound ───▶ *Client (跨模組呼叫元件: AccountClient / ProductClient / OrderClient)
+    ↓                                     │ 底層為 RestClient;baseUrl 指向本應用 (loopback)
+Repository (資料存取)                      └─▶ 自呼叫繞回本應用,成為「新的 inbound 請求」重走 filter chain
     ↓
 Entity (資料模型)
 
 Util (跨層工具類別: BaseEntity, PageResponse, ServiceValidator, ErrorCode 等)
 ```
+
+> **關於「Client」一詞的兩種意義**（避免混淆）：
+> - **呼叫方 (caller)**：發請求進來的外部端(browser / curl / 另一服務),站在 inbound 鏈的最上方入口。
+> - **`*Client` 元件**：`AccountClient` 等以 `RestClient` 支撐的**跨模組呼叫介面**,是 **Service 層往外送的 outbound 協作者**（由 Service 呼叫,而非位於 Controller 之前）。
+>
+> 兩者方向相反：呼叫方由上而下進入本應用；`*Client` 由 Service 往外送出。本專案 `*Client` 的 baseUrl 指向自己(loopback),因此 outbound 送出後會以一個新的 inbound 請求繞回 filter chain（見下方「安全」段落與 `RestClientConfig`）。
 
 ### Controller 層
 
