@@ -184,7 +184,7 @@ public class OrderService {
         public void updateOrder(UpdateOrderRequest request) {
                 ServiceValidator.validateNotNull(request, "Update order request");
                 ServiceValidator.validateNotNull(request.orderId(), "Update order id");
-                ServiceValidator.validateNotEmpty(request.orderStatus(), "Update order status");
+                ServiceValidator.validateNotNull(request.orderStatus(), "Update order status");
                 ServiceValidator.validateNotEmpty(request.items(), "Update order items");
                 // 1. 獲取現有訂單
                 OrderInfo order = findOrderByIdOrThrow(request.orderId());
@@ -361,17 +361,23 @@ public class OrderService {
         private <T> Set<OrderItemRequest> validateAndConvertToUniqueItems(List<T> items,
                         java.util.function.Function<T, Integer> productIdExtractor,
                         java.util.function.Function<T, Integer> quantityExtractor) {
-                Set<OrderItemRequest> uniqueItems = items.stream()
+                // 以 productId 單一鍵判定重複（不含 quantity），確保同商品不同數量也會被攔下
+                long distinctProductIds = items.stream()
+                                .map(productIdExtractor)
+                                .distinct()
+                                .count();
+
+                if (distinctProductIds != items.size()) {
+                        throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
+                }
+
+                // 通過驗證後 productId 已唯一，轉換為 OrderItemRequest 集合（每商品一筆）
+                return items.stream()
                                 .map(item -> OrderItemRequest.builder()
                                                 .productId(productIdExtractor.apply(item))
                                                 .quantity(quantityExtractor.apply(item))
                                                 .build())
                                 .collect(Collectors.toSet());
-
-                if (uniqueItems.size() != items.size()) {
-                        throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
-                }
-                return uniqueItems;
         }
 
         /**

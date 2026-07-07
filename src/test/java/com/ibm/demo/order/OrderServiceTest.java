@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.enums.OrderStatus;
+import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
 import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
@@ -201,6 +202,28 @@ class OrderServiceTest {
                         // 驗證：既然拋異常了，後面的交易服務絕對不該執行
                         verifyNoInteractions(orderTransactionalService);
                 }
+
+                @Test
+                @DisplayName("建立訂單時，若同一商品出現多筆明細(數量不同)，應拋出 InvalidRequestException")
+                void createOrder_WhenDuplicateProduct_ShouldThrowException() {
+                        // Arrange：同一 productId 兩筆、數量不同 —— 以 productId 判重應攔下
+                        CreateOrderRequest request = CreateOrderRequest.builder()
+                                        .accountId(ACTIVE_ACCOUNT_ID)
+                                        .items(List.of(
+                                                        new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2),
+                                                        new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)))
+                                        .build();
+
+                        // Act & Assert
+                        assertThatThrownBy(() -> orderService.createOrder(request))
+                                        .isInstanceOf(InvalidRequestException.class)
+                                        .hasMessageContaining("同一訂單中同一商品只能有一筆明細");
+
+                        // 帳號資格校驗在去重之前，故仍被呼叫；去重失敗後不得預留庫存或進交易服務
+                        verify(accountClient).assertCanPlaceOrder(ACTIVE_ACCOUNT_ID);
+                        verifyNoInteractions(productClient);
+                        verifyNoInteractions(orderTransactionalService);
+                }
         }
 
         @Nested
@@ -310,6 +333,31 @@ class OrderServiceTest {
                                         .hasMessageContaining("庫存不足");
 
                         // 驗證流程在拋出異常後中斷，沒有執行交易服務
+                        verifyNoInteractions(orderTransactionalService);
+                }
+
+                @Test
+                @DisplayName("更新訂單時，若同一商品出現多筆明細(數量不同)，應拋出 InvalidRequestException")
+                void updateOrder_WhenDuplicateProduct_ShouldThrowException() {
+                        // Arrange：同一 productId 兩筆、數量不同 —— 以 productId 判重應攔下
+                        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID,
+                                        STATUS_CREATED);
+                        UpdateOrderRequest request = new UpdateOrderRequest(
+                                        EXISTING_ORDER_ID,
+                                        STATUS_CREATED,
+                                        List.of(
+                                                        new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2),
+                                                        new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
+
+                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
+
+                        // Act & Assert
+                        assertThatThrownBy(() -> orderService.updateOrder(request))
+                                        .isInstanceOf(InvalidRequestException.class)
+                                        .hasMessageContaining("同一訂單中同一商品只能有一筆明細");
+
+                        // 去重失敗後不得調整庫存或進交易服務
+                        verifyNoInteractions(productClient);
                         verifyNoInteractions(orderTransactionalService);
                 }
         }
