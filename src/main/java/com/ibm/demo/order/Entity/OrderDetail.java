@@ -1,6 +1,8 @@
 package com.ibm.demo.order.Entity;
 
+import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.jdbc.Expectation;
 
 import com.ibm.demo.util.AuditMetadata;
 import com.ibm.demo.util.SoftDeleteMetadata;
@@ -31,6 +33,14 @@ import lombok.ToString;
 @Entity
 @Builder
 @Table(name = "ORDER_PRODUCT_DETAIL")
+// orphanRemoval 觸發的實體 DELETE 改寫為軟刪 UPDATE，與 deleteOrder / soft-delete-everywhere 原則一致。
+// @Version entity 的標準 delete 參數會依序 (id, version) 綁到自訂 SQL，故 SQL 必須剛好兩個 ?：WHERE ID = ? AND VERSION = ?。
+// verify = RowCount：自訂 @SQLDelete 預設不檢查影響列數；若不指定，version 過期命中 0 列會「靜默不軟刪」。
+// 加上 RowCount 後，命中列數 != 1 → StaleStateException（保留樂觀鎖，符合 DBAssertion 精神）。
+// 同步遞增 VERSION、寫入 DELETED_AT，與 softDeleteByOrderId 語義相同。
+@SQLDelete(sql = "UPDATE ORDER_PRODUCT_DETAIL "
+        + "SET DELETED = true, DELETED_AT = CURRENT_TIMESTAMP, VERSION = VERSION + 1 "
+        + "WHERE ID = ? AND VERSION = ?", verify = Expectation.RowCount.class)
 @SQLRestriction("DELETED = false") // 只選擇未刪除的訂單明細
 public class OrderDetail {
 
