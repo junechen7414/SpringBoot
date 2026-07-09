@@ -2,6 +2,7 @@ package com.ibm.demo.order;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -10,16 +11,21 @@ import org.springframework.stereotype.Component;
 import lombok.extern.slf4j.Slf4j;
 
 import com.ibm.demo.enums.OrderStatus;
+import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
+import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
+import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
+import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.util.DBAssertion;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
+
 import lombok.RequiredArgsConstructor;
 
 @Slf4j
@@ -101,18 +107,43 @@ public class OrderTransactionalService {
                         request.orderStatus());
         }
 
+        /**
+         * 刪除前的交易內準備：載入訂單、驗證可刪狀態，並把後續步驟(遠端釋放庫存、
+         * 樂觀鎖軟刪、補償告警)所需資料萃取為純 DTO 回傳。
+         * <p>
+         * lazy 關聯 {@code orderDetails} 的載入與轉換都發生在本 readOnly 交易/session 內，
+         * 故不依賴 OSIV；呼叫端拿到的是 detached-safe 的純資料。version 於此刻擷取，
+         * 用於後續軟刪的樂觀鎖檢查——釋放庫存期間若訂單被並發修改，軟刪將命中 0 列而觸發補償。
+         */
+        @Transactional(readOnly = true)
+        public OrderDeletionPlan prepareOrderDeletion(Integer orderId) {
+                OrderInfo order = orderInfoRepository.findById(orderId).orElseThrow(
+                                () -> new ResourceNotFoundException("Order not found with ID: " + orderId));
+
+                if (order.getStatus() != OrderStatus.CREATED.getCode()) {
+                        throw new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + order.getStatus());
+                }
+
+                // 仍在交易/session 內 → lazy 載入明細合法安全，當場轉為純 DTO
+                Set<OrderItemRequest> items = order.getOrderDetails().stream()
+                                .map(detail -> OrderItemRequest.builder()
+                                                .productId(detail.getProductId())
+                                                .quantity(detail.getQuantity())
+                                                .build())
+                                .collect(Collectors.toSet());
+
+                return new OrderDeletionPlan(order.getAccountId(), order.getVersion(), items);
+        }
+
         @Transactional
-        public void deleteOrder(OrderInfo existingOrderInfo, Integer version) {
-                int orderId = existingOrderInfo.getId();
-                log.debug("開始刪除訂單，訂單ID: {}, 帳戶ID: {}", 
-                        orderId, 
-                        existingOrderInfo.getAccountId());
-                
+        public void deleteOrder(Integer orderId, Integer version) {
+                log.debug("開始刪除訂單，訂單ID: {}", orderId);
+
                 int updated = orderInfoRepository.softDeleteById(orderId, version);
 
                 DBAssertion.assertUpdated(updated, OrderInfo.class, orderId);
                 orderDetailRepository.softDeleteByOrderId(orderId);
-                
+
                 log.info("訂單刪除成功，訂單ID: {}", orderId);
         }
 }

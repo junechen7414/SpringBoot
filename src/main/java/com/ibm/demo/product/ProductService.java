@@ -206,10 +206,12 @@ public class ProductService {
                 .collect(Collectors.toSet());
 
         if (!updatedProductIds.isEmpty()) {
-            List<Product> foundProducts = productRepository.findAllById(updatedProductIds);
-            if (foundProducts.size() != updatedProductIds.size()) {
-                Set<Integer> foundIds = foundProducts.stream().map(Product::getId).collect(Collectors.toSet());
-                String missingIds = updatedProductIds.stream().filter(id -> !foundIds.contains(id))
+            // 僅做存在性(且可銷售，受 @SQLRestriction 限制)檢查：查 id 投影而非水合整個 entity，
+            // 避免把 Product 載入 persistence context 後被 bulk update(reserve/release)繞過而 stale。
+            Set<Integer> existingIds = new HashSet<>(productRepository.findExistingIds(updatedProductIds));
+            if (!existingIds.containsAll(updatedProductIds)) {
+                String missingIds = updatedProductIds.stream()
+                        .filter(id -> !existingIds.contains(id))
                         .map(String::valueOf).collect(Collectors.joining(", "));
                 throw new ResourceNotFoundException("Products not found with IDs: " + missingIds);
             }

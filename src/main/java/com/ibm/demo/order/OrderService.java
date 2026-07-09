@@ -12,13 +12,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
-import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
-import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
+import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderItemDTO;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
@@ -244,37 +243,26 @@ public class OrderService {
         @RateLimiter(name = "order-write")
         public void deleteOrder(Integer orderId) {
                 ServiceValidator.validateNotNull(orderId, "Order ID");
-                // 1. 獲取訂單資訊
-                OrderInfo existingOrderInfo = findOrderByIdOrThrow(orderId);
 
-                // 2. 驗證訂單狀態
-                if (existingOrderInfo.getStatus() != OrderStatus.CREATED.getCode()) {
-                        throw new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + existingOrderInfo.getStatus());
-                }
+                // 1. 交易內載入並驗證狀態，把後續所需資料萃取為純 DTO（避免 lazy 洩漏到交易外、不依賴 OSIV）
+                OrderDeletionPlan plan = orderTransactionalService.prepareOrderDeletion(orderId);
 
-                // 3. 先歸還庫存（外部服務調用放在前面，失敗時訂單不受影響）
-                Set<OrderItemRequest> originalItems = existingOrderInfo.getOrderDetails().stream()
-                                .map(detail -> OrderItemRequest.builder()
-                                                .productId(detail.getProductId())
-                                                .quantity(detail.getQuantity())
-                                                .build())
-                                .collect(Collectors.toSet());
+                // 2. 先歸還庫存（外部服務調用放在前面且在交易外，失敗時訂單不受影響）
+                productClient.releaseStock(plan.items());
 
-                productClient.releaseStock(originalItems);
-
-                // 4. 再刪除訂單，若失敗則補償重新扣回庫存
+                // 3. 再刪除訂單，若失敗則補償重新扣回庫存
                 try {
-                        orderTransactionalService.deleteOrder(existingOrderInfo, existingOrderInfo.getVersion());
+                        orderTransactionalService.deleteOrder(orderId, plan.version());
                 } catch (Exception e) {
                         // 補償: 重新預留已歸還的庫存
                         try {
-                                productClient.reserveStock(originalItems);
+                                productClient.reserveStock(plan.items());
                         } catch (Exception compensationEx) {
                                 log.error("刪除訂單失敗後，補償重新扣回庫存也失敗，需人工介入處理。" +
                                                 "訂單ID: {}, 帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",
                                                 orderId,
-                                                existingOrderInfo.getAccountId(),
-                                                originalItems.stream()
+                                                plan.accountId(),
+                                                plan.items().stream()
                                                                 .map(item -> String.format("商品%d(數量%d)",
                                                                                 item.productId(), item.quantity()))
                                                                 .collect(Collectors.joining(", ")),

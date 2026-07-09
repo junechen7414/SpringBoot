@@ -8,7 +8,7 @@ import org.springframework.data.repository.query.Param;
 import com.ibm.demo.order.Entity.OrderDetail;
 
 public interface OrderDetailRepository extends JpaRepository<OrderDetail, Integer> {
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             UPDATE OrderDetail d
             SET d.softDeleteMetadata.deleted = true,

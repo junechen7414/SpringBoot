@@ -1,5 +1,6 @@
 package com.ibm.demo.product;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -28,13 +29,13 @@ public interface ProductRepository extends JpaRepository<Product, Integer>, Soft
     @Query("UPDATE Product p SET p.available = p.available + :qty, p.reserved = p.reserved - :qty WHERE p.id = :productId AND p.reserved >= :qty")
     Integer releaseProduct(Integer productId, Integer qty);
 
-    // 提供未來可能的擴充功能: 確認預留（實際扣庫存)，可能是支付/確認出單後的操作
-    @Modifying
-    @Query("UPDATE Product p SET p.reserved = p.reserved - :qty WHERE p.id = :productId AND p.reserved >= :qty")
-    Integer confirmReservation(Integer productId, Integer qty);
+    // 存在性(且可銷售)檢查：僅投影 id，不水合整個 Product entity，避免載入 PC 後 stale。
+    // 受 @SQLRestriction("DELETED = false AND SALE_STATUS = 1001") 限制，故等同「存在且可銷售」。
+    @Query("SELECT p.id FROM Product p WHERE p.id IN :ids")
+    List<Integer> findExistingIds(@Param("ids") Collection<Integer> ids);
 
     @Override
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             UPDATE Product p SET p.softDeleteMetadata.deleted = true,
             p.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP,

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,11 +34,13 @@ import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
+import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
+import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.product.ProductClient;
 
 @Tag("UnitTest")
@@ -369,16 +373,18 @@ class OrderServiceTest {
                 @Test
                 @DisplayName("刪除存在的 CREATED 訂單應成功並釋放庫存")
                 void deleteOrder_Success() {
-                        // Arrange
-                        OrderInfo order = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED);
-                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(order));
+                        // Arrange：載入/驗證/明細萃取已收斂至 prepareOrderDeletion，模擬其回傳純資料計畫
+                        Integer version = 5;
+                        OrderDeletionPlan plan = new OrderDeletionPlan(ACTIVE_ACCOUNT_ID, version,
+                                        Set.of(new OrderItemRequest(SELLABLE_PRODUCT_ID, 2)));
+                        when(orderTransactionalService.prepareOrderDeletion(EXISTING_ORDER_ID)).thenReturn(plan);
 
                         // Act
                         orderService.deleteOrder(EXISTING_ORDER_ID);
 
                         // Assert
-                        verify(orderTransactionalService).deleteOrder(order, order.getVersion());
-                        verify(productClient).releaseStock(any());
+                        verify(productClient).releaseStock(plan.items());
+                        verify(orderTransactionalService).deleteOrder(EXISTING_ORDER_ID, version);
                 }
         }
 
@@ -393,9 +399,9 @@ class OrderServiceTest {
                 })
                 @DisplayName("刪除時若訂單不存在，應拋出 ResourceNotFoundException")
                 void deleteOrder_WhenNotFound_ShouldThrowException(String scenario, Integer nonExistentId) {
-                        // Arrange
-                        // 關鍵修正：增加 String scenario 參數來接收 @CsvSource 的第一欄文字
-                        when(orderInfoRepository.findById(nonExistentId)).thenReturn(Optional.empty());
+                        // Arrange：載入/驗證已收斂至 prepareOrderDeletion，故在此模擬其拋出 NotFound
+                        when(orderTransactionalService.prepareOrderDeletion(nonExistentId))
+                                        .thenThrow(new ResourceNotFoundException("Order not found with ID: " + nonExistentId));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.deleteOrder(nonExistentId))
@@ -403,50 +409,49 @@ class OrderServiceTest {
                                         .hasMessageContaining("Order not found")
                                         .hasMessageContaining(String.valueOf(nonExistentId));
 
-                        // Verify: 實務防禦性驗證
-                        // 確保沒有呼叫刪除動作，且沒有與庫存服務進行任何交互
+                        // Verify: 準備階段失敗 → 不應釋放庫存、也不應執行刪除
                         verifyNoInteractions(productClient);
-                        verifyNoInteractions(orderTransactionalService);
+                        verify(orderTransactionalService, never()).deleteOrder(any(), any());
                 }
 
                 @Test
                 @DisplayName("刪除時若訂單狀態非 CREATED (例如已取消)，應拋出 OrderStatusInvalidException")
                 void deleteOrder_WhenStatusNotPending_ShouldThrowOrderStatusInvalidException() {
-                        // Arrange
-                        OrderInfo cancelledOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID,
-                                        STATUS_CANCELLED);
-                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(cancelledOrder));
+                        // Arrange：狀態驗證已收斂至 prepareOrderDeletion
+                        when(orderTransactionalService.prepareOrderDeletion(EXISTING_ORDER_ID))
+                                        .thenThrow(new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + STATUS_CANCELLED));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.deleteOrder(EXISTING_ORDER_ID))
                                         .isInstanceOf(OrderStatusInvalidException.class)
                                         .hasMessageContaining("訂單狀態不允許刪除");
 
-                        // 驗證：狀態不對，不應該執行後續任何儲存或扣庫存動作
+                        // 驗證：狀態不對，不應該執行後續任何扣庫存或刪除動作
                         verifyNoInteractions(productClient);
-                        verifyNoInteractions(orderTransactionalService);
+                        verify(orderTransactionalService, never()).deleteOrder(any(), any());
                 }
 
                 @Test
                 @DisplayName("刪除時若發生樂觀鎖衝突，應觸發補償重新預留庫存並拋出原始異常")
                 void deleteOrder_WhenOptimisticLockingConflict_ShouldCompensateAndThrow() {
                         // Arrange
-                        OrderInfo order = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED);
-                        order.setVersion(1);
-                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(order));
+                        Integer version = 1;
+                        OrderDeletionPlan plan = new OrderDeletionPlan(ACTIVE_ACCOUNT_ID, version,
+                                        Set.of(new OrderItemRequest(SELLABLE_PRODUCT_ID, 2)));
+                        when(orderTransactionalService.prepareOrderDeletion(EXISTING_ORDER_ID)).thenReturn(plan);
 
                         // 模擬交易服務拋出樂觀鎖異常
                         doThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(OrderInfo.class, EXISTING_ORDER_ID))
-                                        .when(orderTransactionalService).deleteOrder(order, 1);
+                                        .when(orderTransactionalService).deleteOrder(EXISTING_ORDER_ID, version);
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.deleteOrder(EXISTING_ORDER_ID))
                                         .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
 
-                        verify(orderTransactionalService).deleteOrder(order, 1);
+                        verify(orderTransactionalService).deleteOrder(EXISTING_ORDER_ID, version);
                         // Verify: 先釋放庫存，補償時再重新預留庫存
-                        verify(productClient).releaseStock(any());
-                        verify(productClient).reserveStock(any());
+                        verify(productClient).releaseStock(plan.items());
+                        verify(productClient).reserveStock(plan.items());
                 }
         }
 
