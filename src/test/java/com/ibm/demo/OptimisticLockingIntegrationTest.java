@@ -2,6 +2,7 @@ package com.ibm.demo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 
@@ -196,5 +197,47 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         // B 嘗試用舊版本刪除
         int updated = orderInfoRepository.softDeleteById(id, version);
         assertEquals(0, updated);
+    }
+
+    /**
+     * 驗證 {@code @Modifying(clearAutomatically = true)} 的實際作用。
+     * <p>
+     * 上面幾支測試驗證的是 <b>DB 層的版本守衛</b>（bulk update 的
+     * {@code WHERE version = :version} 命中 0 列）——那跟一級快取無關，加不加
+     * {@code clearAutomatically} 結果都一樣。這支測試瞄準的是另一個層次：
+     * <b>persistence context 一致性</b>。
+     * <p>
+     * bulk JPQL update 會繞過 persistence context，不會更新已託管（managed）的實體。
+     * 若少了 {@code clearAutomatically = true}，軟刪後在同一交易內再讀，{@code findById}
+     * 會直接命中一級快取回傳那個「過時的幽靈物件」（仍為啟用、未刪），繞過
+     * {@code @SQLRestriction}。加上參數清空 PC 後，{@code findById} 才會重打 DB 並套用
+     * {@code @SQLRestriction}，回傳 empty。
+     * <p>
+     * 註：此情境純屬 JVM 內一級快取，與資料庫實作無關；換成 Oracle / H2 都一樣，
+     * 因此 {@code OracleContainer} 無助於重現它——關鍵在於「同交易內軟刪後再讀同一實體」。
+     */
+    @Test
+    @DisplayName("測試軟刪後清空 persistence context (clearAutomatically = true)")
+    @Transactional
+    public void testSoftDeleteClearsPersistenceContext() {
+        Account account = accountRepository.saveAndFlush(Account.builder()
+                .name("PC 一致性測試")
+                .status(AccountStatus.ACTIVE.getCode())
+                .build());
+        Integer id = account.getId();
+        Integer version = account.getVersion();
+
+        // 先讓實體進入一級快取（managed）
+        Account managed = accountRepository.findById(id).get();
+        assertEquals(AccountStatus.ACTIVE.getCode(), managed.getStatus());
+
+        // bulk 軟刪：DB 變 deleted=true / status='N'
+        int updated = accountRepository.softDeleteById(id, version);
+        assertEquals(1, updated, "版本相符時應更新 1 列");
+
+        // clearAutomatically=true → PC 已清空，findById 重打 DB 套用 @SQLRestriction → empty。
+        // 若拿掉該參數，這裡會命中一級快取的過時實體而回傳 present → 斷言失敗。
+        assertTrue(accountRepository.findById(id).isEmpty(),
+                "軟刪後於同交易內再讀應被 @SQLRestriction 過濾，不應命中過時的一級快取");
     }
 }

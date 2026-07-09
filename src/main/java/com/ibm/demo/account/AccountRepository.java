@@ -21,7 +21,7 @@ public interface AccountRepository extends JpaRepository<Account, Integer>, Soft
     Page<Account> findAllAccount(Pageable pageable);
 
     @Override
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             UPDATE Account a SET a.softDeleteMetadata.deleted = true,
             a.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP,

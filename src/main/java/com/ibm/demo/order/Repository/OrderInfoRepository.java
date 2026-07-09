@@ -19,7 +19,7 @@ public interface OrderInfoRepository extends JpaRepository<OrderInfo, Integer>, 
     Page<OrderInfo> findByAccountId(@Param("accountId") Integer accountId, Pageable pageable);
 
     @Override
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             UPDATE OrderInfo o
             SET o.softDeleteMetadata.deleted = true,

@@ -34,7 +34,7 @@ public interface ProductRepository extends JpaRepository<Product, Integer>, Soft
     Integer confirmReservation(Integer productId, Integer qty);
 
     @Override
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             UPDATE Product p SET p.softDeleteMetadata.deleted = true,
             p.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP,
