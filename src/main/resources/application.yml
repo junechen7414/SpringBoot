@@ -57,10 +57,6 @@ spring:
   threads:
     virtual:
       enabled: true
-  jpa:
-    # 明確關閉 OSIV：DB 存取只發生在交易/service 邊界內，避免 view 階段的延遲查詢(N+1)與 lazy 關聯洩漏。
-    # 前置重構已確保跨交易邊界只傳遞 DTO（見 OrderTransactionalService.prepareOrderDeletion）。
-    open-in-view: false
 
 server:
   port: 8787
