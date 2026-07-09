@@ -67,8 +67,8 @@ class ProductServiceTest {
                 void reserveStock_ShouldReserveEachItem() {
                         // Arrange
                         Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2));
-                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
-                                        .thenReturn(List.of(productWithId(ACTIVE_PRODUCT_ID)));
+                        when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
+                                        .thenReturn(List.of(ACTIVE_PRODUCT_ID));
                         when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 2)).thenReturn(1);
 
                         // Act
@@ -84,8 +84,8 @@ class ProductServiceTest {
                 void reserveStock_WhenStockNotEnough_ShouldThrow() {
                         // Arrange
                         Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 999));
-                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
-                                        .thenReturn(List.of(productWithId(ACTIVE_PRODUCT_ID)));
+                        when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
+                                        .thenReturn(List.of(ACTIVE_PRODUCT_ID));
                         when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 999)).thenReturn(0);
 
                         // Act & Assert
@@ -98,7 +98,7 @@ class ProductServiceTest {
                 void reserveStock_WhenProductMissing_ShouldThrow() {
                         // Arrange
                         Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 1));
-                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
+                        when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
                                         .thenReturn(List.of());
 
                         // Act & Assert
@@ -129,8 +129,8 @@ class ProductServiceTest {
                                         .from(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2)))
                                         .to(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 5)))
                                         .build();
-                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
-                                        .thenReturn(List.of(productWithId(ACTIVE_PRODUCT_ID)));
+                        when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
+                                        .thenReturn(List.of(ACTIVE_PRODUCT_ID));
                         when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 3)).thenReturn(1);
 
                         // Act
@@ -149,8 +149,8 @@ class ProductServiceTest {
                                         .from(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 5)))
                                         .to(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2)))
                                         .build();
-                        when(productRepository.findAllById(Set.of(ACTIVE_PRODUCT_ID)))
-                                        .thenReturn(List.of(productWithId(ACTIVE_PRODUCT_ID)));
+                        when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
+                                        .thenReturn(List.of(ACTIVE_PRODUCT_ID));
                         when(productRepository.releaseProduct(ACTIVE_PRODUCT_ID, 3)).thenReturn(1);
 
                         // Act
@@ -159,10 +159,6 @@ class ProductServiceTest {
                         // Assert
                         verify(productRepository).releaseProduct(ACTIVE_PRODUCT_ID, 3);
                         verify(productRepository, never()).reserveProduct(any(), any());
-                }
-
-                private Product productWithId(Integer id) {
-                        return Product.builder().id(id).build();
                 }
         }
 
