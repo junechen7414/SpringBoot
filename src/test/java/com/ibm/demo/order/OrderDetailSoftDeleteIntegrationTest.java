@@ -69,7 +69,7 @@ class OrderDetailSoftDeleteIntegrationTest extends BaseIntegrationTest {
                 OrderStatus.CREATED.getCode(),
                 List.of(new UpdateOrderDetailRequest(productAId, 5)));
 
-        orderTransactionalService.updateOrder(request, orderInfoRepository.findById(orderId).orElseThrow());
+        orderTransactionalService.updateOrder(request);
         entityManager.flush(); // 強制 orphanRemoval 觸發的 @SQLDelete UPDATE 落地
         entityManager.clear();
 
@@ -97,8 +97,7 @@ class OrderDetailSoftDeleteIntegrationTest extends BaseIntegrationTest {
         // 第一次更新：移除 B(軟刪)
         orderTransactionalService.updateOrder(
                 new UpdateOrderRequest(orderId, OrderStatus.CREATED.getCode(),
-                        List.of(new UpdateOrderDetailRequest(productAId, 5))),
-                orderInfoRepository.findById(orderId).orElseThrow());
+                        List.of(new UpdateOrderDetailRequest(productAId, 5))));
         entityManager.flush();
         entityManager.clear();
 
@@ -106,8 +105,7 @@ class OrderDetailSoftDeleteIntegrationTest extends BaseIntegrationTest {
         orderTransactionalService.updateOrder(
                 new UpdateOrderRequest(orderId, OrderStatus.CREATED.getCode(),
                         List.of(new UpdateOrderDetailRequest(productAId, 5),
-                                new UpdateOrderDetailRequest(productBId, 7))),
-                orderInfoRepository.findById(orderId).orElseThrow());
+                                new UpdateOrderDetailRequest(productBId, 7))));
         entityManager.flush();
         entityManager.clear();
 
@@ -133,7 +131,8 @@ class OrderDetailSoftDeleteIntegrationTest extends BaseIntegrationTest {
                 .filter(d -> d.getProductId().equals(productBId))
                 .findFirst().orElseThrow().getId();
 
-        OrderInfo managed = orderInfoRepository.findById(orderId).orElseThrow();
+        // 先把訂單載入 persistence context；稍後 updateOrder 於同一交易內 findById 會命中此快取(VERSION=0)
+        orderInfoRepository.findById(orderId).orElseThrow();
 
         // 在 Hibernate 背後直接把 B 列的 VERSION 加 1，使 persistence context 手中的版本(0)過期
         entityManager.createNativeQuery(
@@ -144,8 +143,7 @@ class OrderDetailSoftDeleteIntegrationTest extends BaseIntegrationTest {
         // 移除 B：orphanRemoval 觸發的 @SQLDelete WHERE VERSION = 0 將影響 0 列
         orderTransactionalService.updateOrder(
                 new UpdateOrderRequest(orderId, OrderStatus.CREATED.getCode(),
-                        List.of(new UpdateOrderDetailRequest(productAId, 5))),
-                managed);
+                        List.of(new UpdateOrderDetailRequest(productAId, 5))));
 
         // flush 透過 repository proxy，Hibernate 的 StaleObjectStateException 會被轉為 Spring 的樂觀鎖例外
         assertThrows(ObjectOptimisticLockingFailureException.class, () -> orderInfoRepository.flush());

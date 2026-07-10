@@ -6,6 +6,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
+import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderDetail;
@@ -69,12 +72,17 @@ public class OrderTransactionalService {
         }
 
         @Transactional
-        public void updateOrder(UpdateOrderRequest request, OrderInfo order) {
-                log.debug("開始更新訂單，訂單ID: {}, 新狀態: {}, 商品數量: {}", 
-                        request.orderId(), 
-                        request.orderStatus(), 
+        public void updateOrder(UpdateOrderRequest request) {
+                log.debug("開始更新訂單，訂單ID: {}, 新狀態: {}, 商品數量: {}",
+                        request.orderId(),
+                        request.orderStatus(),
                         request.items().size());
-                
+
+                // 交易內自行載入(managed)：關閉 OSIV 後不可沿用外部傳入的 detached entity，否則
+                // 存取 lazy orderDetails 仍會拋 LazyInitializationException。
+                OrderInfo order = orderInfoRepository.findById(request.orderId()).orElseThrow(
+                                () -> new ResourceNotFoundException("Order not found with ID: " + request.orderId()));
+
                 Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
                                 .collect(Collectors.toMap(OrderDetail::getProductId, Function.identity()));
                 Map<Integer, UpdateOrderDetailRequest> incomingMap = request.items().stream()
@@ -105,6 +113,37 @@ public class OrderTransactionalService {
                 log.info("訂單更新成功，訂單ID: {}, 新狀態: {}", 
                         request.orderId(), 
                         request.orderStatus());
+        }
+
+        /**
+         * 交易內載入單一訂單並萃取為 {@link OrderView} 純快照(含 lazy 明細)。
+         * 供讀取/更新端點在交易外安全使用，不依賴 OSIV。找不到則拋 ResourceNotFoundException。
+         */
+        @Transactional(readOnly = true)
+        public OrderView loadOrderView(Integer orderId) {
+                OrderInfo order = orderInfoRepository.findById(orderId).orElseThrow(
+                                () -> new ResourceNotFoundException("Order not found with ID: " + orderId));
+                return toView(order);
+        }
+
+        /**
+         * 交易內分頁載入某帳戶的訂單並各自萃取為 {@link OrderView}。lazy 明細於 session 內載入
+         * (搭配 OrderInfo.orderDetails 的 @BatchSize 緩解 N+1)，回傳 detached-safe 的純快照頁。
+         */
+        @Transactional(readOnly = true)
+        public Page<OrderView> loadOrderViews(Integer accountId, Pageable pageable) {
+                return orderInfoRepository.findByAccountId(accountId, pageable).map(this::toView);
+        }
+
+        /** 在交易/session 內把 OrderInfo(含 lazy orderDetails)轉為純快照。 */
+        private OrderView toView(OrderInfo order) {
+                List<OrderItemRequest> items = order.getOrderDetails().stream()
+                                .map(detail -> OrderItemRequest.builder()
+                                                .productId(detail.getProductId())
+                                                .quantity(detail.getQuantity())
+                                                .build())
+                                .collect(Collectors.toList());
+                return new OrderView(order.getId(), order.getAccountId(), order.getStatus(), items);
         }
 
         /**

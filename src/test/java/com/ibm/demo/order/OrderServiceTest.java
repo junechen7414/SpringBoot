@@ -9,9 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +33,7 @@ import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
+import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.order.Entity.OrderInfo;
@@ -238,40 +237,37 @@ class OrderServiceTest {
                 @DisplayName("更新訂單狀態與商品明細，應成功儲存並同步庫存")
                 void updateOrder_Success() {
                         // Arrange
-                        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID,
-                                        STATUS_CREATED);
                         UpdateOrderRequest request = new UpdateOrderRequest(
                                         EXISTING_ORDER_ID,
                                         STATUS_CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
-                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
+                        when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
+                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED, List.of()));
 
                         // Act
                         orderService.updateOrder(request);
 
-                        // Assert
-                        // 驗證呼叫了交易層服務來儲存
-                        verify(orderTransactionalService).updateOrder(request, existingOrder);
-                        verify(productClient).adjustStock(any(AdjustStockRequest.class)); // 庫存處理依然由商品服務負責
+                        // Assert：交易層以 request 更新（交易內自行載入 managed 實體），庫存由商品服務同步
+                        verify(orderTransactionalService).updateOrder(request);
+                        verify(productClient).adjustStock(any(AdjustStockRequest.class));
                 }
 
                 @Test
                 @DisplayName("更新訂單時交易服務失敗，應觸發補償反轉庫存並拋出原始異常")
                 void updateOrder_WhenTransactionFails_ShouldCompensateAndThrow() {
                         // Arrange
-                        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID,
-                                        STATUS_CREATED);
                         UpdateOrderRequest request = new UpdateOrderRequest(
                                         EXISTING_ORDER_ID,
                                         STATUS_CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
-                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
+                        when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
+                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED, List.of()));
 
                         // 模擬交易服務拋出異常
                         doThrow(new RuntimeException("DB update failed"))
-                                        .when(orderTransactionalService).updateOrder(any(), any());
+                                        .when(orderTransactionalService).updateOrder(any());
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.updateOrder(request))
@@ -295,14 +291,14 @@ class OrderServiceTest {
                 })
                 @DisplayName("更新時若訂單 ID 不存在，應拋出 ResourceNotFoundException")
                 void updateOrder_WhenOrderNotFound_ShouldThrowException(String scenario, Integer nonExistentId) {
-                        // Arrange
-                        // 關鍵修正：增加 String scenario 參數來接收 @CsvSource 的第一欄文字
+                        // Arrange：NotFound 由 loadOrderView（交易內載入）拋出
                         UpdateOrderRequest request = new UpdateOrderRequest(
                                         nonExistentId,
                                         STATUS_CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)));
 
-                        when(orderInfoRepository.findById(nonExistentId)).thenReturn(Optional.empty());
+                        when(orderTransactionalService.loadOrderView(nonExistentId))
+                                        .thenThrow(new ResourceNotFoundException("Order not found with ID: " + nonExistentId));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.updateOrder(request))
@@ -310,21 +306,20 @@ class OrderServiceTest {
                                         .hasMessageContaining("Order not found")
                                         .hasMessageContaining(String.valueOf(nonExistentId));
 
-                        // 實務建議：驗證後續的 Client 或交易服務都不應該被執行
+                        // 載入失敗 → 不動庫存、不執行更新
                         verifyNoInteractions(productClient);
-                        verifyNoInteractions(orderTransactionalService);
+                        verify(orderTransactionalService, never()).updateOrder(any());
                 }
 
                 @Test
                 @DisplayName("更新時若包含庫存不足的商品，應拋出 ProductStockNotEnoughException")
                 void updateOrder_WhenInsufficientStock_ShouldThrowException() {
                         // Arrange
-                        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID,
-                                        STATUS_CREATED);
                         UpdateOrderRequest request = new UpdateOrderRequest(EXISTING_ORDER_ID, STATUS_CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)));
 
-                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
+                        when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
+                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED, List.of()));
 
                         // 關鍵：模擬 adjustStock 拋出庫存不足異常
                         doThrow(new ProductStockNotEnoughException("庫存不足"))
@@ -336,16 +331,14 @@ class OrderServiceTest {
                                         .isInstanceOf(ProductStockNotEnoughException.class)
                                         .hasMessageContaining("庫存不足");
 
-                        // 驗證流程在拋出異常後中斷，沒有執行交易服務
-                        verifyNoInteractions(orderTransactionalService);
+                        // 驗證流程在拋出異常後中斷，沒有執行交易服務的更新
+                        verify(orderTransactionalService, never()).updateOrder(any());
                 }
 
                 @Test
                 @DisplayName("更新訂單時，若同一商品出現多筆明細(數量不同)，應拋出 InvalidRequestException")
                 void updateOrder_WhenDuplicateProduct_ShouldThrowException() {
-                        // Arrange：同一 productId 兩筆、數量不同 —— 以 productId 判重應攔下
-                        OrderInfo existingOrder = createTestOrderInfo(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID,
-                                        STATUS_CREATED);
+                        // Arrange：同一 productId 兩筆、數量不同 —— 以 productId 判重應在查 DB 前攔下
                         UpdateOrderRequest request = new UpdateOrderRequest(
                                         EXISTING_ORDER_ID,
                                         STATUS_CREATED,
@@ -353,14 +346,12 @@ class OrderServiceTest {
                                                         new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2),
                                                         new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
-                        when(orderInfoRepository.findById(EXISTING_ORDER_ID)).thenReturn(Optional.of(existingOrder));
-
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.updateOrder(request))
                                         .isInstanceOf(InvalidRequestException.class)
                                         .hasMessageContaining("同一訂單中同一商品只能有一筆明細");
 
-                        // 去重失敗後不得調整庫存或進交易服務
+                        // 去重失敗在查 DB 前就擋下：不得載入、調整庫存或進交易服務
                         verifyNoInteractions(productClient);
                         verifyNoInteractions(orderTransactionalService);
                 }
@@ -455,13 +446,4 @@ class OrderServiceTest {
                 }
         }
 
-        // --- Helper Methods ---
-        private OrderInfo createTestOrderInfo(Integer orderId, Integer accountId, Integer status) {
-                OrderInfo orderInfo = new OrderInfo();
-                orderInfo.setId(orderId);
-                orderInfo.setAccountId(accountId);
-                orderInfo.setStatus(status);
-                orderInfo.setOrderDetails(new ArrayList<>());
-                return orderInfo;
-        }
 }
