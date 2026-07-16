@@ -36,11 +36,11 @@ CREATE SEQUENCE account_id_seq START WITH 1 INCREMENT BY 1;
 - `ID`: 主鍵,使用序列 account_id_seq
 - `NAME`: 帳戶名稱
 - `STATUS`: 啟用狀態 (Y/N)
-- `CREATED_AT`: 創建時間 (BaseEntity)
-- `UPDATED_AT`: 更新時間 (BaseEntity)
-- `DELETED`: 軟刪除標記 (BaseEntity)
-- `DELETED_AT`: 刪除時間 (BaseEntity)
-- `VERSION`: 樂觀鎖版本號 (BaseEntity)
+- `CREATED_AT`: 創建時間 (AuditMetadata, @Embedded)
+- `UPDATED_AT`: 更新時間 (AuditMetadata, @Embedded)
+- `DELETED`: 軟刪除標記 (SoftDeleteMetadata, @Embedded)
+- `DELETED_AT`: 刪除時間 (SoftDeleteMetadata, @Embedded)
+- `VERSION`: 樂觀鎖版本號 (@Version, 直接定義在 entity)
 
 **SQLRestriction**: `STATUS = 'Y' AND DELETED = 0`
 
@@ -71,7 +71,7 @@ CREATE SEQUENCE product_id_seq START WITH 1 INCREMENT BY 1;
 - `SALE_STATUS`: 銷售狀態 (1001=可銷售)
 - `AVAILABLE`: 可用庫存
 - `RESERVED`: 預留庫存
-- 其他欄位繼承自 BaseEntity
+- 其他稽核/軟刪除欄位來自 `@Embedded` 的 AuditMetadata/SoftDeleteMetadata；`VERSION` 直接定義在 entity
 
 **SQLRestriction**: `DELETED = 0 AND SALE_STATUS = 1001`
 
@@ -97,7 +97,7 @@ CREATE SEQUENCE order_id_seq START WITH 1 INCREMENT BY 1;
 - `ID`: 主鍵,使用序列 order_id_seq
 - `ACCOUNT_ID`: 外鍵,關聯到 ACCOUNT 表
 - `STATUS`: 訂單狀態 (1001=進行中)
-- 其他欄位繼承自 BaseEntity
+- 其他稽核/軟刪除欄位來自 `@Embedded` 的 AuditMetadata/SoftDeleteMetadata；`VERSION` 直接定義在 entity
 
 **SQLRestriction**: `DELETED = 0 AND STATUS=1001`
 
@@ -126,7 +126,7 @@ CREATE SEQUENCE order_product_detail_id_seq START WITH 1 INCREMENT BY 1;
 - `ORDER_ID`: 外鍵,關聯到 ORDER_INFO 表
 - `PRODUCT_ID`: 外鍵,關聯到 PRODUCT 表
 - `QUANTITY`: 訂購數量
-- 其他欄位繼承自 BaseEntity
+- 其他稽核/軟刪除欄位來自 `@Embedded` 的 AuditMetadata/SoftDeleteMetadata；`VERSION` 直接定義在 entity
 
 **SQLRestriction**: `DELETED = 0`
 

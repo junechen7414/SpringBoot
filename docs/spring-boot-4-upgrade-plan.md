@@ -376,7 +376,7 @@ class JacksonSerializationTest {
 |---|------|------|
 | 5.1 | 移除 `spring-boot-properties-migrator` | 升級完成，不再需要 |
 | 5.2 | 簡化 RestClientConfig | 如果 Boot 4 支援 auto-proxy，移除手動 Factory 配置 |
-| 5.3 | 移除 deprecated `BaseEntity` | 已標記 `@Deprecated(forRemoval = true)`，趁機清理 |
+| 5.3 | 移除 deprecated `BaseEntity` | ✅ 已完成：`BaseEntity` 已整個移除，entity 改用 `@Embedded` 組合（`AuditMetadata`/`SoftDeleteMetadata`）+ entity 上的 `@Version` |
 | 5.4 | 更新 Dockerfile | Gradle 版本對齊 |
 | 5.5 | 依賴快照比對 | `./gradlew dependencies > after-upgrade.txt` + `diff` |
 | 5.6 | 移除 `io.spring.dependency-management`（如適用） | 改用原生 Gradle BOM |

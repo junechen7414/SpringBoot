@@ -14,7 +14,7 @@ Repository (資料存取)                      └─▶ 自呼叫繞回本應�
     ↓
 Entity (資料模型)
 
-Util (跨層工具類別: BaseEntity, PageResponse, ServiceValidator, ErrorCode 等)
+Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, ServiceValidator, ErrorCode 等)
 ```
 
 > **關於「Client」一詞的兩種意義**（避免混淆）：
@@ -44,8 +44,8 @@ Util (跨層工具類別: BaseEntity, PageResponse, ServiceValidator, ErrorCode 
 
 ### Entity 層
 
-- 繼承 `BaseEntity` 獲得審計欄位與軟刪除支援
-- 使用 `@SuperBuilder` 支援建構者模式
+- 以 `@Embedded` 組合 `AuditMetadata` / `SoftDeleteMetadata` 獲得審計欄位與軟刪除支援；`@Version` 樂觀鎖欄位直接定義在 entity（JPA 不支援 `@Version` 在 `@Embeddable`）
+- 使用 `@Builder` 支援建構者模式（改用組合後不再需要 `@SuperBuilder`）
 - 關聯關係標註 `@ToString.Exclude` 避免循環引用
 
 ### 分頁策略

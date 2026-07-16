@@ -52,7 +52,7 @@ public class OrderInfo {
     @BatchSize(size = 50) // 列表分頁載入時，把多筆 order 的 lazy orderDetails 併成少量 IN 查詢，緩解 N+1
     @ToString.Exclude // 避免Entity中有OneToMany或ManyToOne關聯時，因為循環引用導致 StackOverflowError。
     private List<OrderDetail> orderDetails; // 建立雙向關聯，方便查詢
-    // 注意：這裡不能使用@Builder 而是要用SuperBuilder 才能設定accountId 和status
+    // 改用組合（@Embedded 元數據）後已無 @MappedSuperclass 父類，直接用類別上的 @Builder 即可（不需 @SuperBuilder）
 
     // 組合：審計欄位
     @Embedded

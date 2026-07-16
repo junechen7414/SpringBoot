@@ -50,7 +50,7 @@ Tests：
 
 - **跨模組呼叫一律經由 `*Client` classes**（例如 `AccountClient`、`ProductClient`、`OrderClient`），背後以 Spring `RestClient` 支撐（設定於 `config/RestClientConfig.java`），**而非**直接呼叫另一個 domain 的 service。這正是讓 app 能把各模組當成獨立服務看待的機制。
 - **`OrderService` 與 `OrderTransactionalService`**：order 建立橫跨 account + product；transactional service 把 DB transaction 邊界與 orchestration/remote-call 邏輯隔離開來。編輯 order 流程時請保留此拆分。
-- **Soft delete + auditing** 已集中化：entity 繼承 `util/BaseEntity`（audit 欄位、`@Version` optimistic locking），需要 soft delete 的 repository 繼承 `util/SoftDeleteRepository`，Hibernate `@SQLRestriction` 在 query 層過濾掉已刪除/停用的 row。不要自行手刻 `deleted = false` 過濾。（`BaseEntity` 已標記 `@Deprecated(forRemoval=true)` — 為新 entity 繼承前請先確認。）
+- **Soft delete + auditing** 已集中化：entity 以**組合（composition）**用 `@Embedded` 嵌入 `util/AuditMetadata`（audit 欄位）與 `util/SoftDeleteMetadata`（軟刪除欄位）；`@Version` optimistic locking 欄位因 JPA 不支援 `@Embeddable` 而**直接定義在各 entity**。需要 soft delete 的 repository 繼承 `util/SoftDeleteRepository`，Hibernate `@SQLRestriction` 在 query 層過濾掉已刪除/停用的 row。不要自行手刻 `deleted = false` 過濾。（舊的 `BaseEntity` 繼承基底已移除 — 一律用組合，不要再引入 `@MappedSuperclass` 基底類別。）
 - **分頁一致**：list endpoint 接受 `Pageable` 並回傳 `util/PageResponse<T>`（預設 `page=0, size=20`）。刻意不提供非分頁的 list endpoint。
 - **錯誤處理**：domain 邏輯拋出 `exception/BusinessLogicCheck/BusinessException` 的子類別；`GlobalExceptionHandler`（`@RestControllerAdvice`）使用 `util/ErrorCode` 將它們對應為 `ApiErrorResponse`。新增失敗情境時請新增 `BusinessException` 子類別，而非臨時湊出的 response。
 - **Resilience4j**（`config/Resilience4jConfig.java`、`application.yml`）透過 service 上的 annotation 提供 Bulkhead（fail-fast，`max-wait-duration: 0`）、CircuitBreaker 與 RateLimiter。設定 key 放在 `resilience4j.*` 底下。
