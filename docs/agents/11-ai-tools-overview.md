@@ -49,7 +49,7 @@
 
 各工具的 skills **並非完全一致**：
 
-- `.claude/skills/` 與 `.bob/skills/`：互為鏡像 —— caveman、find-skills、github-actions-docs、skill-creator、skills-cli（5 個）。
+- `.claude/skills/` 與 `.bob/skills/`：互為鏡像 —— caveman、find-skills、github-actions-docs、high-risk-pr-workflow、integration-test-runner、new-domain-scaffold、openapi-doc-gen、skill-creator、skills-cli（9 個）。
 - `.agents/skills/`（agy CLI）：另一套 —— cavecrew、caveman 全家族（commit / compress / help / init / review / stats）、compress、find-skills。
 - 真相源：`skills-lock.json`（記錄每個 skill 的 GitHub 來源與 hash）。
 
