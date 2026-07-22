@@ -30,10 +30,11 @@ src/main/java/com/ibm/demo/{domain}/
 
 ### 1. Entity
 
-- [ ] 繼承 `util/BaseEntity`（`@MappedSuperclass`，含 `id`、audit 欄位、`@Version`）
-  > ⚠️ `BaseEntity` 已標記 `@Deprecated(forRemoval=true)`，建立前先確認是否仍適用。
+- [ ] **不要繼承任何基底類別**（舊的 `util/BaseEntity` `@MappedSuperclass` 已移除，一律用組合）
 - [ ] 標註 `@Entity`、`@Table(name = "...")`
-- [ ] 使用 `@SuperBuilder`（配合 `BaseEntity`）
+- [ ] 稽核欄位：以 `@Embedded` 組合 `util/AuditMetadata`；需要 soft delete 再以 `@Embedded` 組合 `util/SoftDeleteMetadata`
+- [ ] `@Version` optimistic locking 欄位**直接定義在 entity**（因 JPA 不支援放進 `@Embeddable`）
+- [ ] 使用 `@Builder`（不需 `@SuperBuilder`，已無繼承基底）
 - [ ] 關聯欄位標註 `@ToString.Exclude` 避免循環引用
 - [ ] 需要 soft delete？→ 加 `@SQLRestriction("deleted = 0")`（`SoftDeleteRepository` 要求）
 
