@@ -12,6 +12,19 @@
 - **監控整合**: 自動整合 Micrometer，無需手動開發
 - **擴展性**: 可輕鬆堆疊熔斷、重試等功能
 
+### 為何 entity 用組合（`@Embedded`）而非繼承 `BaseEntity`？
+
+- **背景**: 早期用 `BaseEntity`（`@MappedSuperclass`）集中稽核/軟刪除/樂觀鎖欄位，後來全面改成組合並移除 `BaseEntity`（見 git：`migrate all entities from inheritance to composition`、`remove deprecated unused BaseEntity`）。
+- **為何改組合**:
+  - 避免深繼承樹，語義更清楚；每個 entity 可自由挑選要嵌入哪些元數據。
+  - 不被「基底類別放什麼」綁死——`@Version` 就是放不進去的例子（見下）。
+- **⚠️ `@Version` 不能放進 `@Embeddable`（血淚教訓）**: JPA 規格**不支援** `@Version` 出現在 `@Embeddable` 內。曾嘗試把版本欄位收進 `VersionMetadata` embeddable，反覆失敗，最後把 `@Version` 移回每個 entity 才正常運作（見 git：`refactor(util): remove VersionMetadata Embeddable`）。
+- **如何套用**:
+  - 稽核欄位 → `@Embedded AuditMetadata`；軟刪除欄位 → `@Embedded SoftDeleteMetadata`（兩者皆 `@Embeddable`）。
+  - `@Version` **直接宣告在 entity**（`NUMBER(10) DEFAULT 0 NOT NULL`），不要放進任何 `@Embeddable`。
+  - 用 `@Builder`（無父類別，不需 `@SuperBuilder`）。
+  - 不要再新增 `@MappedSuperclass` 基底類別。
+
 ### 如何處理樂觀鎖衝突？
 
 ```java

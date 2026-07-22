@@ -41,7 +41,7 @@ Tests：
 
 - **跨模組呼叫一律經由 `*Client` classes**（`AccountClient`、`ProductClient`、`OrderClient`），背後以 Spring `RestClient` 支撐，**不直接呼叫**其他 domain 的 service。
 - **`OrderService` 與 `OrderTransactionalService`**：order 建立橫跨 account + product；transactional service 隔離 DB transaction 邊界與 orchestration 邏輯，編輯 order 流程時請保留此拆分。
-- **Soft delete + auditing**：entity 繼承 `util/BaseEntity`（audit 欄位、`@Version`），需要 soft delete 的 repository 繼承 `util/SoftDeleteRepository`，`@SQLRestriction` 自動過濾，**不要手刻 `deleted = false`**。（`BaseEntity` 已 `@Deprecated(forRemoval=true)` — 繼承前先確認。）
+- **Soft delete + auditing**：entity 以**組合（composition）**用 `@Embedded` 嵌入 `util/AuditMetadata`（audit 欄位）與 `util/SoftDeleteMetadata`（軟刪除欄位）；`@Version` optimistic locking 欄位因 JPA 不支援 `@Embeddable` 而**直接定義在各 entity**。需要 soft delete 的 repository 繼承 `util/SoftDeleteRepository`，`@SQLRestriction` 在 query 層自動過濾，**不要手刻 `deleted = false`**。（舊的 `BaseEntity` 繼承基底已移除 — 一律用組合，不要再引入 `@MappedSuperclass` 基底類別。）
 - **分頁一致**：list endpoint 接受 `Pageable` 回傳 `PageResponse<T>`（預設 `page=0, size=20`），不提供非分頁列表。
 - **錯誤處理**：拋出 `BusinessException` 子類別；`GlobalExceptionHandler` 統一對應 `ApiErrorResponse`。
 - **Resilience4j**：`config/Resilience4jConfig.java`，service 方法上用 `@Bulkhead`、`@CircuitBreaker`、`@RateLimiter`。

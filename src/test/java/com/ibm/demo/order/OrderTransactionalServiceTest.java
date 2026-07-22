@@ -21,6 +21,7 @@ import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
 import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
+import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.order.Entity.OrderDetail;
 import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderDetailRepository;
@@ -110,5 +111,39 @@ public class OrderTransactionalServiceTest {
         assertThatThrownBy(() -> orderTransactionalService.prepareOrderDeletion(1))
                 .isInstanceOf(OrderStatusInvalidException.class)
                 .hasMessageContaining("訂單狀態不允許刪除");
+    }
+
+    @Test
+    @DisplayName("loadOrderView 應載入訂單並把明細萃取為 items 快照")
+    void loadOrderView_Success() {
+        // Arrange
+        OrderInfo order = new OrderInfo();
+        order.setId(7);
+        order.setAccountId(3);
+        order.setStatus(OrderStatus.CREATED.getCode());
+        order.setOrderDetails(List.of(
+                OrderDetail.builder().productId(20).quantity(4).build()));
+        when(orderInfoRepository.findById(7)).thenReturn(Optional.of(order));
+
+        // Act
+        OrderView view = orderTransactionalService.loadOrderView(7);
+
+        // Assert
+        assertThat(view.orderId()).isEqualTo(7);
+        assertThat(view.accountId()).isEqualTo(3);
+        assertThat(view.status()).isEqualTo(OrderStatus.CREATED.getCode());
+        assertThat(view.items()).containsExactly(new OrderItemRequest(20, 4));
+    }
+
+    @Test
+    @DisplayName("loadOrderView 若訂單不存在應拋出 ResourceNotFoundException")
+    void loadOrderView_WhenNotFound_ShouldThrow() {
+        // Arrange
+        when(orderInfoRepository.findById(404)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() -> orderTransactionalService.loadOrderView(404))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Order not found");
     }
 }

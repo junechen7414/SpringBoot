@@ -13,15 +13,13 @@ import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
-import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderItemDTO;
+import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
-import com.ibm.demo.order.Entity.OrderDetail;
-import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
@@ -110,24 +108,23 @@ public class OrderService {
          */
         public PageResponse<GetOrderListResponse> getOrderListByAccountId(Integer accountId, Pageable pageable) {
                 ServiceValidator.validateNotNull(accountId, "Account ID");
-                Page<OrderInfo> orderInfoPage = orderInfoRepository.findByAccountId(accountId, pageable);
+                // 1. 交易內載入訂單並萃取為純快照（明細於 session 內載入，避免交易外碰 lazy）
+                Page<OrderView> orderViews = orderTransactionalService.loadOrderViews(accountId, pageable);
 
-                // 收集當前頁所有訂單涉及的商品 ID
-                Set<Integer> allProductIds = orderInfoPage.getContent().stream()
-                                .flatMap(order -> order.getOrderDetails().stream())
-                                .map(OrderDetail::getProductId)
+                // 2. 一次性批量查詢當頁所有商品（遠端呼叫在交易外）
+                Set<Integer> allProductIds = orderViews.getContent().stream()
+                                .flatMap(v -> v.items().stream())
+                                .map(OrderItemRequest::productId)
                                 .collect(Collectors.toSet());
-
-                // 一次性批量查詢所有商品
                 Map<Integer, GetProductDetailResponse> productMap = allProductIds.isEmpty()
                                 ? Collections.emptyMap()
                                 : batchGetProductDetails(allProductIds);
 
-                // 計算每個訂單的總金額並轉換為 DTO
-                Page<GetOrderListResponse> responsePage = orderInfoPage.map(orderInfo -> GetOrderListResponse.builder()
-                                .orderId(orderInfo.getId())
-                                .status(orderInfo.getStatus())
-                                .totalAmount(calculateOrderTotalAmount(orderInfo, productMap))
+                // 3. 計算每個訂單的總金額並轉換為 DTO
+                Page<GetOrderListResponse> responsePage = orderViews.map(v -> GetOrderListResponse.builder()
+                                .orderId(v.orderId())
+                                .status(v.status())
+                                .totalAmount(calculateTotalAmount(v.items(), productMap))
                                 .build());
 
                 return PageResponse.from(responsePage);
@@ -140,38 +137,35 @@ public class OrderService {
         @Bulkhead(name = "order-read")
         @RateLimiter(name = "order-read")
         public GetOrderDetailResponse getOrderDetailByOrderId(Integer orderId) {
-                // 1. 獲取訂單主檔（找不到直接噴 404）
-                OrderInfo orderInfo = findOrderByIdOrThrow(orderId);
-                List<OrderDetail> details = orderInfo.getOrderDetails();
+                // 1. 交易內載入訂單與明細，萃取為純快照（找不到直接噴 404）
+                OrderView view = orderTransactionalService.loadOrderView(orderId);
 
-                // 2. 批量獲取商品資訊（先收集 ID 再一次查詢，避免 N+1 問題）
-                Set<Integer> productIds = details.stream()
-                                .map(OrderDetail::getProductId)
+                // 2. 批量獲取商品資訊（先收集 ID 再一次查詢，避免 N+1；遠端呼叫在交易外）
+                Set<Integer> productIds = view.items().stream()
+                                .map(OrderItemRequest::productId)
                                 .collect(Collectors.toSet());
-
                 Map<Integer, GetProductDetailResponse> productMap = batchGetProductDetails(productIds);
 
-                // 3. 組裝 DTO (使用 Stream 讓轉換過程一目了然)
-                List<OrderItemDTO> itemDTOs = details.stream()
-                                .map(detail -> {
-                                        GetProductDetailResponse product = productMap.get(detail.getProductId());
+                // 3. 組裝明細 DTO
+                List<OrderItemDTO> itemDTOs = view.items().stream()
+                                .map(item -> {
+                                        GetProductDetailResponse product = productMap.get(item.productId());
                                         return OrderItemDTO.builder()
-                                                        .productId(detail.getProductId())
+                                                        .productId(item.productId())
                                                         .productName(product.name())
-                                                        .quantity(detail.getQuantity())
+                                                        .quantity(item.quantity())
                                                         .productPrice(product.price())
                                                         .build();
                                 })
                                 .collect(Collectors.toList());
 
-                // 4. 回傳結果
-                GetOrderDetailResponse response = GetOrderDetailResponse.builder()
-                                .accountId(orderInfo.getAccountId())
-                                .orderStatus(orderInfo.getStatus())
-                                .totalAmount(calculateOrderTotalAmount(orderInfo))
+                // 4. 回傳結果（總金額沿用同一份 productMap，不重複遠端查詢）
+                return GetOrderDetailResponse.builder()
+                                .accountId(view.accountId())
+                                .orderStatus(view.status())
+                                .totalAmount(calculateTotalAmount(view.items(), productMap))
                                 .items(itemDTOs)
                                 .build();
-                return response;
         }
 
         /**
@@ -185,29 +179,24 @@ public class OrderService {
                 ServiceValidator.validateNotNull(request.orderId(), "Update order id");
                 ServiceValidator.validateNotNull(request.orderStatus(), "Update order status");
                 ServiceValidator.validateNotEmpty(request.items(), "Update order items");
-                // 1. 獲取現有訂單
-                OrderInfo order = findOrderByIdOrThrow(request.orderId());
-                Set<OrderItemRequest> originalItems = order.getOrderDetails().stream()
-                                .map(detail -> OrderItemRequest.builder()
-                                                .productId(detail.getProductId())
-                                                .quantity(detail.getQuantity())
-                                                .build())
-                                .collect(Collectors.toSet());
-
-                // 驗證並轉換訂單明細，確保同一訂單中同一商品只有一筆明細
+                // 1. 先驗證請求本身（同一商品只能一筆），失敗即擋下，不必查 DB 或動庫存
                 Set<OrderItemRequest> uniqueItems = validateAndConvertToUniqueItems(
                                 request.items(),
                                 detail -> detail.productId(),
                                 detail -> detail.quantity());
+
+                // 2. 交易內載入現有訂單快照（取得原明細與帳戶，避免交易外碰 lazy）
+                OrderView view = orderTransactionalService.loadOrderView(request.orderId());
+                Set<OrderItemRequest> originalItems = Set.copyOf(view.items());
 
                 productClient.adjustStock(AdjustStockRequest.builder()
                                 .from(originalItems)
                                 .to(uniqueItems)
                                 .build());
 
-                // 將資料庫操作委派給交易服務，若失敗則補償反轉庫存操作
+                // 將資料庫操作委派給交易服務（交易內自行載入 managed 實體），失敗則補償反轉庫存操作
                 try {
-                        orderTransactionalService.updateOrder(request, order);
+                        orderTransactionalService.updateOrder(request);
                 } catch (Exception e) {
                         // 補償: 將庫存調整回原狀 (from 與 to 互換)
                         try {
@@ -219,7 +208,7 @@ public class OrderService {
                                 log.error("更新訂單失敗後，補償反轉庫存也失敗，需人工介入處理。" +
                                                 "訂單ID: {}, 帳戶ID: {}, 原商品清單: {}, 新商品清單: {}, 原始異常: {}, 補償異常: {}",
                                                 request.orderId(),
-                                                order.getAccountId(),
+                                                view.accountId(),
                                                 originalItems.stream()
                                                                 .map(item -> String.format("商品%d(數量%d)",
                                                                                 item.productId(), item.quantity()))
@@ -296,46 +285,20 @@ public class OrderService {
         }
 
         /**
-         * @param orderInfo
-         * @return BigDecimal
-         */
-        private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo) {
-                List<OrderDetail> orderDetails = orderInfo.getOrderDetails();
-                Set<Integer> productIds = orderInfo.getOrderDetails().stream()
-                                .map(OrderDetail::getProductId)
-                                .collect(Collectors.toSet());
-                Map<Integer, GetProductDetailResponse> productDetailsMap = batchGetProductDetails(
-                                productIds);
-
-                BigDecimal totalAmount = BigDecimal.ZERO;
-                for (OrderDetail detail : orderDetails) {
-                        GetProductDetailResponse productDetail = productDetailsMap.get(detail.getProductId());
-                        totalAmount = totalAmount.add(
-                                        productDetail.price().multiply(BigDecimal.valueOf(detail.getQuantity())));
-                }
-                return totalAmount;
-        }
-
-        /**
-         * 
-         * @param orderInfo  訂單資訊
+         * 依已批量查詢的商品資訊計算訂單總金額。
+         *
+         * @param items      訂單明細快照（productId + quantity）
          * @param productMap 已批量查詢的商品資訊 Map
          * @return 訂單總金額
          */
-        private BigDecimal calculateOrderTotalAmount(OrderInfo orderInfo,
+        private BigDecimal calculateTotalAmount(List<OrderItemRequest> items,
                         Map<Integer, GetProductDetailResponse> productMap) {
-                return orderInfo.getOrderDetails().stream()
-                                .map(detail -> {
-                                        GetProductDetailResponse product = productMap.get(detail.getProductId());
-                                        return product.price().multiply(BigDecimal.valueOf(detail.getQuantity()));
+                return items.stream()
+                                .map(item -> {
+                                        GetProductDetailResponse product = productMap.get(item.productId());
+                                        return product.price().multiply(BigDecimal.valueOf(item.quantity()));
                                 })
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-
-        public OrderInfo findOrderByIdOrThrow(Integer orderId) {
-                ServiceValidator.validateNotNull(orderId, "Order ID");
-                return orderInfoRepository.findById(orderId).orElseThrow(
-                                () -> new ResourceNotFoundException("Order not found with ID: " + orderId));
         }
 
         /**

@@ -19,7 +19,7 @@
 ### 架構特色
 
 1. **分層架構**: Client → Controller → Service → Repository → Entity
-2. **軟刪除機制**: 透過 `BaseEntity` 實現統一的軟刪除與審計欄位
+2. **軟刪除機制**: 透過 `@Embedded` 組合 `SoftDeleteMetadata` / `AuditMetadata` 實現統一的軟刪除與審計欄位
 3. **樂觀鎖**: 使用 `@Version` 防止併發更新衝突
 4. **全域異常處理**: `@RestControllerAdvice` 統一攔截並格式化錯誤回應
 5. **併發控制**: Resilience4j Bulkhead 取代自定義 Semaphore，實現 fail-fast 資源保護
