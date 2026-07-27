@@ -20,10 +20,6 @@ import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
-import com.ibm.demo.order.Entity.OrderDetail;
-import com.ibm.demo.order.Entity.OrderInfo;
-import com.ibm.demo.order.Repository.OrderDetailRepository;
-import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.util.DBAssertion;
 

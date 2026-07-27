@@ -1,4 +1,4 @@
-package com.ibm.demo.order.Repository;
+package com.ibm.demo.order;
 
 import java.util.List;
 
@@ -9,7 +9,6 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.ibm.demo.order.Entity.OrderInfo;
 import com.ibm.demo.util.SoftDeleteRepository;
 
 public interface OrderInfoRepository extends JpaRepository<OrderInfo, Integer>, SoftDeleteRepository<Integer> {
