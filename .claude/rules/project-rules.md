@@ -35,6 +35,7 @@
 - **只在高風險變更時才開 branch + PR**：CI workflow 編輯、DB migrations、跨 domain 重構／大型功能。
 - **Branch 命名**：使用 `feature/ fix/ hotfix/ refactor/ config/ docs/ test/ chore/` 前綴（小寫、以 `-` 分隔），從最新的 `main` 分出，保持短命。
 - **Commit 格式**：遵循 Conventional Commits — `type(scope): subject`（祈使句、小寫、結尾不加句點）。
+- **禁止 AI 協作者署名**：commit message **不得**包含 `Co-Authored-By: Claude`（或任何指向 claude/anthropic 的 co-author）、`noreply@anthropic.com`、`🤖 Generated with Claude Code` 這類 AI 署名行。PR body 亦同。`.githooks/commit-msg` 會擋下含這些署名的 commit，作為第二道防線。
 - **新增 PR label 時**：使用 GitHub MCP 的 `issue_write`（method `update`）帶入 PR 編號 — `create_pull_request`/`update_pull_request` 沒有 labels 欄位。
 
 ---

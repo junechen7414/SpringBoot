@@ -59,4 +59,6 @@ Tests：
 
 **Trunk-based。** 小步驟直接 commit 到 `main` — push 前 pre-push hook 自動執行 CI gate 相同的測試（`./gradlew test -Djunit.platform.exclude.tags=SanityTest`）。Push `main` 有副作用：發佈 image、觸發下游 E2E、重新產生 swagger.json。
 
+commit message / PR body **不加 AI 協作者署名**（`Co-Authored-By: Claude`、`🤖 Generated with Claude Code` 等）；`.githooks/commit-msg` hook 會擋下含這些署名的 commit。
+
 高風險變更（CI 改動、DB migrations、跨 domain 重構）請走 branch + PR — 詳見 **`high-risk-pr-workflow` skill**。

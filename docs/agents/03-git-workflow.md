@@ -40,6 +40,8 @@ git config core.hooksPath .githooks
 ```
 
 > Windows 上 Git 會用內附的 `sh` 執行 hook，無需額外設定；確認 `.githooks/pre-push` 具執行權限（`git update-index --chmod=+x .githooks/pre-push` 已隨檔提交）。
+>
+> 同一條 `core.hooksPath` 設定會一併啟用 `.githooks/` 底下的其他 hook —— 包含 `commit-msg`（擋 AI 協作者署名，見「Commit 訊息規範」的說明），不需另外設定。
 
 啟用後，每次 `git push` 若推送目標包含 `main`，會先在本地跑：
 
@@ -131,6 +133,7 @@ chore/upgrade-spring-boot
 - ✅ 第一個字母小寫
 - ✅ 不要在結尾加句號
 - ✅ 簡潔明瞭，說明「做了什麼」而非「為什麼」
+- ❌ **不要加 AI 協作者署名**：`Co-Authored-By: Claude`、`noreply@anthropic.com`、`🤖 Generated with Claude Code` 等一律不放進 commit message 與 PR body。`.githooks/commit-msg` hook 會擋下含這些署名的 commit（第二道防線；只比對署名結構，不會誤擋內文中正當提到的 claude/anthropic）。
 
 ### 範例
 

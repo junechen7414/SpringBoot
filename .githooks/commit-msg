@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# commit-msg hook — 阻擋 AI 協作者署名混進 commit message。
+#
+# 背景：AI 助手（如 Claude Code）習慣在 commit message 結尾附上
+#   "Co-Authored-By: Claude ..." 或 "🤖 Generated with Claude Code"
+# 這類署名。本專案不要這些行。這是繼 .claude/rules/project-rules.md
+# 規則之後的「第二道防線」——就算規則被忽略，這裡也會擋下 commit。
+#
+# 只比對「署名結構」，不會因為 message 內文提到 claude/anthropic 就誤擋
+# （本 repo 有大量關於 .claude/、Claude subagent 的正當 commit）。
+#
+# 啟用（每台機器設定一次）：
+#   git config core.hooksPath .githooks
+#
+# 趕時間想跳過（自負風險）：
+#   git commit --no-verify
+#
+# 參考：docs/agents/03-git-workflow.md、.claude/rules/project-rules.md
+
+msg_file="$1"
+
+# 濾掉註解行（git 預設以 # 開頭者不進最終 message），避免誤判 commit 範本說明。
+content=$(grep -v '^#' "$msg_file")
+
+# 三類署名：Co-Authored-By 指向 claude/anthropic、anthropic 署名 email、Claude Code 產生行。
+pattern='Co-authored-by:[[:space:]]*.*(claude|anthropic)|noreply@anthropic\.com|Generated with (\[)?Claude Code'
+
+offending=$(printf '%s\n' "$content" | grep -inE "$pattern")
+
+if [ -n "$offending" ]; then
+	echo "commit-msg: ❌ 偵測到 AI 協作者署名，已中止 commit。"
+	echo "            以下行請移除（行號:內容）："
+	printf '%s\n' "$offending" | while IFS= read -r line; do
+		echo "              $line"
+	done
+	echo "commit-msg: 規則見 .claude/rules/project-rules.md。"
+	echo "            確定要保留可用 git commit --no-verify（自負風險）。"
+	exit 1
+fi
+
+exit 0

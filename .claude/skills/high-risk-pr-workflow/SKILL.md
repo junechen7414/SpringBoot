@@ -58,6 +58,7 @@ git commit -m "<type>(<scope>): <subject>"
 - `type(scope): subject`（祈使句、小寫、不加句點）
 - 常用 type：`feat` `fix` `docs` `refactor` `test` `chore` `style`
 - 範例：`feat(order): add bulk order creation endpoint`
+- ❌ 不加 AI 協作者署名（`Co-Authored-By: Claude`、`🤖 Generated with Claude Code` 等）；PR body（Step 3）亦同。`.githooks/commit-msg` hook 會擋下含這些署名的 commit。
 
 ---
 
