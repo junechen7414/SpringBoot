@@ -48,8 +48,8 @@ MCP、agent/mode 設定保持一致，並偵測 drift（漂移）。
 ### 軸線 3：MCP / Agents / Modes
 - **MCP**：共四份設定檔須同步——`.mcp.json`（Claude，根目錄）、`.bob/mcp.json`（Bob）、
   `.vscode/mcp.json`（Cline/Copilot，`servers` + `inputs` 格式）、`.agents/mcp_config.json`
-  （agy CLI，額外帶 `disabled`/`autoApprove`）。目前皆已建立，含 `github`、`browser-use`、
-  `awslabs.document-loader-mcp-server` 三個 server。任一邊新增/修改 server，就把等價設定寫進其餘三份，
+  （agy CLI，額外帶 `disabled`/`autoApprove`）。目前皆已建立，含 `github`、`browser-use`
+  兩個 server。任一邊新增/修改 server，就把等價設定寫進其餘三份，
   並依各工具格式調整。**注意刻意差異**（非 drift）：agy 的 `github` 用本地 npm 版 +
   `GITHUB_PERSONAL_ACCESS_TOKEN`、`browser-use` 用 Gemini；其餘工具用 Copilot HTTP endpoint +
   `GITHUB_PAT`、Anthropic API。詳見 `docs/agents/11-ai-tools-overview.md`。

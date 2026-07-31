@@ -32,7 +32,6 @@
 |--------|------|---------|-------------|
 | `github` | GitHub 操作（PR / issue / label 等） | 見下方差異 | `GITHUB_PAT` 或 `GITHUB_PERSONAL_ACCESS_TOKEN` |
 | `browser-use` | 瀏覽器自動化 | `uvx --from browser-use[cli] browser-use --mcp` | 見下方差異 |
-| `awslabs.document-loader-mcp-server` | 文件載入 / 解析 | `uvx awslabs.document-loader-mcp-server@latest` | `FASTMCP_LOG_LEVEL`（無金鑰） |
 
 四份 MCP 設定檔須同步維護：`.mcp.json`（Claude，`type: http`/`stdio`）、`.bob/mcp.json`（同格式）、`.vscode/mcp.json`（`servers` + `inputs`）、`.agents/mcp_config.json`（額外帶 `disabled` / `autoApprove`）。
 
