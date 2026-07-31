@@ -46,3 +46,15 @@ out/
 
 ### Claude Code ###
 # Project-level skills are tracked and synced (see docs/agents/11-mcp-tools.md).
+
+### Git hooks ###
+# 只有 pre-push（trunk-based 的本地 CI gate）進版控共用。
+# 以下由 Bob 自動裝進 core.hooksPath(.githooks) 的 git-notes hook 屬個人工具產物，不追蹤。
+.githooks/pre-commit
+.githooks/post-commit
+.githooks/post-checkout
+.githooks/post-merge
+
+### Local docs ###
+# 個人講義草稿，暫不進版控。
+docs/handout/

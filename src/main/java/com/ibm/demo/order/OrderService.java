@@ -12,7 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountClient;
-import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
+import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
@@ -20,11 +20,11 @@ import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderItemDTO;
 import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
-import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.util.ErrorCode;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
 
@@ -307,7 +307,7 @@ public class OrderService {
          * 
          * @param items 訂單明細列表
          * @return 唯一的訂單商品集合
-         * @throws InvalidRequestException 當存在重複商品時
+         * @throws BusinessException 當存在重複商品時（ErrorCode.INVALID_REQUEST）
          */
         private <T> Set<OrderItemRequest> validateAndConvertToUniqueItems(List<T> items,
                         java.util.function.Function<T, Integer> productIdExtractor,
@@ -319,7 +319,8 @@ public class OrderService {
                                 .count();
 
                 if (distinctProductIds != items.size()) {
-                        throw new InvalidRequestException("同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
+                        throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                                        "同一訂單中同一商品只能有一筆明細，請合併重複的商品明細後再提交訂單。");
                 }
 
                 // 通過驗證後 productId 已唯一，轉換為 OrderItemRequest 集合（每商品一筆）

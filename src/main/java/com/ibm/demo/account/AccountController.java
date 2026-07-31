@@ -85,7 +85,7 @@ public class AccountController {
         }
 
         // Update Account
-        @Operation(summary = "更新帳戶", description = "更新現有帳戶資訊。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若欲將狀態從啟用 'Y' 變更為停用 'N'，會先檢查該帳戶是否仍有關聯訂單，若有則拋出 AccountStillHasOrderCanNotBeDeleteException。")
+        @Operation(summary = "更新帳戶", description = "更新現有帳戶資訊。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若欲將狀態從啟用 'Y' 變更為停用 'N'，會先檢查該帳戶是否仍有關聯訂單，若有則拋出 BusinessException（ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED）。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "更新成功"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗或帳戶仍有關聯訂單", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
@@ -100,7 +100,7 @@ public class AccountController {
         }
 
         // Delete Account
-        @Operation(summary = "刪除帳戶", description = "執行帳戶軟刪除。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若該帳戶仍有關聯訂單，則拋出 AccountStillHasOrderCanNotBeDeleteException。")
+        @Operation(summary = "刪除帳戶", description = "執行帳戶軟刪除。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若該帳戶仍有關聯訂單，則拋出 BusinessException（ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED）。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "刪除成功"),
                         @ApiResponse(responseCode = "400", description = "帳戶仍有關聯訂單，無法刪除", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),

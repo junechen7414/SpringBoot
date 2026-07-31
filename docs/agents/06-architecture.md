@@ -34,7 +34,7 @@ Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, Servi
 - 核心業務邏輯所在
 - 使用 `@Transactional` 管理事務
 - 查詢方法標註 `@Transactional(readOnly = true)` 提升效能
-- 拋出自定義業務異常（繼承 `BusinessException`）
+- 拋出 `BusinessException` 並帶入對應的 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`）
 
 ### Repository 層
 

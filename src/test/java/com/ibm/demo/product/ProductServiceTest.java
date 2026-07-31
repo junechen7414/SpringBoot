@@ -27,9 +27,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.enums.ProductStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
-import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessException;
+import com.ibm.demo.util.ErrorCode;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
@@ -90,7 +89,8 @@ class ProductServiceTest {
 
                         // Act & Assert
                         assertThatThrownBy(() -> productService.reserveStock(items))
-                                        .isInstanceOf(ProductStockNotEnoughException.class);
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PRODUCT_STOCK_NOT_ENOUGH);
                 }
 
                 @Test
@@ -103,7 +103,8 @@ class ProductServiceTest {
 
                         // Act & Assert
                         assertThatThrownBy(() -> productService.reserveStock(items))
-                                        .isInstanceOf(ResourceNotFoundException.class);
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND);
                 }
 
                 @Test
@@ -226,7 +227,8 @@ class ProductServiceTest {
 
                         // Act & Assert (建議點：驗證異常類型和訊息內容)
                         assertThatThrownBy(() -> productService.createProduct(request))
-                                        .isInstanceOf(ProductAlreadyExistException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PRODUCT_ALREADY_EXIST)
                                         .hasMessageContaining(existingName)
                                         .hasMessageContaining("already exists");
 
@@ -283,7 +285,8 @@ class ProductServiceTest {
 
                         // Act & Assert
                         assertThatThrownBy(() -> productService.getProductDetail(id))
-                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                                         .hasMessageContaining("not found")
                                         .hasMessageContaining(String.valueOf(id));
 
@@ -370,7 +373,8 @@ class ProductServiceTest {
                         when(productRepository.findById(999)).thenReturn(Optional.empty());
 
                         assertThatThrownBy(() -> productService.updateProduct(999, request))
-                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                                         .hasMessageContaining("not found")
                                         .hasMessageContaining("999");
 
@@ -396,7 +400,8 @@ class ProductServiceTest {
 
                         // Act & Assert
                         assertThatThrownBy(() -> productService.updateProduct(id, request))
-                                        .isInstanceOf(ProductAlreadyExistException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PRODUCT_ALREADY_EXIST)
                                         .hasMessageContaining(newName)
                                         .hasMessageContaining("already exists");
 
@@ -443,7 +448,8 @@ class ProductServiceTest {
 
                         // Act & Assert
                         assertThatThrownBy(() -> productService.deleteProduct(id))
-                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                                         .hasMessageContaining("not found")
                                         .hasMessageContaining("99");
 
@@ -464,7 +470,8 @@ class ProductServiceTest {
 
                         // Act & Assert
                         assertThatThrownBy(() -> productService.deleteProduct(id))
-                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                                         .hasMessageContaining("not found")
                                         .hasMessageContaining(String.valueOf(id));
 

@@ -1,11 +1,9 @@
-package com.ibm.demo.order.Repository;
+package com.ibm.demo.order;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-
-import com.ibm.demo.order.Entity.OrderDetail;
 
 public interface OrderDetailRepository extends JpaRepository<OrderDetail, Integer> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)

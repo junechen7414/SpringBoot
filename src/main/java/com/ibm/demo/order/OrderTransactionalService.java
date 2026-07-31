@@ -13,19 +13,15 @@ import org.springframework.stereotype.Component;
 import lombok.extern.slf4j.Slf4j;
 
 import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
-import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
-import com.ibm.demo.order.Entity.OrderDetail;
-import com.ibm.demo.order.Entity.OrderInfo;
-import com.ibm.demo.order.Repository.OrderDetailRepository;
-import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.util.DBAssertion;
+import com.ibm.demo.util.ErrorCode;
 
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,7 +77,8 @@ public class OrderTransactionalService {
                 // 交易內自行載入(managed)：關閉 OSIV 後不可沿用外部傳入的 detached entity，否則
                 // 存取 lazy orderDetails 仍會拋 LazyInitializationException。
                 OrderInfo order = orderInfoRepository.findById(request.orderId()).orElseThrow(
-                                () -> new ResourceNotFoundException("Order not found with ID: " + request.orderId()));
+                                () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                                                "Order not found with ID: " + request.orderId()));
 
                 Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
                                 .collect(Collectors.toMap(OrderDetail::getProductId, Function.identity()));
@@ -117,12 +114,13 @@ public class OrderTransactionalService {
 
         /**
          * 交易內載入單一訂單並萃取為 {@link OrderView} 純快照(含 lazy 明細)。
-         * 供讀取/更新端點在交易外安全使用，不依賴 OSIV。找不到則拋 ResourceNotFoundException。
+         * 供讀取/更新端點在交易外安全使用，不依賴 OSIV。找不到則拋 BusinessException（RESOURCE_NOT_FOUND）。
          */
         @Transactional(readOnly = true)
         public OrderView loadOrderView(Integer orderId) {
                 OrderInfo order = orderInfoRepository.findById(orderId).orElseThrow(
-                                () -> new ResourceNotFoundException("Order not found with ID: " + orderId));
+                                () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                                                "Order not found with ID: " + orderId));
                 return toView(order);
         }
 
@@ -157,10 +155,12 @@ public class OrderTransactionalService {
         @Transactional(readOnly = true)
         public OrderDeletionPlan prepareOrderDeletion(Integer orderId) {
                 OrderInfo order = orderInfoRepository.findById(orderId).orElseThrow(
-                                () -> new ResourceNotFoundException("Order not found with ID: " + orderId));
+                                () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                                                "Order not found with ID: " + orderId));
 
                 if (order.getStatus() != OrderStatus.CREATED.getCode()) {
-                        throw new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + order.getStatus());
+                        throw new BusinessException(ErrorCode.ORDER_STATUS_INVALID,
+                                        "訂單狀態不允許刪除，目前狀態: " + order.getStatus());
                 }
 
                 // 仍在交易/session 內 → lazy 載入明細合法安全，當場轉為純 DTO

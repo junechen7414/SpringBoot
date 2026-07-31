@@ -21,9 +21,6 @@ import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
-import com.ibm.demo.order.Entity.OrderDetail;
-import com.ibm.demo.order.Entity.OrderInfo;
-import com.ibm.demo.order.Repository.OrderInfoRepository;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
 

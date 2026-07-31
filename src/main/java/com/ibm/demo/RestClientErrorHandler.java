@@ -10,8 +10,8 @@ import org.springframework.util.StreamUtils;
 
 import tools.jackson.databind.ObjectMapper;
 import com.ibm.demo.exception.ApiErrorResponse;
-import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
-import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessException;
+import com.ibm.demo.util.ErrorCode;
 
 @Component
 public class RestClientErrorHandler {
@@ -29,8 +29,8 @@ public class RestClientErrorHandler {
 
         // 實務上建議使用 switch 提升可讀性 (Java 17+ 語法)
         throw switch (response.getStatusCode()) {
-            case HttpStatus.NOT_FOUND -> new ResourceNotFoundException(errorMessage);
-            case HttpStatus.BAD_REQUEST -> new InvalidRequestException(errorMessage);
+            case HttpStatus.NOT_FOUND -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, errorMessage);
+            case HttpStatus.BAD_REQUEST -> new BusinessException(ErrorCode.INVALID_REQUEST, errorMessage);
             default -> new RuntimeException("API Call Failed [" + response.getStatusCode() + "]: " + errorMessage);
         };
     }

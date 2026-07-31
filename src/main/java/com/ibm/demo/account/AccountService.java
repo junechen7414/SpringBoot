@@ -10,10 +10,10 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
-import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.util.DBAssertion;
+import com.ibm.demo.util.ErrorCode;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
 
@@ -88,7 +88,7 @@ public class AccountService {
      * <p>
      * 帳戶實體受 {@code @SQLRestriction("STATUS = 'Y' AND DELETED = false")} 限制，
      * 停用或已軟刪除的帳戶查詢即不可見，故「存在且可載入」等同於「具下單資格」；
-     * 不符者一律由 {@code findAccountByIdOrThrow} 拋出 ResourceNotFoundException(404)。
+     * 不符者一律由 {@code findAccountByIdOrThrow} 拋出 BusinessException（RESOURCE_NOT_FOUND, 404）。
      *
      * @param id 帳戶 ID
      */
@@ -156,17 +156,18 @@ public class AccountService {
     private Account findAccountByIdOrThrow(Integer accountId) {
         ServiceValidator.validateNotNull(accountId, "Account ID");
         return accountRepository.findById(accountId)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + accountId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                        "Account not found with id: " + accountId));
     }
 
     /**
      * Checks if an account has associated orders via OrderClient. Throws
-     * AccountStillHasOrderCanNotBeDeleteException if orders exist.
+     * BusinessException (ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED) if orders exist.
      */
     private void checkAccountHasNoOrdersOrThrow(Integer accountId) {
         ServiceValidator.validateNotNull(accountId, "Account ID");
         if (orderClient.accountIdIsInOrder(accountId)) {
-            throw new AccountStillHasOrderCanNotBeDeleteException(
+            throw new BusinessException(ErrorCode.ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED,
                     "Account with id: " + accountId + " has associated orders and cannot be set to deactivate.");
         }
     }
