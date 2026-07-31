@@ -2,7 +2,7 @@ package com.ibm.demo.util;
 
 import java.util.Collection;
 
-import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
+import com.ibm.demo.exception.BusinessException;
 
 public class ServiceValidator {
     // 私有建構子，防止這個工具類別被執行實例化
@@ -13,7 +13,7 @@ public class ServiceValidator {
     // null 檢查對「任何」參考型別都成立，因此收 Object 是正確的契約寬度。
     public static void validateNotNull(Object object, String parameterName) {
         if (object == null) {
-            throw new InvalidRequestException(parameterName + " cannot be null.");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, parameterName + " cannot be null.");
         }
     }
 
@@ -23,13 +23,13 @@ public class ServiceValidator {
     // 未來要支援新的可空型別（例如 Map、陣列），在此新增一個多載即可，呼叫端不受影響。
     public static void validateNotEmpty(String value, String parameterName) {
         if (value == null || value.isEmpty()) {
-            throw new InvalidRequestException(parameterName + " cannot be empty.");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, parameterName + " cannot be empty.");
         }
     }
 
     public static void validateNotEmpty(Collection<?> value, String parameterName) {
         if (value == null || value.isEmpty()) {
-            throw new InvalidRequestException(parameterName + " cannot be empty.");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, parameterName + " cannot be empty.");
         }
     }
 }

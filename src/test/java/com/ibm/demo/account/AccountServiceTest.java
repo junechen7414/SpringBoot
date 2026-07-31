@@ -32,9 +32,9 @@ import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.AccountStillHasOrderCanNotBeDeleteException;
-import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.OrderClient;
+import com.ibm.demo.util.ErrorCode;
 
 @Tag("UnitTest")
 @ExtendWith(MockitoExtension.class)
@@ -117,7 +117,8 @@ public class AccountServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> accountService.assertCanPlaceOrder(missingId))
-                    .isInstanceOf(ResourceNotFoundException.class)
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                     .hasMessageContaining("Account not found");
         }
     }
@@ -198,7 +199,8 @@ public class AccountServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> accountService.getAccountDetail(id))
-                    .isInstanceOf(ResourceNotFoundException.class)
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                     .hasMessageContaining("not found")
                     .hasMessageContaining(String.valueOf(id));
 
@@ -272,7 +274,8 @@ public class AccountServiceTest {
             when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> accountService.updateAccount(id, request))
-                    .isInstanceOf(ResourceNotFoundException.class)
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                     .hasMessageContaining("not found")
                     .hasMessageContaining(String.valueOf(id));
 
@@ -295,7 +298,8 @@ public class AccountServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> accountService.updateAccount(ACTIVE_ACCOUNT_ID,request))
-                    .isInstanceOf(AccountStillHasOrderCanNotBeDeleteException.class)
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED)
                     .hasMessageContaining("associated orders");
 
             verify(accountRepository, never()).save(any());
@@ -359,7 +363,8 @@ public class AccountServiceTest {
 
             // Act & Assert: 執行並驗證異常
             assertThatThrownBy(() -> accountService.deleteAccount(id))
-                    .isInstanceOf(ResourceNotFoundException.class)
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                     .hasMessageContaining("not found")
                     .hasMessageContaining(String.valueOf(id));
 
@@ -380,7 +385,8 @@ public class AccountServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> accountService.deleteAccount(id))
-                    .isInstanceOf(ResourceNotFoundException.class);
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND);
 
             verify(orderClient, never()).accountIdIsInOrder(any());
         }
@@ -394,7 +400,8 @@ public class AccountServiceTest {
             when(orderClient.accountIdIsInOrder(ACTIVE_ACCOUNT_ID)).thenReturn(true);
 
             assertThatThrownBy(() -> accountService.deleteAccount(ACTIVE_ACCOUNT_ID))
-                    .isInstanceOf(AccountStillHasOrderCanNotBeDeleteException.class)
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED)
                     .hasMessageContaining("associated orders");
 
             verify(accountRepository, never()).delete(any());

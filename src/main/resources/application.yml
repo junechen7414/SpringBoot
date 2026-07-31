@@ -201,7 +201,7 @@ resilience4j:
         # 只對「下游真的壞了」反應：正常業務拒絕（餘額不足、查無資源…）不算失敗，
         # 否則一波驗證失敗會誤把斷路器打開、擋掉合法請求。
         ignore-exceptions:
-          - com.ibm.demo.exception.BusinessLogicCheck.BusinessException
+          - com.ibm.demo.exception.BusinessException
     instances:
       OrderService:
         base-config: default

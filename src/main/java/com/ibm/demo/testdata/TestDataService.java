@@ -11,9 +11,10 @@ import com.ibm.demo.account.Account;
 import com.ibm.demo.account.AccountRepository;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.ProductStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
+import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
+import com.ibm.demo.util.ErrorCode;
 import com.ibm.demo.util.ServiceValidator;
 
 import lombok.RequiredArgsConstructor;
@@ -28,7 +29,7 @@ public class TestDataService {
     public void createOrderPrecondition(Integer count) {
         ServiceValidator.validateNotNull(count, "Count");
         if (count <= 0) {
-            throw new InvalidRequestException("Count must be positive");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Count must be positive");
         }
         
         List<Product> products = new ArrayList<>();

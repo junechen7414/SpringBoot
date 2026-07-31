@@ -43,7 +43,7 @@ public class ProductController {
     private final ProductService productService;
 
     // Create Product
-    @Operation(summary = "新增商品", description = "建立新商品。若已存在同名商品則拋出 ProductAlreadyExistException。成功則新增商品資料，預設銷售狀態為 1001 (AVAILABLE)。")
+    @Operation(summary = "新增商品", description = "建立新商品。若已存在同名商品則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。成功則新增商品資料，預設銷售狀態為 1001 (AVAILABLE)。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "建立成功，回傳商品 ID"),
             @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
@@ -87,7 +87,7 @@ public class ProductController {
     }
 
     // Update Product
-    @Operation(summary = "更新商品", description = "更新現有商品資訊。受限於 SQLRestriction 規則，若商品 ID 不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將拋出 NotFound。若嘗試更改為已存在的商品名稱，則拋出 ProductAlreadyExistException。")
+    @Operation(summary = "更新商品", description = "更新現有商品資訊。受限於 SQLRestriction 規則，若商品 ID 不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將拋出 NotFound。若嘗試更改為已存在的商品名稱，則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "更新成功"),
             @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),

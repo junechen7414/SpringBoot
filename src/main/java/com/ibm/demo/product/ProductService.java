@@ -11,9 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.enums.ProductStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductAlreadyExistException;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
-import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
@@ -21,6 +19,7 @@ import com.ibm.demo.product.DTO.UpdateProductRequest;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.util.DBAssertion;
+import com.ibm.demo.util.ErrorCode;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
 
@@ -213,7 +212,7 @@ public class ProductService {
                 String missingIds = updatedProductIds.stream()
                         .filter(id -> !existingIds.contains(id))
                         .map(String::valueOf).collect(Collectors.joining(", "));
-                throw new ResourceNotFoundException("Products not found with IDs: " + missingIds);
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Products not found with IDs: " + missingIds);
             }
         }
 
@@ -239,7 +238,8 @@ public class ProductService {
                 // 需要更多庫存
                 int rowsAffected = productRepository.reserveProduct(productId, diff);
                 if (rowsAffected == 0) {
-                    throw new ProductStockNotEnoughException("商品 ID " + productId + " 庫存不足，無法預留");
+                    throw new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH,
+                            "商品 ID " + productId + " 庫存不足，無法預留");
                 }
             } else if (diff == 0) {
                 // 數量沒變不處理
@@ -248,7 +248,8 @@ public class ProductService {
                 // 釋放多餘庫存
                 int rowsAffected = productRepository.releaseProduct(productId, Math.abs(diff));
                 if (rowsAffected == 0) {
-                    throw new ProductStockNotEnoughException("商品 ID " + productId + " 預留的庫存不足，無法釋放");
+                    throw new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH,
+                            "商品 ID " + productId + " 預留的庫存不足，無法釋放");
                 }
             }
         }
@@ -312,7 +313,7 @@ public class ProductService {
     private void checkProductExistsByNameOrThrow(String productName) {
         ServiceValidator.validateNotNull(productName, "Product name");
         if (productRepository.existsByName(productName)) {
-            throw new ProductAlreadyExistException(productName + " already exists");
+            throw new BusinessException(ErrorCode.PRODUCT_ALREADY_EXIST, productName + " already exists");
         }
     }
 
@@ -325,7 +326,8 @@ public class ProductService {
     private Product findProductByIdOrThrow(Integer productId) {
         ServiceValidator.validateNotNull(productId, "Product ID");
         Product result = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                        "Product not found with id: " + productId));
         return result;
     }
 }

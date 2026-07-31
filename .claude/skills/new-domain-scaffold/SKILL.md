@@ -51,7 +51,7 @@ src/main/java/com/ibm/demo/{domain}/
 - [ ] 標註 `@Service`、`@RequiredArgsConstructor`
 - [ ] 查詢方法加 `@Transactional(readOnly = true)`
 - [ ] 寫入方法加 `@Transactional`
-- [ ] 失敗情境：拋出 `exception/` 下的 `BusinessException` 子類別，**不要直接回傳 error response**
+- [ ] 失敗情境：拋出 `BusinessException` 並帶入對應 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`），**不要直接回傳 error response**
 - [ ] 需要呼叫其他 domain？→ 注入對應 `*Client`（`AccountClient`、`ProductClient`、`OrderClient`），**不要直接注入其他 domain 的 Service**
 - [ ] 需要 Resilience4j？→ 在方法上加 `@Bulkhead`、`@CircuitBreaker`、`@RateLimiter`（name 需與 `application.yml` 中的 key 對應）
 
@@ -73,10 +73,9 @@ src/main/java/com/ibm/demo/{domain}/
 
 ### 6. 錯誤處理
 
-- [ ] 在 `exception/` 下新增該 domain 的 `BusinessException` 子類別
-  - 例：`{Domain}NotFoundException`、`{Domain}AlreadyExistsException`
-- [ ] 在 `util/ErrorCode` 加入對應的錯誤碼（若有需要）
-- [ ] `GlobalExceptionHandler` 已處理 `BusinessException` 父類別，通常不需要額外改動
+- [ ] 在 `util/ErrorCode` 加入該 domain 需要的錯誤碼（HttpStatus + code + message）
+- [ ] throw 時用 `new BusinessException(ErrorCode.X, "...")`；**不需要**新增例外子類別（已整併為單一具體 `BusinessException`）
+- [ ] `GlobalExceptionHandler` 已統一處理 `BusinessException`，通常不需要額外改動
 
 ### 7. DB Migration
 
@@ -108,5 +107,5 @@ src/main/java/com/ibm/demo/{domain}/
 | 跨 domain 呼叫 | 一律經由 `*Client`，不直接注入其他 domain 的 Service |
 | Soft delete | 繼承 `SoftDeleteRepository`，不手刻 `deleted = false` 條件 |
 | 分頁 | 所有列表端點用 `Pageable` + `PageResponse<T>`，無例外 |
-| 錯誤 | 拋 `BusinessException` 子類別，由 `GlobalExceptionHandler` 統一處理 |
+| 錯誤 | 拋 `BusinessException` 並帶入 `ErrorCode`，由 `GlobalExceptionHandler` 統一處理 |
 | 安全 | `*Client` 自呼叫需帶 `internal` 帳號憑證 |

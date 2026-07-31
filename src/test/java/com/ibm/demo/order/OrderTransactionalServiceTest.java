@@ -18,11 +18,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
-import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.util.ErrorCode;
 
 @Tag("UnitTest")
 @ExtendWith(MockitoExtension.class)
@@ -89,7 +89,8 @@ public class OrderTransactionalServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> orderTransactionalService.prepareOrderDeletion(99))
-                .isInstanceOf(ResourceNotFoundException.class)
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                 .hasMessageContaining("Order not found")
                 .hasMessageContaining("99");
     }
@@ -105,7 +106,8 @@ public class OrderTransactionalServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> orderTransactionalService.prepareOrderDeletion(1))
-                .isInstanceOf(OrderStatusInvalidException.class)
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_STATUS_INVALID)
                 .hasMessageContaining("訂單狀態不允許刪除");
     }
 
@@ -139,7 +141,8 @@ public class OrderTransactionalServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> orderTransactionalService.loadOrderView(404))
-                .isInstanceOf(ResourceNotFoundException.class)
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                 .hasMessageContaining("Order not found");
     }
 }

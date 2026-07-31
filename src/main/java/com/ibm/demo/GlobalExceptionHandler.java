@@ -18,7 +18,7 @@ import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import com.ibm.demo.exception.ApiErrorResponse;
-import com.ibm.demo.exception.BusinessLogicCheck.BusinessException;
+import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.util.ErrorCode;
 
 @RestControllerAdvice

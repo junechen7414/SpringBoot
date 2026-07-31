@@ -26,10 +26,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.exception.BusinessLogicCheck.InvalidRequestException;
-import com.ibm.demo.exception.BusinessLogicCheck.OrderStatusInvalidException;
-import com.ibm.demo.exception.BusinessLogicCheck.ProductStockNotEnoughException;
-import com.ibm.demo.exception.BusinessLogicCheck.ResourceNotFoundException;
+import com.ibm.demo.exception.BusinessException;
+import com.ibm.demo.util.ErrorCode;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
@@ -147,12 +145,13 @@ class OrderServiceTest {
                                         .build();
 
                         // 關鍵：帳戶領域判定不具資格，停用/不存在均查無 -> ResourceNotFoundException
-                        doThrow(new ResourceNotFoundException("Account not found with id: " + ineligibleId))
+                        doThrow(new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found with id: " + ineligibleId))
                                         .when(accountClient).assertCanPlaceOrder(ineligibleId);
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
-                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                                         .hasMessageContaining("Account not found");
 
                         verifyNoInteractions(productClient);
@@ -169,13 +168,14 @@ class OrderServiceTest {
                                         .build();
 
                         // 關鍵：不可售商品受 @SQLRestriction 濾除，reserveStock 視為查無而拋出 ResourceNotFoundException
-                        doThrow(new ResourceNotFoundException("Products not found with IDs: " + SELLABLE_PRODUCT_ID))
+                        doThrow(new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Products not found with IDs: " + SELLABLE_PRODUCT_ID))
                                         .when(productClient)
                                         .reserveStock(any());
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
-                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                                         .hasMessageContaining("Products not found");
 
                         // 驗證：既然拋異常了，後面的交易服務絕對不該執行
@@ -192,12 +192,13 @@ class OrderServiceTest {
                                         .build();
 
                         // 關鍵：模擬 reserveStock 發現庫存不足
-                        doThrow(new ProductStockNotEnoughException("庫存不足"))
+                        doThrow(new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH, "庫存不足"))
                                         .when(productClient)
                                         .reserveStock(any());
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
-                                        .isInstanceOf(ProductStockNotEnoughException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PRODUCT_STOCK_NOT_ENOUGH)
                                         .hasMessageContaining("庫存不足");
 
                         // 驗證：既然拋異常了，後面的交易服務絕對不該執行
@@ -217,7 +218,8 @@ class OrderServiceTest {
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.createOrder(request))
-                                        .isInstanceOf(InvalidRequestException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_REQUEST)
                                         .hasMessageContaining("同一訂單中同一商品只能有一筆明細");
 
                         // 帳號資格校驗在去重之前，故仍被呼叫；去重失敗後不得預留庫存或進交易服務
@@ -296,11 +298,12 @@ class OrderServiceTest {
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)));
 
                         when(orderTransactionalService.loadOrderView(nonExistentId))
-                                        .thenThrow(new ResourceNotFoundException("Order not found with ID: " + nonExistentId));
+                                        .thenThrow(new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Order not found with ID: " + nonExistentId));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.updateOrder(request))
-                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                                         .hasMessageContaining("Order not found")
                                         .hasMessageContaining(String.valueOf(nonExistentId));
 
@@ -320,13 +323,14 @@ class OrderServiceTest {
                                         new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED, List.of()));
 
                         // 關鍵：模擬 adjustStock 拋出庫存不足異常
-                        doThrow(new ProductStockNotEnoughException("庫存不足"))
+                        doThrow(new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH, "庫存不足"))
                                         .when(productClient)
                                         .adjustStock(any(AdjustStockRequest.class));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.updateOrder(request))
-                                        .isInstanceOf(ProductStockNotEnoughException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PRODUCT_STOCK_NOT_ENOUGH)
                                         .hasMessageContaining("庫存不足");
 
                         // 驗證流程在拋出異常後中斷，沒有執行交易服務的更新
@@ -346,7 +350,8 @@ class OrderServiceTest {
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.updateOrder(request))
-                                        .isInstanceOf(InvalidRequestException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_REQUEST)
                                         .hasMessageContaining("同一訂單中同一商品只能有一筆明細");
 
                         // 去重失敗在查 DB 前就擋下：不得載入、調整庫存或進交易服務
@@ -390,11 +395,12 @@ class OrderServiceTest {
                 void deleteOrder_WhenNotFound_ShouldThrowException(String scenario, Integer nonExistentId) {
                         // Arrange：載入/驗證已收斂至 prepareOrderDeletion，故在此模擬其拋出 NotFound
                         when(orderTransactionalService.prepareOrderDeletion(nonExistentId))
-                                        .thenThrow(new ResourceNotFoundException("Order not found with ID: " + nonExistentId));
+                                        .thenThrow(new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Order not found with ID: " + nonExistentId));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.deleteOrder(nonExistentId))
-                                        .isInstanceOf(ResourceNotFoundException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                                         .hasMessageContaining("Order not found")
                                         .hasMessageContaining(String.valueOf(nonExistentId));
 
@@ -408,11 +414,12 @@ class OrderServiceTest {
                 void deleteOrder_WhenStatusNotPending_ShouldThrowOrderStatusInvalidException() {
                         // Arrange：狀態驗證已收斂至 prepareOrderDeletion
                         when(orderTransactionalService.prepareOrderDeletion(EXISTING_ORDER_ID))
-                                        .thenThrow(new OrderStatusInvalidException("訂單狀態不允許刪除，目前狀態: " + STATUS_CANCELLED));
+                                        .thenThrow(new BusinessException(ErrorCode.ORDER_STATUS_INVALID, "訂單狀態不允許刪除，目前狀態: " + STATUS_CANCELLED));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.deleteOrder(EXISTING_ORDER_ID))
-                                        .isInstanceOf(OrderStatusInvalidException.class)
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_STATUS_INVALID)
                                         .hasMessageContaining("訂單狀態不允許刪除");
 
                         // 驗證：狀態不對，不應該執行後續任何扣庫存或刪除動作
