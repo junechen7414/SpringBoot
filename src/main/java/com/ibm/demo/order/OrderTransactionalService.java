@@ -46,21 +46,16 @@ public class OrderTransactionalService {
                                 .status(OrderStatus.CREATED.getCode())
                                 .build();
 
+                // 明細先掛到父端（addOrderDetail 同步雙向兩端），再以單一 save 由 cascade PERSIST 一併寫入。
+                // 舊寫法只設子端的 orderInfo 再另外 saveAll，交易內父端集合會是空的（雙向不一致）。
+                createOrderRequest.items().forEach(detailRequest -> newOrderInfo.addOrderDetail(
+                                OrderDetail.builder()
+                                                .productId(detailRequest.productId())
+                                                .quantity(detailRequest.quantity())
+                                                .build()));
+
                 OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
-                List<OrderDetail> orderDetails = createOrderRequest.items().stream()
-                                .map(detailRequest -> {
-                                        Integer productId = detailRequest.productId();
-                                        Integer quantity = detailRequest.quantity();
-                                        // 建立訂單明細
-                                        return OrderDetail.builder()
-                                                        .orderInfo(savedOrderInfo)
-                                                        .productId(productId)
-                                                        .quantity(quantity)
-                                                        .build();
-                                })
-                                .collect(Collectors.toList());
-                orderDetailRepository.saveAll(orderDetails);
-                
+
                 log.info("訂單建立成功，訂單ID: {}, 帳戶ID: {}", 
                         savedOrderInfo.getId(), 
                         createOrderRequest.accountId());
@@ -98,9 +93,8 @@ public class OrderTransactionalService {
 
                 request.items().stream()
                                 .filter(item -> !existingMap.containsKey(item.productId()))
-                                .forEach(item -> order.getOrderDetails().add(
+                                .forEach(item -> order.addOrderDetail(
                                                 OrderDetail.builder()
-                                                                .orderInfo(order)
                                                                 .productId(item.productId())
                                                                 .quantity(item.quantity())
                                                                 .build()));

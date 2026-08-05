@@ -1,5 +1,6 @@
 package com.ibm.demo.order;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.hibernate.annotations.BatchSize;
@@ -48,10 +49,14 @@ public class OrderInfo {
     @Column(name = "STATUS", columnDefinition = "NUMBER(4)", nullable = false)
     private Integer status;
 
-    @OneToMany(mappedBy = "orderInfo", cascade = CascadeType.ALL, orphanRemoval = true)
+    // 雙向關聯（配對 OrderDetail.orderInfo）：判準是生命週期綁定 —— 明細隨 order 而生滅，
+    // 沒有跨 order 查明細的需求。cascade 只留實際用到的 PERSIST/MERGE，REMOVE 由 orphanRemoval 涵蓋。
+    // 完整取捨（收益、代價、為何不改單向）見 筆記.md「要不要做『雙向』關聯？」一節。
+    @OneToMany(mappedBy = "orderInfo", cascade = { CascadeType.PERSIST, CascadeType.MERGE }, orphanRemoval = true)
     @BatchSize(size = 50) // 列表分頁載入時，把多筆 order 的 lazy orderDetails 併成少量 IN 查詢，緩解 N+1
     @ToString.Exclude // 避免Entity中有OneToMany或ManyToOne關聯時，因為循環引用導致 StackOverflowError。
-    private List<OrderDetail> orderDetails; // 建立雙向關聯，方便查詢
+    @Builder.Default // @Builder 走 all-args constructor 會蓋掉欄位初始值，少了這行 builder 路徑會拿到 null
+    private List<OrderDetail> orderDetails = new ArrayList<>();
     // 改用組合（@Embedded 元數據）後已無 @MappedSuperclass 父類，直接用類別上的 @Builder 即可（不需 @SuperBuilder）
 
     // 組合：審計欄位
@@ -69,6 +74,15 @@ public class OrderInfo {
     @Column(name = "VERSION", columnDefinition = "NUMBER(10) DEFAULT 0", nullable = false)
     @Builder.Default
     private Integer version = 0;
+
+    /**
+     * 掛載明細的唯一入口：同步雙向關聯的兩端（JPA 不會自動維護，只設一端會讓物件圖與 DB 不一致）。
+     * 刻意不提供成對的 removeOrderDetail，理由見 筆記.md「要不要做『雙向』關聯？」一節。
+     */
+    public void addOrderDetail(OrderDetail detail) {
+        this.orderDetails.add(detail);
+        detail.setOrderInfo(this);
+    }
 
     public void restore() {
         this.softDeleteMetadata.setDeleted(false);

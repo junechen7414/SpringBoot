@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -115,9 +114,7 @@ class OrderReadEndpointOsivIntegrationTest extends BaseIntegrationTest {
                 .accountId(accountId)
                 .status(OrderStatus.CREATED.getCode())
                 .build();
-        order.setOrderDetails(new ArrayList<>());
-        order.getOrderDetails().add(OrderDetail.builder()
-                .orderInfo(order).productId(productId).quantity(2).build());
+        order.addOrderDetail(OrderDetail.builder().productId(productId).quantity(2).build());
         Integer orderId = orderInfoRepository.saveAndFlush(order).getId();
         return new Seed(accountId, productId, orderId);
     }

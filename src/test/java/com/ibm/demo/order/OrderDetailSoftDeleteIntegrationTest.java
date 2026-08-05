@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -168,12 +167,9 @@ class OrderDetailSoftDeleteIntegrationTest extends BaseIntegrationTest {
                 .accountId(accountId)
                 .status(OrderStatus.CREATED.getCode())
                 .build();
-        order.setOrderDetails(new ArrayList<>());
-        order.getOrderDetails().add(OrderDetail.builder()
-                .orderInfo(order).productId(productAId).quantity(2).build());
-        order.getOrderDetails().add(OrderDetail.builder()
-                .orderInfo(order).productId(productBId).quantity(3).build());
-        return orderInfoRepository.saveAndFlush(order); // cascade=ALL 一併存明細
+        order.addOrderDetail(OrderDetail.builder().productId(productAId).quantity(2).build());
+        order.addOrderDetail(OrderDetail.builder().productId(productBId).quantity(3).build());
+        return orderInfoRepository.saveAndFlush(order); // cascade PERSIST 一併存明細
     }
 
     /** 以 native query 繞過 {@code @SQLRestriction}，直接數實體列(含已軟刪)。 */
