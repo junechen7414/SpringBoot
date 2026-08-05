@@ -55,7 +55,11 @@ public class OrderDetail {
     // @OneToMany(mappedBy) 與 orphanRemoval 都要求擁有端存在，OrderDetailRepository
     // 的 JPQL（d.orderInfo.id）也依賴它。細節見 筆記.md「要不要做『雙向』關聯？」一節。
     @ManyToOne(fetch = FetchType.LAZY) // 延遲載入
-    @JoinColumn(name = "ORDER_ID", referencedColumnName = "ID", nullable = false) // 映射到 ORDER_ID 和 OrderInfo 的ID
+    // ORDER_ID 是「本表」ORDER_PRODUCT_DETAIL 的外鍵欄位；不指定 name 會被推導成 order_info_id
+    // （屬性名 + 對方 PK 欄位，再過 CamelCaseToUnderscoresNamingStrategy），與 V1 migration 不符
+    // → ddl-auto: validate 啟動即失敗。被參考的目標欄位預設就是 OrderInfo 的 @Id（ORDER_INFO.ID），
+    // 故不需 referencedColumnName。nullable 只影響 DDL 產生（本專案僅 openapi profile 會產 DDL）。
+    @JoinColumn(name = "ORDER_ID", nullable = false)
     @ToString.Exclude // 避免Entity中有OneToMany或ManyToOne關聯時，因為循環引用導致 StackOverflowError。
     private OrderInfo orderInfo;
 
