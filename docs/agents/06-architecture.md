@@ -80,10 +80,13 @@ public class ProductService {
 ### 安全（Spring Security）
 
 - **設定位置**：`config/SecurityConfig.java`，提供 **stateless HTTP Basic** 的 `SecurityFilterChain`。
+- **定位：這是佔位方案**，只夠服務對服務與教學用。正式環境應改為只當 OAuth2 Resource Server、把 authN/authZ 交給外部 IdP —— 遷移步驟見 **`docs/security-external-idp-migration.md`**。
 - **授權規則**：`anyRequest().authenticated()`；放行以下端點：
   - actuator：`/actuator/health/**`——給 Dockerfile HEALTHCHECK 的 `wget` 探針用（該探針也走此 filter chain，不放行會 401）。監控走 **OTLP push**，無需放行 scrape 端點。
   - springdoc：`/v3/api-docs/**`、`/swagger-ui/**`、`/swagger-ui.html`（執行時免登入瀏覽 Swagger）。
-- **使用者**：in-memory（`api`、`internal` 兩帳號），帳密來自 `app.auth.*`（env 覆寫；見 `AppProperties.Auth`）。**不建 DB 使用者表**。
+- **無方法級授權（authZ）**：`roles("API")` / `roles("INTERNAL")` 目前**沒有任何授權規則在用**（全專案無 `@PreAuthorize` / `hasRole`）。保留它們是作為未來映射 IdP role claim 的接縫，不代表現在有授權效果 —— internal 服務帳號可打所有對外端點，反之亦然。
+- **使用者**：in-memory（`api`、`internal` 兩個**機器帳號**），帳密來自 `app.auth.*`（env 覆寫；見 `AppProperties.Auth`）。**不建 DB 使用者表**。
+- **密碼刻意不做雜湊**：以 `{noop}` 前綴交給預設的 `DelegatingPasswordEncoder` 逐字比對。理由是雜湊在此對不上任何威脅模型（機器帳號、密碼本來就從 env 明文注入同一個 process，沒有會外洩的密碼資料庫），卻要付真實成本 —— STATELESS + Basic 表示**每個請求都重新認證**且無憑證快取，加上 `*Client` loopback 自呼叫的放大倍數，BCrypt（strength 10，單次數十毫秒）會直接吃掉 Resilience4j 併發/QPS 調校的預算。**真正的使用者密碼一律走外部 IdP。**
 - **分層界線**：Security filter chain 只攔 **inbound HTTP** —— Oracle/Hikari 連線、OTLP metric 推送、容器間網路都不受影響。
 - **內部 `*Client` 自呼叫**：因 `*Client` 透過 loopback HTTP 打回本應用，`RestClientConfig` 為其掛上 `internal` 帳號的 Basic 憑證，讓自呼叫能通過 filter chain（否則會 401）。
 - **openapi profile**：`@Profile("openapi")` 另有一條全 `permitAll` 的 chain，確保 `generateOpenApiDocs`（打 `/v3/api-docs`）不被擋。

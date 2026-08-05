@@ -50,6 +50,7 @@ ORACLE_DEV_PASSWORD=your_password
 
 # HTTP Basic 認證（Spring Security）。本地 bootRun 未設定時，application.yml 有 dev 友善預設值；
 # 正式/共享環境務必覆蓋。api-*：一般 API 呼叫端；internal-*：內部 *Client loopback 自呼叫服務帳號。
+# 這兩組是機器帳號，密碼以 {noop} 逐字比對、不做雜湊（理由見 SecurityConfig 註解）。
 API_USERNAME=api
 API_PASSWORD=change_me_api
 INTERNAL_USERNAME=internal

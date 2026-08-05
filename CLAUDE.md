@@ -46,7 +46,7 @@ Tests：
 - **錯誤處理**：拋出 `BusinessException` 並帶入對應的 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`）；`GlobalExceptionHandler` 統一對應 `ApiErrorResponse`。
 - **Resilience4j**：`config/Resilience4jConfig.java`，service 方法上用 `@Bulkhead`、`@CircuitBreaker`、`@RateLimiter`。
 - **可觀測性**：OTLP push → Grafana Alloy → Prometheus → Grafana。**無** `/actuator/prometheus` scrape endpoint。
-- **Security**：stateless HTTP Basic，`anyRequest().authenticated()`；放行 actuator health、springdoc。`*Client` 自呼叫透過 loopback 繞回，`RestClientConfig` 掛 `internal` 帳號憑證。
+- **Security**：stateless HTTP Basic，`anyRequest().authenticated()`；放行 actuator health、springdoc。`*Client` 自呼叫透過 loopback 繞回，`RestClientConfig` 掛 `internal` 帳號憑證。使用者是兩個 **in-memory 機器帳號**，密碼以 `{noop}` 逐字比對（不雜湊，理由見 `SecurityConfig` 註解）；**目前沒有方法級 authZ**（`roles` 保留但無規則使用）。正式環境應改為只當 OAuth2 Resource Server、authN/authZ 外包給 IdP — 見 `docs/security-external-idp-migration.md`。
 - **DB migrations**：Flyway，`src/main/resources/db/migration`（Oracle）；H2 用於測試與 OpenAPI 產生。
 
 > 新增 domain 請參閱 **`new-domain-scaffold` skill**。
