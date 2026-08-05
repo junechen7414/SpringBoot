@@ -177,7 +177,16 @@ JwtAuthenticationConverter jwtAuthenticationConverter() {
 | `GET /account/{id}/order-eligibility` | `AccountClient` |
 | `GET /order/account/{accountId}/exists` | `OrderClient` |
 
-> 🚨 **啟用前必須先確認下游 Playwright E2E repo 沒有直接呼叫這些端點**（`image-publish.yml` 會在 push `main` 後觸發它）。這是行為變更，不是重構。
+> ✅ **已查核下游，上表可安全啟用**（2026-08-05 對 `junechen7414/Playwright-TS`）。下游唯一的呼叫面是
+> `services/apis/springboot-api-client.ts`，只用 `/account`、`/product`、`/order`（含 `/{id}`、
+> `/order/account/{accountId}`）的 CRUD 與列表；`reserve`、`release`、`adjustStock`、`batch`、
+> `order-eligibility`、`exists` 這些字串在該 repo **只出現在產出的 `docs/swagger.json`**，沒有任何測試引用。
+> 這仍是行為變更而非重構 —— 下次調整這批端點前要重新查核，下游隨時可能新增測試。
+
+> 🚨 **例外：`POST /PlaywrightTestData/createOrderPrecondition` 必須維持對外部呼叫端開放。**
+> 下游用它準備 order 測試的前置資料（`SpringbootApiClient.prepareOrdersTestData()`），而
+> `testdata/PlaywrightTestDataController` 沒有 `@Profile` 限制、在所有 profile 都存在。若順手把它一起限成
+> `INTERNAL`，整組 order E2E 會在前置階段就失敗，而且失敗點看起來像是測試資料問題、不像授權問題。
 
 ### 7. 測試
 
@@ -187,7 +196,18 @@ JwtAuthenticationConverter jwtAuthenticationConverter() {
 
 ### 8. 下游與環境衝擊
 
-- **Playwright E2E repo**：要改成先向 IdP 取 token、再帶 `Authorization: Bearer`。這是跨 repo 的破壞性變更，兩邊要協調上線順序。
+- **Playwright E2E repo（`junechen7414/Playwright-TS`）**：要改成先向 IdP 取 token、再帶 `Authorization: Bearer`。這是跨 repo 的破壞性變更，兩邊要協調上線順序。點名要改的檔案（2026-08-05 查核）：
+
+  | 檔案 | 現況 | 要改成 |
+  |---|---|---|
+  | `playwright.config.ts` | 自行組 `Basic ${base64(API_USERNAME:API_PASSWORD)}`，透過 `springboot-api` project 的 `extraHTTPHeaders` 送出 | `Authorization: Bearer ${process.env.API_TOKEN}`。`extraHTTPHeaders` 是 config 載入時求值、**不能 `await`**，所以 token 要在 `globalSetup` 取好塞進 env —— 該 repo 已有一份被註解停用的 `global-setup.ts`，正好在此重新啟用 |
+  | `docker-compose.test.yml` | 把 `API_USERNAME` / `API_PASSWORD` 注入 app 容器覆寫 `app.auth.api-*` | 加 keycloak service（`depends_on: condition: service_healthy`），env 換成 `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI` |
+  | `.github/workflows/springboot.yml` | `API_USERNAME` / `API_PASSWORD` 出現**兩處**（Start Environment 給容器、Run Playwright 給測試） | 換成 client id / secret，兩處都要改；GitHub Secrets 同步新增 |
+  | `.env.example` | 說明「後端在 PR #66 後加上 HTTP Basic 認證」、列 `API_USERNAME` / `API_PASSWORD` | 改為 IdP client 憑證與 issuer |
+
+  token 存活期要涵蓋整個 job（該 workflow `timeout-minutes: 60`），否則長測試跑到後半段會集體 401；不想放長效 token 就得改成每個 fixture 自己取。
+
+  **不受影響的部分**：`tests/api/Network.spec.ts` 雖然測 401 情境，但它是 `page.route` 全 mock 打 `https://demo-api.local/endpoint`，且不在 `--project=springboot-api` 的 `testMatch` 內，與真實後端無關。`pnpm run api-spec:update` 讀的是 repo 內已 commit 的 `docs/swagger.json`（不是打線上 server），只要 API 形狀沒變就不必重跑。
 - **`.env.example` / `.env`**：`API_USERNAME` / `API_PASSWORD` / `INTERNAL_USERNAME` / `INTERNAL_PASSWORD` 換成 `IDP_ISSUER_URI`、`IDP_INTERNAL_CLIENT_SECRET`、`KEYCLOAK_ADMIN_*`。
 - **`docs/agents/06-architecture.md`、`docs/handout/06-config-security-ops.md`、`CLAUDE.md`** 要同步（見 `docs/agents/05-code-standards.md` 的同步要求）。
 
@@ -197,6 +217,8 @@ JwtAuthenticationConverter jwtAuthenticationConverter() {
 
 **1. issuer 主機名不一致會直接讓驗證失敗**
 JWT 的 `iss` claim 必須與 `issuer-uri` 完全相符。容器內是 `http://keycloak:8080/realms/demo`，從主機瀏覽器拿到的 token 卻是 `http://localhost:8080/realms/demo` —— 兩者不相等，驗證就掛。解法與本專案處理 `ORACLE_DB_HOST` 的手法同源：把 host 抽成帶預設值的變數，並在 Keycloak 設定 `KC_HOSTNAME` 讓簽發端與驗證端看到同一個 issuer。
+
+> **下游 E2E 一定會踩到這個坑**：`docker-compose.test.yml` 的 app 跑在 compose 網路內、只能用服務名 `keycloak:8080` 連 IdP，而 Playwright 跑在 runner 主機上、只能用 `localhost:8080` 取 token。token 的 `iss` 是簽發時那個 URL，於是**每個請求都 401，錯誤訊息不會提到主機名**。要先把 Keycloak 的 frontend URL（`KC_HOSTNAME_URL`）釘成單一標準值讓兩邊看到同一個字串，具體配法需實測驗證。這也是遷移該優先在下游驗的一項。
 
 **2. loopback 自呼叫的 audience**
 `client_credentials` 拿到的 token 必須被本應用接受（aud / scope 對得上）。若之後加了 audience 驗證，記得把本應用自己也列進去。
