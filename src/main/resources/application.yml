@@ -62,7 +62,8 @@ spring:
     # order 讀取/更新/刪除端點均已改為在交易內把資料萃取為 DTO（OrderTransactionalService
     # 的 loadOrderView(s)/prepareOrderDeletion），不再於交易外碰 lazy orderDetails。
     open-in-view: false
-
+  main:
+    banner-mode: off
 server:
   port: 8787
 
