@@ -67,6 +67,12 @@ spring:
 server:
   port: 8787
 
+springdoc:
+  swagger-ui:
+    # Authorize 輸入的憑證存進瀏覽器 localStorage：重新整理或重開分頁後仍在，不必每次重打。
+    # 只影響 Swagger UI 這個前端頁面，伺服器端不保存任何憑證（filter chain 仍是 STATELESS + 每次驗 Basic）。
+    persist-authorization: true
+
 logging:
   level:
     "[com.ibm.demo]": INFO
