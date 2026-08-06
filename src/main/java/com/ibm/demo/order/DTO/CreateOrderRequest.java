@@ -19,8 +19,7 @@ public record CreateOrderRequest(
         @Schema(description = "帳戶 ID", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
         Integer accountId,
 
-        @Valid
         @NotEmpty(message = "Order items are required")
         @Schema(description = "訂單明細項目列表", requiredMode = Schema.RequiredMode.REQUIRED)
-        List<CreateOrderDetailRequest> items) {
+        List<@Valid CreateOrderDetailRequest> items) {
 }

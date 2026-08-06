@@ -25,8 +25,7 @@ public record UpdateOrderRequest(
         @Schema(description = "訂單狀態 (1001=訂單建立, 1003=訂單取消)", example = "1001", requiredMode = Schema.RequiredMode.REQUIRED)
         Integer orderStatus,
 
-        @Valid
         @NotEmpty(message = "Order items are required")
         @Schema(description = "訂單明細項目列表", requiredMode = Schema.RequiredMode.REQUIRED)
-        List<UpdateOrderDetailRequest> items) {
+        List<@Valid UpdateOrderDetailRequest> items) {
 }
