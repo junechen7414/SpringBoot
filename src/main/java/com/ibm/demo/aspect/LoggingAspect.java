@@ -20,8 +20,15 @@ public class LoggingAspect {
 
     private static final Logger logger = LoggerFactory.getLogger(LoggingAspect.class);
 
-    // 修改 Pointcut，使其更專注於 Controller 和 Service 層，避免攔截過多無關方法
-    @Pointcut("within(@org.springframework.web.bind.annotation.RestController *) || within(@org.springframework.stereotype.Service *)")
+    // 攔截範圍限定在自家 package 內的 Controller / Service 層。
+    // within(com.ibm.demo..*) 不可省：@RestController / @Service 是公開註解，第三方 bean 也會標
+    // （例如 springdoc 的 OpenApiWebMvcResource），少了 package 邊界就會連別人家的端點一起代理，
+    // 打開 Swagger UI 時整份 OpenAPI JSON 會以 byte 陣列印進 log。
+    // 括號不可省：AspectJ 的 && 綁得比 || 緊，寫成 A && B || C 會被解析為 (A && B) || C，
+    // 導致 @Service 那半邊仍然沒有 package 邊界。
+    @Pointcut("within(com.ibm.demo..*)"
+            + " && (within(@org.springframework.web.bind.annotation.RestController *)"
+            + "     || within(@org.springframework.stereotype.Service *))")
     public void serviceAndControllerLayer() {}
 
     // 使用 @Around 環繞通知來記錄方法執行時間和返回值
