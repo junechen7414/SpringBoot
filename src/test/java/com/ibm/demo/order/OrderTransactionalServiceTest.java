@@ -121,7 +121,7 @@ public class OrderTransactionalServiceTest {
         order.setStatus(OrderStatus.CREATED.getCode());
         order.setOrderDetails(List.of(
                 OrderDetail.builder().productId(20).quantity(4).build()));
-        when(orderInfoRepository.findById(7)).thenReturn(Optional.of(order));
+        when(orderInfoRepository.findByIdWithDetails(7)).thenReturn(Optional.of(order));
 
         // Act
         OrderView view = orderTransactionalService.loadOrderView(7);
@@ -137,7 +137,7 @@ public class OrderTransactionalServiceTest {
     @DisplayName("loadOrderView 若訂單不存在應拋出 ResourceNotFoundException")
     void loadOrderView_WhenNotFound_ShouldThrow() {
         // Arrange
-        when(orderInfoRepository.findById(404)).thenReturn(Optional.empty());
+        when(orderInfoRepository.findByIdWithDetails(404)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThatThrownBy(() -> orderTransactionalService.loadOrderView(404))

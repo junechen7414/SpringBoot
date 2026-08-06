@@ -112,7 +112,7 @@ public class OrderTransactionalService {
          */
         @Transactional(readOnly = true)
         public OrderView loadOrderView(Integer orderId) {
-                OrderInfo order = orderInfoRepository.findById(orderId).orElseThrow(
+                OrderInfo order = orderInfoRepository.findByIdWithDetails(orderId).orElseThrow(
                                 () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                                                 "Order not found with ID: " + orderId));
                 return toView(order);
