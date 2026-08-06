@@ -69,7 +69,7 @@ server:
 
 logging:
   level:
-    com.ibm.demo: INFO
+    "[com.ibm.demo]": INFO
 
 management:
   endpoints:

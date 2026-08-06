@@ -18,7 +18,6 @@ spring:
     url: jdbc:oracle:thin:@//oracle-db:1521/FREEPDB1
     username: ${ORACLE_TEST_USERNAME}
     password: ${ORACLE_TEST_PASSWORD}
-    driver-class-name: oracle.jdbc.driver.OracleDriver
     hikari:
       connection-timeout: 5000
       maximum-pool-size: 20
@@ -27,9 +26,8 @@ spring:
       ddl-auto: validate
     properties:
       hibernate:
-        format_sql: true
+        "[format_sql]": true
         dialect: org.hibernate.dialect.OracleDialect
-    show-sql: true
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -49,13 +47,5 @@ management:
 
 logging:
   level:
-    org:
-      hibernate:
-        SQL: DEBUG
-        type:
-          descriptor:
-            sql:
-              BasicBinder: TRACE
-        tool:
-          schema:
-            internal: DEBUG
+    "[org.hibernate.SQL]": DEBUG
+    "[org.hibernate.orm.jdbc.bind]": TRACE

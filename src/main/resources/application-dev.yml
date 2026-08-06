@@ -3,7 +3,6 @@ spring:
     url: jdbc:oracle:thin:@//${ORACLE_DB_HOST:localhost}:1521/FREEPDB1
     username: ${ORACLE_DEV_USERNAME}
     password: ${ORACLE_DEV_PASSWORD}
-    driver-class-name: oracle.jdbc.driver.OracleDriver
     hikari:
       maximum-pool-size: 10      # dev 本機連線池（固定大小）；依 (核心數×2)+spindle 公式，對齊 DB 核心數
       connection-timeout: 5000    # 5 秒連接超時
@@ -13,17 +12,18 @@ spring:
       ddl-auto: validate  
     properties:
       hibernate:
-        format_sql: true
+        "[format_sql]": true        
         jdbc:
           lob:
-            non_contextual_creation: true
-    show-sql: true  # 開發環境顯示 SQL 語句，方便除錯
+            "[non_contextual_creation]": true
   flyway:
     enabled: true  # 使用 Flyway 進行資料庫遷移版本控制
 
 logging:
   level:
-    com.ibm.demo: DEBUG
+    "[com.ibm.demo]": DEBUG
+    "[org.hibernate.SQL]": DEBUG  # 開發環境顯示 SQL 語句，方便除錯
+    "[org.hibernate.orm.jdbc.bind]": TRACE
 
 management:
   otlp:
