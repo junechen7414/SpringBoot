@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.SQLRestriction;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.ibm.demo.util.AuditMetadata;
 import com.ibm.demo.util.SoftDeleteMetadata;
@@ -13,6 +14,7 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,6 +35,7 @@ import lombok.ToString;
 @AllArgsConstructor
 @Builder
 @Entity
+@EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
 @SQLRestriction("DELETED = false AND STATUS=1001") // 只選擇未刪除且已確認的訂單
 @Table(name = "ORDER_INFO") // 指定對應的資料表名稱
 public class OrderInfo {

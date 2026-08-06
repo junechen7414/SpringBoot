@@ -3,6 +3,7 @@ package com.ibm.demo.product;
 import java.math.BigDecimal;
 
 import org.hibernate.annotations.SQLRestriction;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.util.AuditMetadata;
@@ -11,6 +12,7 @@ import com.ibm.demo.util.SoftDeleteMetadata;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -29,6 +31,7 @@ import lombok.Setter;
 @AllArgsConstructor
 @Entity
 @Builder
+@EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
 @SQLRestriction("DELETED = false AND SALE_STATUS = 1001") // 只選擇未刪除且上架的商品
 @Table(name = "PRODUCT")
 public class Product {

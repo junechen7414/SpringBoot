@@ -3,6 +3,7 @@ package com.ibm.demo.order;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.jdbc.Expectation;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.ibm.demo.util.AuditMetadata;
 import com.ibm.demo.util.SoftDeleteMetadata;
@@ -10,6 +11,7 @@ import com.ibm.demo.util.SoftDeleteMetadata;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -32,6 +34,7 @@ import lombok.ToString;
 @AllArgsConstructor
 @Entity
 @Builder
+@EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
 @Table(name = "ORDER_PRODUCT_DETAIL")
 // orphanRemoval 觸發的實體 DELETE 改寫為軟刪 UPDATE，與 deleteOrder / soft-delete-everywhere 原則一致。
 // @Version entity 的標準 delete 參數會依序 (id, version) 綁到自訂 SQL，故 SQL 必須剛好兩個 ?：WHERE ID = ? AND VERSION = ?。

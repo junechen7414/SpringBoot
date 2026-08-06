@@ -1,6 +1,7 @@
 package com.ibm.demo.account;
 
 import org.hibernate.annotations.SQLRestriction;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.util.AuditMetadata;
@@ -9,6 +10,7 @@ import com.ibm.demo.util.SoftDeleteMetadata;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -27,6 +29,7 @@ import lombok.Setter;
 @AllArgsConstructor
 @Entity
 @Builder
+@EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
 @SQLRestriction("STATUS = 'Y' AND DELETED = false") // 只選擇啟用狀態且未被刪除的資料
 @Table(name = "ACCOUNT") // 指定對應的資料表名稱
 public class Account {
