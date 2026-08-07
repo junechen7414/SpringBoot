@@ -10,7 +10,7 @@ version = '0.0.1-SNAPSHOT'
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
+		languageVersion = JavaLanguageVersion.of(25)
 	}
 }
 
@@ -26,7 +26,7 @@ openApi {
 
 // springdoc 的 forkedSpringBootRun 只從 bootRun 複製 args/classpath/jvmArgs/environment，
 // 沒有帶上 toolchain launcher，預設改用 Gradle daemon 的 JVM 啟動 app。若 daemon JVM 比
-// 上面 toolchain 宣告的版本舊（本機常見：daemon 跑 17、toolchain 編出 65.0 的 class），
+// 上面 toolchain 宣告的版本舊（本機常見：daemon 跑 17、toolchain 編出 69.0 的 class），
 // app 會在啟動時 UnsupportedClassVersionError，接著 generateOpenApiDocs 只看得到
 // 「Unable to connect to /v3/api-docs」的 timeout。明確指定 launcher 以對齊 toolchain。
 tasks.named('forkedSpringBootRun') {
