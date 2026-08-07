@@ -43,9 +43,6 @@ class OrderCreateCascadeIntegrationTest extends BaseIntegrationTest {
     private ProductRepository productRepository;
 
     @Autowired
-    private OrderInfoRepository orderInfoRepository;
-
-    @Autowired
     private OrderTransactionalService orderTransactionalService;
 
     @Autowired
