@@ -1,6 +1,6 @@
-# 第一階段：編譯 (使用 JDK 21)
+# 第一階段：編譯 (使用 JDK 25)
 # 僅需 JDK 環境，實際編譯透過 Gradle Wrapper (9.6.1) 進行，故使用精簡的 temurin JDK 映像
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 # 設定工作目錄為 /app，後續的命令都會在這個目錄下執行
 WORKDIR /app
 
@@ -19,7 +19,7 @@ COPY src ./src
 RUN ./gradlew bootJar --no-daemon -x test
 
 # 第二階段：運行 (使用輕量化 JRE)
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 # 從 build 階段複製編譯好的 jar

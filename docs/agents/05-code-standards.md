@@ -3,7 +3,7 @@
 ### 核心原則
 
 1. **可讀性優先**: 即使程式碼簡短或執行快速，若難以理解則不採用
-2. **現代化語法**: 優先使用 Java 21 新特性（如 Virtual Threads, Pattern Matching）
+2. **現代化語法**: 優先使用 Java 25 新特性（如 Virtual Threads, Pattern Matching）
 3. **實務導向**: 理論正確但實務不適用的方案應避免
 
 ### 文檔管理

@@ -43,7 +43,7 @@
 ## 專案環境慣例
 
 - 單模組 Gradle 專案（`settings.gradle` 定義單一 project）。
-- Java 21 toolchain。
+- Java 25 toolchain。
 - Base package：`com.ibm.demo`。
 - App 監聽於 **http://localhost:8787**。
 - 需要一份包含 `ORACLE_DEV_USERNAME` / `ORACLE_DEV_PASSWORD` 的 `.env`（見 `.env.example`）。
