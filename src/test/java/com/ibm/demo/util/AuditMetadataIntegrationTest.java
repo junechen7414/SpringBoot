@@ -76,6 +76,11 @@ class AuditMetadataIntegrationTest extends BaseIntegrationTest {
         LocalDateTime createdAt = account.getAuditMetadata().getCreatedAt();
         LocalDateTime firstUpdatedAt = account.getAuditMetadata().getUpdatedAt();
 
+        // auditing 取系統時鐘。Windows 的時鐘 tick 較粗，兩次 flush 常落在同一個 tick，
+        // 讓 updatedAt 與 firstUpdatedAt 完全相同、strictly-after 斷言隨機失敗。
+        // 等時鐘真的前進再改資料，斷言強度不必因此放寬。
+        awaitClockPast(firstUpdatedAt);
+
         account.setName("審計測試帳戶（改名）");
         accountRepository.saveAndFlush(account);
 
@@ -115,6 +120,13 @@ class AuditMetadataIntegrationTest extends BaseIntegrationTest {
                 .getSingleResult();
         assertThat(detail[0]).as("ORDER_PRODUCT_DETAIL.CREATED_AT").isNotNull();
         assertThat(detail[1]).as("ORDER_PRODUCT_DETAIL.UPDATED_AT").isNotNull();
+    }
+
+    /** 忙等到系統時鐘超過指定時間點，確保下一次 audit 取值不會落在同一個 clock tick。 */
+    private static void awaitClockPast(LocalDateTime timestamp) {
+        while (!LocalDateTime.now().isAfter(timestamp)) {
+            Thread.onSpinWait();
+        }
     }
 
     /** 直接讀 DB 欄位，繞過 persistence context 與 @SQLRestriction。 */
