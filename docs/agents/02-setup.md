@@ -2,9 +2,89 @@
 
 ### 前置需求
 
-- **Java 25** (建議使用 Eclipse Temurin)
+- **Java 25** (建議使用 Eclipse Temurin) — 唯一權威來源是 `build.gradle` 的 toolchain 宣告，此處只是副本
 - **Podman** 或 Docker (用於容器管理)
 - **Gradle 9.6.1** (專案已包含 Gradle Wrapper，無需自行安裝)
+
+### JDK 版本管理
+
+以下是與版本無關的通則，未來要升級到新的 Java 版本、或想清掉機器上舊的 JDK 時照著走。
+
+#### 一台機器上的 JDK 有兩種角色
+
+版本相關的困惑幾乎都來自沒分清這兩件事：
+
+| 角色 | 由誰決定 | 版本要求 |
+|---|---|---|
+| **launcher** — 啟動 Gradle / IDE 的那個 JVM | `JAVA_HOME`（未設則 PATH 上第一個 `java`） | 只要該 Gradle 版本支援即可，**不必**等於編譯版本 |
+| **toolchain** — 實際用來編譯的 JDK | `build.gradle` 的 `JavaLanguageVersion.of(N)` | **主版本精確比對** |
+
+兩者允許不同（daemon 跑舊版、編譯用新版），但不一致時會出現難查的症狀。實例：springdoc 的
+`forkedSpringBootRun` 預設用 daemon 的 JVM 啟動 app，若它比 toolchain 舊，app 會在啟動時
+`UnsupportedClassVersionError`，而 `generateOpenApiDocs` 只會顯示連不上 `/v3/api-docs` 的 timeout
+——`build.gradle` 已明確綁定該 task 的 launcher 來消除這個落差，升版時不需重新處理。
+
+#### 建議的機器設定
+
+- `JAVA_HOME` 指向目前主力開發的 JDK；PATH 只放 `%JAVA_HOME%\bin`（Windows）或 `$JAVA_HOME/bin`。
+  **不要逐版本硬塞 bin 目錄** —— 換版時只需改 `JAVA_HOME` 一處，不必記得同步 PATH。
+- 多版本共存交給使用者層級的 `~/.gradle/gradle.properties`：
+
+  ```properties
+  org.gradle.java.installations.paths=<JDK-A-home>,<JDK-B-home>
+  ```
+
+  填 **JDK home，不是 `bin`**；Windows 上 `.properties` 的反斜線要寫 `\\`（單一 `\b` 會被當成轉義序列吃掉）。
+  用 `./gradlew -q javaToolchains` 確認偵測結果 —— Gradle 只看得到這裡列出的版本加上當前 JVM，
+  機器上裝了但沒列出的 JDK 一律不會被挑到。
+- IDE 若要直接執行 `DemoApplication.java`（見下方「僅啟動資料庫」），需另外註冊 runtime：
+  VS Code 的 `java.configuration.runtimes`（主力版本加 `"default": true`）、IntelliJ 的 Project SDK。
+  **這份設定不在版控內**，換機器或升版時最容易漏掉。
+- 改完 `JAVA_HOME` 後務必 `./gradlew --stop`，否則既有 daemon 會繼續用舊 JVM 服務，
+  看起來像設定沒生效。
+
+#### 升級到新的 Java 版本
+
+前兩項是擋門檻，沒過就不要往下做：
+
+1. **確認 Gradle 支援該 Java 版本**（見 Gradle 相容性矩陣）。不支援就先升 Gradle。
+2. **確認 annotation processor 支援** —— 實務上 **Lombok 最常擋路**，它依賴 JDK 內部 API，
+   每個新版本都得等它出新 release。
+3. **同時**改三處宣告；漏一處會變成「本機過、CI 過、映像跑不起來」這種難查的組合：
+   - `build.gradle` 的 toolchain
+   - `Dockerfile` 兩個階段的 base image tag
+   - `.github/workflows/image-publish.yml` 兩個 job 的 `setup-java`
+4. 本機：裝新 JDK → 加進 `installations.paths` → 調 `JAVA_HOME` → IDE 註冊 runtime → `./gradlew --stop`。
+5. 驗三關：
+
+   ```bash
+   ./gradlew clean build -x test                                # 一
+   ./gradlew test -Djunit.platform.exclude.tags=SanityTest      # 二（CI gate 等效指令）
+   ./gradlew generateOpenApiDocs                                # 三
+   ```
+
+   第三關最容易被 toolchain 變更影響（見上面 `forkedSpringBootRun` 的例子），務必跑。
+   第一關順便確認產出的 class file major version = **44 + Java 版本**（17→61、21→65、25→69）：
+
+   ```powershell
+   # 讀 class 檔第 7-8 個 byte；Java 25 應得到 0 69
+   [System.IO.File]::ReadAllBytes('build\classes\java\main\com\ibm\demo\DemoApplication.class')[6..7]
+   ```
+
+6. 同步版本敘述：本檔前置需求、`01-overview.md`、`.claude/rules/project-rules.md`。
+
+#### 舊版 JDK 何時可以解除安裝
+
+條件是「**這台機器上所有專案宣告的 toolchain 版本都不再包含它**」。要注意：
+
+- toolchain 是精確比對，**裝了新版不代表可以刪舊版**。只要還有專案宣告 `of(21)`，機器上僅有更新版
+  就會直接失敗：`No matching toolchains found for requested specification: {languageVersion=21}`。
+- 本專案**未安裝 foojay toolchain resolver**，所以缺版本是硬失敗，Gradle 不會自動下載補救。
+- 刪之前掃過這些地方（**後兩項不在版控裡，掃 repo 掃不到**）：各專案建置檔的版本宣告
+  （`JavaLanguageVersion.of(`、`sourceCompatibility`、`<java.version>`、`<maven.compiler.*>`）、
+  `.sdkmanrc` / `.java-version`、CI workflow、`Dockerfile`、IDE runtime 設定、
+  `~/.gradle/gradle.properties`。
+- 一個 JDK 約 300MB，回收的空間有限；主要好處是少一個「現在到底在用哪個 java」的混淆來源。
 
 ### 本地開發環境啟動
 
