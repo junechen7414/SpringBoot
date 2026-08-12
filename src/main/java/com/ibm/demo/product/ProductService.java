@@ -1,5 +1,6 @@
 package com.ibm.demo.product;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,9 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @CircuitBreaker(name = "ProductService")
@@ -60,6 +63,7 @@ public class ProductService {
                 .build();
         // 3. 儲存商品資料
         Product savedProduct = productRepository.save(newProduct);
+        log.info("商品建立成功，商品ID: {}, 名稱: {}", savedProduct.getId(), requestProductName);
         return savedProduct.getId();
     }
 
@@ -135,6 +139,7 @@ public class ProductService {
         existingProduct.setAvailable(updateProductRequestDto.available());
         // 4. 儲存商品資料
         productRepository.save(existingProduct);
+        log.info("商品更新成功，商品ID: {}, 銷售狀態: {}", id, existingProduct.getSaleStatus());
     }
 
     /**
@@ -149,6 +154,7 @@ public class ProductService {
         Product existingProduct = findProductByIdOrThrow(productId);
         int updated = productRepository.softDeleteById(productId, existingProduct.getVersion());
         DBAssertion.assertUpdated(updated, Product.class, productId);
+        log.info("商品軟刪除成功，商品ID: {}", productId);
     }
 
     /**
@@ -228,6 +234,8 @@ public class ProductService {
         allProductIds.addAll(newMap.keySet());
 
         // 3. 統一計算差值並處理
+        // 差值累積起來，最後只記一行 —— 在迴圈內記會讓一筆訂單噴出好幾行。
+        Map<Integer, Integer> appliedDeltas = new HashMap<>();
         for (Integer productId : allProductIds) {
             int oldQty = oldMap.getOrDefault(productId, 0);
             int newQty = newMap.getOrDefault(productId, 0);
@@ -241,6 +249,7 @@ public class ProductService {
                     throw new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH,
                             "商品 ID " + productId + " 庫存不足，無法預留");
                 }
+                appliedDeltas.put(productId, diff);
             } else if (diff == 0) {
                 // 數量沒變不處理
                 continue;
@@ -251,7 +260,12 @@ public class ProductService {
                     throw new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH,
                             "商品 ID " + productId + " 預留的庫存不足，無法釋放");
                 }
+                appliedDeltas.put(productId, diff);
             }
+        }
+
+        if (!appliedDeltas.isEmpty()) {
+            log.info("庫存異動成功，商品ID與預留差值: {}", appliedDeltas);
         }
     }
 

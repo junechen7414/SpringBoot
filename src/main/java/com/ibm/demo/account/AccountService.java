@@ -21,7 +21,9 @@ import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @CircuitBreaker(name = "AccountService")
@@ -52,6 +54,7 @@ public class AccountService {
                 .build();
 
         Account savedAccount = accountRepository.save(newAccount);
+        log.info("帳戶建立成功，帳戶ID: {}, 名稱: {}", savedAccount.getId(), savedAccount.getName());
         return savedAccount.getId();
     }
 
@@ -118,7 +121,7 @@ public class AccountService {
 
         // 5. 儲存帳戶實體
         accountRepository.save(existingAccount);
-
+        log.info("帳戶更新成功，帳戶ID: {}, 狀態: {}", id, existingAccount.getStatus());
     }
 
     /**
@@ -132,6 +135,7 @@ public class AccountService {
         checkAccountHasNoOrdersOrThrow(accountId);
         int updated = accountRepository.softDeleteById(accountId, existingAccount.getVersion());
         DBAssertion.assertUpdated(updated, Account.class, accountId);
+        log.info("帳戶軟刪除成功，帳戶ID: {}", accountId);
     }
 
     // --- Private Helper Methods ---
