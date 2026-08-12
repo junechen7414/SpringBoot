@@ -1,5 +1,6 @@
 package com.ibm.demo.order;
 
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
@@ -55,7 +56,7 @@ public class OrderController {
         @GetMapping("/account/{accountId}")
         public ResponseEntity<PageResponse<GetOrderListResponse>> getOrderList(
                         @Parameter(description = "帳戶 ID", example = "1", required = true) @PathVariable Integer accountId,
-                        @Parameter(description = "分頁參數（page=頁碼從0開始, size=每頁筆數, sort=排序欄位,方向）", example = "page=0&size=20&sort=id,asc") @PageableDefault(size = 20) Pageable pageable) {
+                        @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
                 PageResponse<GetOrderListResponse> orderPage = orderService.getOrderListByAccountId(accountId,
                                 pageable);
                 return ResponseEntity.ok(orderPage);

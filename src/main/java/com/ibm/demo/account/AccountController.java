@@ -1,5 +1,6 @@
 package com.ibm.demo.account;
 
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
@@ -53,7 +54,7 @@ public class AccountController {
         @ApiResponse(responseCode = "200", description = "成功取得帳戶分頁列表")
         @GetMapping
         public ResponseEntity<PageResponse<GetAccountListResponse>> getAccountList(
-                        @Parameter(description = "分頁參數（page=頁碼從0開始, size=每頁筆數, sort=排序欄位,方向）", example = "page=0&size=20&sort=id,asc") @PageableDefault(size = 20) Pageable pageable) {
+                        @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
                 PageResponse<GetAccountListResponse> accountPage = accountService.getAccountList(pageable);
                 return ResponseEntity.ok(accountPage);
         }

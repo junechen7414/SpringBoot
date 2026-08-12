@@ -51,7 +51,7 @@ Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, Servi
 ### 分頁策略
 
 - **統一分頁回應**: 所有列表查詢使用 `PageResponse<T>` 封裝，不提供非分頁列表端點
-- **Controller 層**: 接收 `Pageable` 參數（`page`, `size`, `sort`）
+- **Controller 層**: 接收 `Pageable` 參數（`page`, `size`, `sort`），並標上 springdoc 的 `@ParameterObject`（不可用 `@Parameter`，否則 Swagger UI 會當成單一 object 參數而無法送出）
 - **Service 層**: 回傳 `Page<T>`，由 Controller 轉換為 `PageResponse<T>`
 - **預設值**: `page=0`, `size=20`
 - **詳細指南**: 參考 `docs/pagination-strategies-guide.md`

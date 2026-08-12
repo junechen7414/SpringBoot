@@ -63,6 +63,7 @@ src/main/java/com/ibm/demo/{domain}/
 - [ ] 列表端點接受 `Pageable` 參數，回傳 `ResponseEntity<PageResponse<{Domain}Response>>`
   - 預設 `page=0, size=20`
   - **不提供非分頁的列表端點**
+  - `Pageable` 必須標 `@ParameterObject`（`import org.springdoc.core.annotations.ParameterObject`），**不可**用 `@Parameter` — 後者會讓 Swagger UI 渲染成單一 object 參數而無法送出請求（詳見 `docs/swagger-openapi-design-guide.md` 改善 6）
 - [ ] 加上 Swagger 註解（`@Operation`、`@ApiResponse`、`@Tag`）
 
 ### 5. DTO
@@ -106,6 +107,6 @@ src/main/java/com/ibm/demo/{domain}/
 |------|------|
 | 跨 domain 呼叫 | 一律經由 `*Client`，不直接注入其他 domain 的 Service |
 | Soft delete | 繼承 `SoftDeleteRepository`，不手刻 `deleted = false` 條件 |
-| 分頁 | 所有列表端點用 `Pageable` + `PageResponse<T>`，無例外 |
+| 分頁 | 所有列表端點用 `Pageable` + `PageResponse<T>`，無例外；`Pageable` 一律標 `@ParameterObject`，不可用 `@Parameter` |
 | 錯誤 | 拋 `BusinessException` 並帶入 `ErrorCode`，由 `GlobalExceptionHandler` 統一處理 |
 | 安全 | `*Client` 自呼叫需帶 `internal` 帳號憑證 |

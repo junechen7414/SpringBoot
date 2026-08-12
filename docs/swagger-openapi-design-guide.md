@@ -519,6 +519,15 @@ public record PageResponse<T>(
 - 支援 `page`, `size`, `sort` 查詢參數
 - 範例：`GET /account?page=0&size=10&sort=id,desc`
 
+**Controller 端寫法（重要）：** `Pageable` 參數必須標 springdoc 的 `@ParameterObject`，**不可**用 `@Parameter`：
+
+```java
+public ResponseEntity<PageResponse<GetProductListResponse>> getProductList(
+        @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
+```
+
+`@Parameter` 是描述**單一** query 參數用的（如 `@PathVariable`、`@RequestParam`，見改善 4）。套在 `Pageable` 這種複合物件上，springdoc 會產出一個名為 `pageable`、schema 指向 `$ref: '#/components/schemas/Pageable'` 的 object 型參數 — Swagger UI 因此渲染成物件編輯器並要求 JSON，導致**無法直接送出請求**（且會被誤標為 `required: true`）。`@ParameterObject` 才會把物件攤平成 `page` / `size` / `sort` 三個獨立且 optional 的 query 參數，說明與預設值（`page=0`、`size=20`）取自 springdoc 內建的 `org.springdoc.core.converters.models.Pageable`。
+
 **設計決策：**
 - 選擇自訂 `PageResponse<T>` 而非直接回傳 `Page<T>`
 - 原因：避免暴露 Spring 內部結構（`pageable`, `sort` 物件等），保持 API Contract 乾淨
