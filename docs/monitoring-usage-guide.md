@@ -3,7 +3,7 @@
 > 這份文件是給**人**讀的操作指南：怎麼把監控堆疊跑起來、怎麼看圖、圖是空的時候怎麼查。
 > 若你要找的是「這條鏈路怎麼接的」這類架構描述，見 [`docs/agents/09-monitoring.md`](./agents/09-monitoring.md)。
 
-讀完你應該能自己做到：起堆疊 → 產生流量 → 在 Grafana 看到四個黃金訊號 → 在 Prometheus UI 手打一句 PromQL 驗證 → 圖是空的時候依決策樹定位斷在哪一段 → 自己加一個 panel。
+讀完你應該能自己做到：起堆疊 → 產生流量 → 在 Grafana 看到四個黃金訊號 → 在 Prometheus UI 手打一句 PromQL 驗證 → 圖是空的時候依決策樹定位斷在哪一段 → 看懂 `grafana/` 底下的佈建檔在做什麼 → 自己加一個 panel。
 
 ---
 
@@ -14,7 +14,7 @@
 | | 回答什麼問題 | 取樣 | 儲存成本 | 本專案 |
 |---|---|---|---|---|
 | **Metrics（指標）** | 「有多少 / 多快 / 多滿」 | 100% 流量 | **最便宜** — 只存聚合後的數字，不存個別請求 | ✅ 已有（本文件主題） |
-| **Traces（追蹤）** | 「**這一筆**請求的時間花在哪一段」 | 通常抽樣（1%～10%） | 中等 — 每筆請求存一棵 span 樹 | ❌ 尚未（見 §8） |
+| **Traces（追蹤）** | 「**這一筆**請求的時間花在哪一段」 | 通常抽樣（1%～10%） | 中等 — 每筆請求存一棵 span 樹 | ❌ 尚未（見 §9） |
 | **Logs（日誌）** | 「發生了什麼**離散事件**」 | 100% | **最貴** — 每筆一整行字串，無法聚合 | ✅ 已有（`log.info` 業務事件） |
 
 **關鍵在「metrics 存的是聚合值」**。一萬個請求進來，`http.server.requests` 這個指標不會存一萬筆紀錄，它只維護幾個累加的數字（總次數、總耗時、各個耗時區間的落點數）。所以 metrics 可以 100% 覆蓋還很便宜——代價是你**永遠問不出「是哪一筆請求慢」**，只能問「慢的那 1% 有多慢」。要追到個別請求就得靠 traces。
@@ -107,7 +107,7 @@ try { Invoke-RestMethod -Uri 'http://localhost:8787/account/999999' -Headers $au
 (Invoke-RestMethod 'http://localhost:9090/api/v1/label/__name__/values').data | Where-Object { $_ -like 'http_server*' }
 ```
 
-應該看到 `http_server_requests_seconds_count` / `_sum` / `_bucket`。**若後綴跟這裡寫的不一樣，以實際查到的為準**（Alloy 的命名轉譯會依指標單位與型別補後綴），並照 §7 修正 dashboard 的 PromQL。
+應該看到 `http_server_requests_seconds_count` / `_sum` / `_bucket`。**若後綴跟這裡寫的不一樣，以實際查到的為準**（Alloy 的命名轉譯會依指標單位與型別補後綴），並照 §8 修正 dashboard 的 PromQL。
 
 然後在 Prometheus 的 Graph 頁貼這句，確認 histogram bucket 真的有送出來：
 
@@ -287,9 +287,109 @@ implementation 'org.springframework.boot:spring-boot-opentelemetry'
 
 ---
 
-## 7. 自己加一個 panel
+## 7. 佈建檔是怎麼運作的（`grafana/` 底下那三個檔案）
 
-改動要進 git，所以**不要只在 UI 上按存檔**——UI 的改動只存進 Grafana 自己的 DB，volume 一砍就沒了。
+Grafana 的 datasource 與 dashboard **不在 UI 上手動建**，一律用佈建檔（provisioning）進 git。理由很實際：手動建的東西只存在 `grafana-data` 這個具名 volume 裡的 `grafana.db`，volume 一砍就全沒了，而且無法 code review、無法跟著 branch 走。
+
+### 7.1 三個檔案各自的角色
+
+| 檔案 | 是什麼 | 誰讀它 |
+|---|---|---|
+| `grafana/provisioning/datasources/prometheus.yml` | 「有一個叫 Prometheus 的資料來源，位置在 `http://prometheus:9090`」 | Grafana **啟動時**讀一次 |
+| `grafana/provisioning/dashboards/default.yml` | **不是** dashboard，是「去哪個目錄找 dashboard」的 provider 設定 | Grafana 啟動時讀，之後按 `updateIntervalSeconds` 重掃 |
+| `grafana/dashboards/app-overview.json` | dashboard 本體 | 由上面那個 provider 掃進來 |
+
+最容易搞混的是中間那個：`provisioning/dashboards/` 底下放的是**指路的設定**，dashboard 的 JSON 在別的地方。
+
+### 7.2 兩個掛載路徑的性質**完全不同**
+
+```yaml
+- ./grafana/provisioning:/etc/grafana/provisioning:ro   # 映像的預設路徑
+- ./grafana/dashboards:/var/lib/grafana/dashboards:ro   # 我們自己挑的路徑
+```
+
+**`/etc/grafana/provisioning` 是被規定的。** 官方映像用環境變數把它設成絕對路徑（`grafana` 容器內實測）：
+
+```
+GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+GF_PATHS_DATA=/var/lib/grafana
+GF_PATHS_CONFIG=/etc/grafana/grafana.ini
+```
+
+有趣的是 Grafana 自己 `defaults.ini` 裡的原生預設是**相對路徑** `conf/provisioning` —— 絕對路徑是**映像**的慣例，不是 Grafana 的常數。所以理論上你可以設 `GF_PATHS_PROVISIONING=/somewhere/else` 再掛到那裡。
+
+**但目錄裡面的子目錄名是硬限制。** 映像內建的骨架就是完整清單：
+
+```
+/usr/share/grafana/conf/provisioning/
+├── access-control/
+├── alerting/
+├── dashboards/      ← provider 設定（不是 dashboard 本體）
+├── datasources/
+└── plugins/
+```
+
+Grafana 對每個子目錄跑**不同的** provisioner，這些名字寫在程式碼裡。你不能自己開一個 `my-stuff/` 期待它被讀到；打成 `datasource/`（少一個 s）也只會被跳過。
+
+> 這跟 §6.1 的 OTLP 依賴是**同一類失敗**：不是「設定錯 → 報錯」，而是「沒被掃到 → 什麼都沒發生」。基礎設施的設定檔很多都是這個模式，所以驗證一律要確認「東西真的出現了嗎」，而不是「有沒有報錯」。
+
+檔案內容的 key 也是固定的：datasource 檔頂層必須是 `datasources:`、provider 檔必須是 `providers:`，兩者都要 `apiVersion: 1`。
+
+**`/var/lib/grafana/dashboards` 則完全不是預設，是我們挑的。** `/var/lib/grafana` 是 `GF_PATHS_DATA`（`grafana.db` 住的地方），底下那層 `dashboards/` 沒有任何官方地位，唯一決定它的就是 `default.yml` 裡這行：
+
+```yaml
+options:
+  path: /var/lib/grafana/dashboards    # 改成 /anything/you/like 都會動（compose 掛載跟著改）
+```
+
+從容器裡也看得出這層是外來的 —— 只有它的 owner 是主機 uid：
+
+```
+drwxrwxrwx  1 1000    1000  dashboards      ← 掛載進來的
+-rw-r-----  1 grafana root  grafana.db      ← 其餘都屬於 grafana 使用者
+```
+
+**為什麼不乾脆把 JSON 塞進 `/etc/grafana/provisioning/dashboards/` 跟 `default.yml` 放一起？** 技術上可以（把 `options.path` 指到同一層即可，很多範例這麼做）。這裡刻意分開，因為那個目錄的語意是「給 Grafana 掃 provider 設定」，把 dashboard JSON 混進去會讓同一個目錄躺著兩種語意不同的檔案。
+
+還有一個看起來像限制、其實不是的東西：`defaults.ini` 有 `permitted_provisioning_paths = devenv/dev-dashboards|conf/provisioning`。那個管的是新版 Git Sync / local repository 功能，**不管** dashboard file provider 的 `options.path` —— 實證就是我們的 `/var/lib/grafana/dashboards` 不在清單裡卻正常載入。
+
+**巢狀掛載**：`grafana-data:/var/lib/grafana` 與 `./grafana/dashboards:/var/lib/grafana/dashboards:ro` 是一個掛在另一個裡面。這在 podman/docker 都合法，runtime 按路徑深度排序，較深的蓋在較淺的上面。所以 `grafana.db`（UI 上的改動、註解、偏好設定）仍留在具名 volume，只有 `dashboards/` 那一層被 repo 的唯讀內容覆蓋。**compose 裡兩行的先後順序不影響結果。**
+
+### 7.3 這三個檔案是手寫的，但性質分兩類
+
+跟 `config.alloy` 的類比只有一半成立：
+
+| | `config.alloy` | `provisioning/*.yml` | `app-overview.json` |
+|---|---|---|---|
+| 格式性質 | Alloy 的 DSL（HCL 風格），是**宣告元件並接線**的小程式 | Grafana provisioning schema，攤平的資料 | Grafana **dashboard model** —— 內部資料結構的序列化 |
+| 誰定義格式 | Alloy 文件 | Grafana 文件 | Grafana 前後端 schema，**隨版本演進**（故有 `schemaVersion`） |
+| 正常怎麼產出 | 手寫 | 手寫 | **通常在 UI 拉好再匯出** |
+
+兩個 yml 確實「像 `config.alloy`」：啟動時讀的設定檔、手寫、格式由該工具定義、改了要重啟。唯一差別是 `config.alloy` 在描述一條 pipeline（receiver → exporter → remote_write 互相 `forward_to`），provisioning yml 沒有接線概念。
+
+**`app-overview.json` 不一樣，它是 UI 的產物格式。** 標準流程是在 Grafana 上拖拉建好 → Dashboard settings → JSON Model → 複製出來存檔。這份是直接手寫的，理由：UI 匯出的 JSON 帶大量雜訊（`__inputs`、`__requires`、`pluginVersion`、所有預設值展開、亂數 `id`），手寫才能只留必要的 key 讓檔案可讀；更重要的是每個 panel 的 `description` 要當教材寫，那是 UI 匯出不會幫你填的欄位。
+
+手寫的兩個注意事項：
+
+- 這是**最小子集**，權威 schema 是 UI 產的那份。檔案宣告 `schemaVersion: 39`，若比 Grafana 自身版本舊，讀進來會自動 migrate。
+- 頂層**故意沒有 `id`** —— 佈建的 dashboard 帶 `id` 會跟 `grafana.db` 裡既有的撞號。穩定識別靠 `uid: "app-overview"`。
+
+`prometheus.yml` 的 `uid: prometheus` **寫死**是同一個思路：讓 dashboard JSON 有固定字串可引用。若讓 Grafana 隨機產 uid，佈建的 dashboard 會找不到資料來源 —— panel 全空，而錯誤訊息不明顯。
+
+### 7.4 改動怎麼生效，以及 UI 上的改動去了哪裡
+
+| 改什麼 | 怎麼生效 |
+|---|---|
+| `grafana/dashboards/*.json` | provider 每 10 秒重掃，**重新整理瀏覽器**即可 |
+| `grafana/provisioning/**` | 需 `podman compose restart grafana`（啟動時才讀） |
+
+`default.yml` 設了 `allowUiUpdates: true`，所以你**可以放心在 UI 上直接改** —— 改動只寫進 `grafana.db`，**不會**寫回你的 JSON 檔（那是唯讀掛載）。這正是推薦的工作流：在 UI 上拉到滿意 → Dashboard settings → JSON Model → 複製回 `grafana/dashboards/app-overview.json` → commit。
+
+---
+
+## 8. 自己加一個 panel
+
+改動要進 git，所以**不要只在 UI 上按存檔**——理由與機制見 §7.4。
 
 1. 先在 **Prometheus UI**（<http://localhost:9090>）把 PromQL 調到出正確結果為止。這一步不要在 Grafana 做，Grafana 多一層變數與時間範圍的干擾。
 2. 或在 Grafana 直接 Edit panel 試版面，滿意後開 **Dashboard settings → JSON Model**，把 JSON 複製出來。
@@ -298,13 +398,13 @@ implementation 'org.springframework.boot:spring-boot-opentelemetry'
    - `gridPos` 的 `y` 要接在下方（`w` 最大 24）
    - `datasource` 寫 `{"type": "prometheus", "uid": "prometheus"}`
    - **`description` 請寫「這句 PromQL 為什麼這樣寫」**——這份 dashboard 是要當教材讀的
-4. 存檔後重新整理瀏覽器即可（provider 設了 `updateIntervalSeconds: 10`，每 10 秒重掃，**不必重啟容器**）。改的是 `grafana/provisioning/` 底下的檔案才需要 `podman compose restart grafana`。
+4. 存檔後重新整理瀏覽器即可（**不必重啟容器**，機制見 §7.4）。
 
 值得自己動手加的幾個：`rate(hikaricp_connections_timeout_total[5m])`（連線等到超時的次數）、`resilience4j_ratelimiter_available_permissions`（限流剩餘額度）、`sum by (uri, status) (rate(http_server_requests_seconds_count[5m]))`（哪個端點在回什麼狀態碼）。
 
 ---
 
-## 8. 這批刻意沒做的（延後項目）
+## 9. 這批刻意沒做的（延後項目）
 
 | 項目 | 為什麼延後 | 補上之後能做到什麼 |
 |---|---|---|

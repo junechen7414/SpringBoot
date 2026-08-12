@@ -71,7 +71,7 @@ OTLP 匯出需要 **兩個** artifact 同時在 classpath 上，缺一個就完�
 
 ### Grafana 佈建（provisioning）
 
-datasource 與 dashboard **不手動在 UI 建**，一律進 git。手動建的東西存在 `grafana-data` volume，volume 一砍就沒了。
+datasource 與 dashboard **不手動在 UI 建**，一律進 git。手動建的東西存在 `grafana-data` volume，volume 一砍就沒了。掛載路徑的來歷、檔案格式的性質、UI 改動的去向見 [`docs/monitoring-usage-guide.md` §7](../monitoring-usage-guide.md#7-佈建檔是怎麼運作的grafana-底下那三個檔案)。
 
 | 檔案 | 掛載到容器 | 內容 |
 |---|---|---|
