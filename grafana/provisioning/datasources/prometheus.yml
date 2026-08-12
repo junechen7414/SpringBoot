@@ -1,0 +1,24 @@
+# Grafana datasource 佈建
+#
+# Grafana 啟動時會讀 /etc/grafana/provisioning/datasources/ 底下的檔案自動建立
+# datasource，不必手動在 UI 點。手動建的東西存在 grafana-data volume 裡，volume
+# 一砍就沒了；佈建檔進 git 才是可重現的做法。
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    # uid 固定寫死：dashboard JSON 用這個 uid 引用 datasource，
+    # 若讓 Grafana 隨機產生 uid，佈建的 dashboard 會找不到資料來源。
+    uid: prometheus
+    access: proxy
+    # grafana 與 prometheus 同在 monitor-net，用 compose 的 service 名互連。
+    # 不是 localhost:9090 —— 那是「grafana 容器自己」的 9090。
+    url: http://prometheus:9090
+    isDefault: true
+    # 佈建的 datasource 在 UI 上唯讀；要改請改這個檔案再重啟 grafana 容器。
+    editable: false
+    jsonData:
+      # 與 application-dev.yml 的 management.otlp.metrics.export.step 對齊，
+      # Grafana 才知道資料點的最小間隔，$__rate_interval 也才算得準。
+      timeInterval: 10s

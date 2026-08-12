@@ -1,0 +1,22 @@
+# Grafana dashboard provider 佈建
+#
+# 告訴 Grafana：去 /var/lib/grafana/dashboards 掃 JSON 檔並載入成 dashboard。
+# 那個目錄由 docker-compose.yml 以唯讀方式掛載自 repo 的 ./grafana/dashboards。
+apiVersion: 1
+
+providers:
+  - name: 'default'
+    orgId: 1
+    folder: ''
+    type: file
+    # 在 UI 刪掉 dashboard 時，不要連 JSON 檔一起刪（檔案是 repo 內容，唯讀掛載）
+    disableDeletion: false
+    # 每 10 秒重掃一次：改了 JSON 存檔後重新整理瀏覽器就看得到，不必重啟容器
+    updateIntervalSeconds: 10
+    # 允許在 UI 上直接改（存下來只進 Grafana 自己的 DB，不會寫回 JSON 檔；
+    # 想讓改動進 git 要用 Dashboard settings → JSON Model 複製出來貼回檔案）
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      # 讓子目錄名成為 Grafana 的 folder 名稱
+      foldersFromFilesStructure: false

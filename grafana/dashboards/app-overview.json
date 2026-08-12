@@ -1,0 +1,246 @@
+{
+  "uid": "app-overview",
+  "title": "App Overview",
+  "description": "四個黃金訊號（流量 / 錯誤 / 延遲 / 飽和）的入門檢視。每個 panel 的 description（滑到標題旁的 i 圖示）都寫了那句 PromQL 為什麼這樣寫。使用說明見 docs/monitoring-usage-guide.md。",
+  "tags": ["demo", "golden-signals"],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "請求速率（依 uri）",
+      "description": "黃金訊號之一：流量。\n\nhttp_server_requests_seconds_count 是「累積」計數器，只會往上加，直接畫出來是一條斜線、看不出忙不忙。rate() 把它換算成「每秒幾個請求」，[5m] 是計算斜率用的時間窗（窗越大越平滑、對尖峰越不敏感）。\n\nsum by (uri) 把同一個 uri 但 method/status 不同的序列合併，讓每條線代表一個端點。uri 是 Spring 的樣板路徑（/product/{id}）而非實際路徑，否則每個 id 都會產生一條新序列（cardinality 爆炸）。",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count[5m]))",
+          "legendFormat": "{{uri}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "錯誤率",
+      "description": "黃金訊號之一：錯誤。\n\n錯誤率是「錯誤請求數 ÷ 全部請求數」，兩邊都必須先 rate() 再相除。若直接拿兩個累積計數器相除，得到的是「開機至今的平均」——剛剛爆掉的那五分鐘會被幾小時的正常流量稀釋掉，看不出來。\n\noutcome 是 Micrometer 依 HTTP status 自動加的標籤：SUCCESS(2xx) / REDIRECTION(3xx) / CLIENT_ERROR(4xx) / SERVER_ERROR(5xx)。這裡用 outcome!=\"SUCCESS\" 把 4xx 也算進去；若只想看伺服器自己的錯，改成 outcome=\"SERVER_ERROR\"。\n\n沒有任何流量時分母為 0，圖上會斷線（NaN）—— 那代表「沒資料」，不是 0% 錯誤。",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 15, "showPoints": "never" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.05 },
+              { "color": "red", "value": 0.2 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(http_server_requests_seconds_count{outcome!=\"SUCCESS\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))",
+          "legendFormat": "錯誤率（含 4xx）"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(http_server_requests_seconds_count{outcome=\"SERVER_ERROR\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))",
+          "legendFormat": "5xx 錯誤率"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "回應延遲 p50 / p95 / p99",
+      "description": "黃金訊號之一：延遲。\n\n為什麼不畫平均值：平均會把尖峰藏起來。100 個請求裡 99 個 10ms、1 個 5 秒，平均只有 60ms 看起來很健康，但那一個使用者等了 5 秒。p99 = 「最慢的 1% 有多慢」才是使用者感受。\n\nhistogram_quantile 的三層要一起看（由內而外）：\n1. rate(..._bucket[5m])：_bucket 是一組累積計數器，每個 le 標籤代表「耗時 ≤ le 秒的請求數」。同樣要先 rate() 換算成速率。\n2. sum by (le)：把所有 uri/method 的同 le bucket 加總。只保留 le，其他標籤必須丟掉，否則 histogram_quantile 算不出來。想看單一端點的 p99，就在這裡改成 sum by (le, uri) 並在外層加 by (uri)。\n3. histogram_quantile(0.99, ...)：從 bucket 分布內插估出分位數。它是「估計值」，精度取決於 bucket 邊界疏密。\n\n要有 _bucket 序列，application-dev.yml 必須開 management.metrics.distribution.percentiles-histogram；沒開的話 OTLP 只送 count/sum，這三條線會全空。",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Bulkhead 剩餘併發額度",
+      "description": "黃金訊號之一：飽和度。\n\nresilience4j_bulkhead_available_concurrent_calls 是 gauge（當下的瞬時值，不是累積），所以不需要包 rate()。它代表某個 bulkhead 還剩幾個許可；設定值見 application.yml 的 resilience4j.bulkhead.instances。\n\n怎麼讀：這條線貼近 0 且待著不動，代表該路徑已經滿載、新請求正在被 fail-fast 拒絕（本專案 max-wait-duration 為 0ms，不排隊）。此時延遲 panel 不一定會變差 —— 被拒絕的請求很快就回 429/503 —— 這正是要獨立看飽和度的原因。",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "asc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "resilience4j_bulkhead_available_concurrent_calls",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "斷路器狀態",
+      "description": "黃金訊號之一：飽和度（下游健康）。\n\nresilience4j_circuitbreaker_state 的畫法跟一般指標不同：它為每個狀態（closed / open / half_open / disabled / forced_open）各產生一條序列，當下所處的狀態值為 1、其餘為 0。所以要看的是「哪條線跳到 1」，而不是線的高度。\n\nclosed = 正常放行；open = 已熔斷，全部請求直接被拒不呼叫下游；half_open = 試探性放行少量請求看下游好了沒。\n\n本專案設定 ignore-exceptions 包含 BusinessException —— 餘額不足、查無資源這類正常業務拒絕不算失敗，不會把斷路器打開。所以這條線跳到 open 意味著下游真的壞了。",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 1,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "lineInterpolation": "stepAfter" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "resilience4j_circuitbreaker_state",
+          "legendFormat": "{{name}} / {{state}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Hikari 等待連線的執行緒數",
+      "description": "黃金訊號之一：飽和度（資源爭用）。\n\nhikaricp_connections_pending 是 gauge：當下有幾個執行緒在排隊等 DB 連線。健康狀態應該長期為 0。\n\n持續 > 0 代表連線池（application-dev.yml 的 maximum-pool-size: 10）不夠用，或有查詢佔著連線太久沒放。這個 panel 通常會比延遲 panel 更早示警 —— 排隊時間會累加進請求延遲，但等到 p99 看得出來時已經有人在等了。\n\n配套可看的還有 hikaricp_connections_active（正在使用中）與 hikaricp_connections_timeout_total（等到超時的次數，這個是累積計數器，要包 rate()）。",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 20, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "hikaricp_connections_pending",
+          "legendFormat": "{{pool}} 等待中"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "hikaricp_connections_active",
+          "legendFormat": "{{pool}} 使用中"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "JVM Heap 使用量",
+      "description": "資源面的基本盤。\n\njvm_memory_used_bytes{area=\"heap\"} 是 gauge，依 id 標籤分成各個記憶體區（Eden Space、Old Gen、Survivor Space…）。area=\"nonheap\" 則是 Metaspace 等。\n\n怎麼讀：Eden 呈鋸齒狀是正常的（配置 → 回收 → 再配置）。要注意的是 Old Gen 的「谷底」有沒有一路往上抬 —— 每次 full GC 後都回不到原來的低點，通常是記憶體洩漏的徵兆。單看某個瞬間的高水位並不代表有問題。",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never", "stacking": { "mode": "none" } }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "legendFormat": "{{id}}"
+        }
+      ]
+    }
+  ]
+}

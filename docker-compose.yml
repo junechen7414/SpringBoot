@@ -12,6 +12,9 @@ services:
       # Only the host differs between container and local runs; the URL format lives
       # in application-dev.yml (defaults to localhost when ORACLE_DB_HOST is unset).
       - ORACLE_DB_HOST=oracle-db
+      # 同上：OTLP 目標的主機名在容器內是 alloy，本機 IDE/bootRun 時
+      # application-dev.yml 會退回 localhost。
+      - ALLOY_HOST=alloy
       - SPRING_DATASOURCE_USERNAME=${ORACLE_DEV_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${ORACLE_DEV_PASSWORD}
     networks:
@@ -131,6 +134,10 @@ services:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+      # datasource 與 dashboard 由佈建檔自動建立，不必手動在 UI 點。
+      # 唯讀掛載：容器不該改到 repo 內容；要改設定就改檔案再重啟 grafana。
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       - monitor-net
     restart: unless-stopped
