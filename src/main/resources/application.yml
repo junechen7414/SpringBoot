@@ -81,14 +81,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        # 不含 prometheus：classpath 只有 micrometer-registry-otlp，沒有 prometheus
+        # registry，/actuator/prometheus 不會 materialize（列了也只是誤導）。
+        include: health,info,metrics
   otlp:
     metrics:
       export:
         enabled: false
   endpoint:
-    prometheus:
-      access: READ_ONLY
     health:
       show-details: always
 

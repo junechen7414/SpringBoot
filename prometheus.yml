@@ -1,9 +1,9 @@
 global:
   scrape_interval: 10s
 
-# 開啟 remote_write 接收功能: Alloy 才能把資料「推」進來
-remote_write:
-  - url: "http://localhost:9090/api/v1/write"
-
-# 甚至可以不設定任何 scrape_configs，全部交給 Alloy 處理
+# 本專案不 scrape 任何 target：指標由 app --OTLP--> Alloy --remote_write--> 這裡。
+#
+# 「接收 remote_write」是靠 docker-compose.yml 裡的 --web.enable-remote-write-receiver
+# 這個 CLI flag 開啟的，不是靠設定檔。設定檔的 remote_write: 語意相反 —— 那是叫
+# Prometheus 把自己的資料推「出去」給別的後端，填自己的位址等於推給自己。
 scrape_configs: []

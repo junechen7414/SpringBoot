@@ -10,7 +10,8 @@ Spring Boot App (OTLP) → Grafana Alloy → Prometheus → Grafana
 
 - **健康檢查**: `/actuator/health`（亦為映像內建 `HEALTHCHECK` 的探測目標，下游 E2E repo 依賴此健康狀態判斷就緒；契約細節見 [02-setup.md](./02-setup.md#映像內建-healthcheck重要契約)）
 - **指標**: `/actuator/metrics`
-- **Prometheus scrape 端點**: 無。本專案只引入 `micrometer-registry-otlp`（見 `build.gradle`），未引入 `micrometer-registry-prometheus`，故 `/actuator/prometheus` 端點不存在（即使 `application.yml` 的 `exposure.include` 列出 prometheus，無 registry 也不會 materialize，實際回 404）。指標一律走 **OTLP push**（app → Alloy），非 Prometheus 主動 scrape。
+- **Prometheus scrape 端點**: 無。本專案只引入 `micrometer-registry-otlp`（見 `build.gradle`），未引入 `micrometer-registry-prometheus`，故 `/actuator/prometheus` 端點不存在（無 registry 就不會 materialize，實際回 404；因此 `application.yml` 的 `exposure.include` 也刻意不列 prometheus）。指標一律走 **OTLP push**（app → Alloy），非 Prometheus 主動 scrape。
+- Prometheus 這一端也不 scrape 任何 target：`prometheus.yml` 的 `scrape_configs` 為空，它是**被推**的一方。接收 remote_write 靠的是 `docker-compose.yml` 裡的 `--web.enable-remote-write-receiver` CLI flag，**不是**設定檔裡的 `remote_write:` 區塊（那個區塊語意相反，是把資料推出去）。
 
 ### 健康檢查（HEALTHCHECK）的運作機制
 
