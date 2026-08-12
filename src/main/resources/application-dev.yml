@@ -29,9 +29,22 @@ management:
   otlp:
     metrics:
       export:
-        url: http://alloy:4318/v1/metrics
-        enabled: true
+        # 只有主機名因執行環境而異（容器內是 alloy、本機 IDE/bootRun 是 localhost），
+        # 與第 3 行的 ORACLE_DB_HOST 同一個慣例。
+        url: http://${ALLOY_HOST:localhost}:4318/v1/metrics
+        # 本機沒起監控堆疊時可設 false，避免每個 step 噴一次連線失敗
+        enabled: ${OTLP_METRICS_ENABLED:true}
         step: 10s
+        # Prometheus 生態一律以秒為單位。預設的 milliseconds 會讓指標名帶
+        # _milliseconds 後綴且值為毫秒，與所有 PromQL 範例、Grafana 單位都不合。
+        # 注意不要動 aggregation-temporality（預設 cumulative）—— rate() 依賴單調
+        # 遞增的累積計數，改成 delta 會讓所有 rate() 查詢失效。
+        base-time-unit: seconds
   metrics:
     tags:
       application: ${spring.application.name}
+    distribution:
+      # 不開這個，OTLP 只會送出 count/sum 而沒有 bucket，histogram_quantile() 查不到
+      # p99。代價是時間序列數量變多（每個 uri × 每個 bucket），單機 demo 吃得下。
+      percentiles-histogram:
+        "[http.server.requests]": true
