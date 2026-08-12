@@ -56,7 +56,46 @@ Spring Boot App          Grafana Alloy              Prometheus            Grafan
 
 **踩過的坑**：讓 Prometheus 能「接收」remote_write，靠的是 `docker-compose.yml` 裡的 CLI flag `--web.enable-remote-write-receiver`，**不是**設定檔裡的 `remote_write:` 區塊。那個區塊語意剛好相反——它是叫 Prometheus 把自己的資料推**出去**給別的後端。舊版 `prometheus.yml` 曾經把自己的位址填進去（等於推給自己），註解還寫成「開啟接收功能」，兩者都是錯的。
 
-> push 的取捨：app 不必開放端點被連進來（安全面較好、也適合會跑掉的短命實例），代價是 app 必須知道 collector 在哪、且 collector 掛了指標會直接掉。
+### 2.1 push 與 scrape 的取捨（這個代價值不值得）
+
+上面說了「本專案是 push」，但沒說為什麼要付代價。這一節把帳算清楚 —— 因為**這條鏈的每個排錯難點都源自這個選擇**，理解它比記住指令重要。
+
+兩條路徑攤開比較：
+
+```
+本專案：  app --OTLP push--> Alloy --remote_write push--> Prometheus     （全程 push）
+傳統：    Prometheus --HTTP GET--> app:8787/actuator/prometheus          （Prometheus 主動拉）
+```
+
+**push 換到了什麼**
+
+| 好處 | 說明 |
+|---|---|
+| 不需要 service discovery | Prometheus 不必知道 app 在哪，反過來由 app 知道 collector 在哪（就是 `ALLOY_HOST`）。對**短命 workload** 是生死級差別 —— 活 20 秒的 batch job / CI 容器，10 秒 scrape 間隔可能整段錯過 |
+| 網路方向對了 | push 是 outbound。scrape 要求監控端能主動連進**每一個** app 實例；跨 NAT、跨網段、跨雲、只開出不開進的防火牆環境下，那是行政問題不是技術問題 |
+| 中間多一層可插拔的處理點 | relabel、砍高基數 label、補 resource attribute、同時 fan-out 到多個後端 —— 全在 Alloy 做，**app 一行都不用改**。換後端不動應用程式，這是 collector 模式最實際的價值 |
+| 三根柱子共用一條線 | OTLP 同一個協定送 metrics/traces/logs，resource attributes 一致。日後接 tracing（§9）時 trace 與 metric 的 label 對得上 |
+| app 不必裸露指標端點 | 也就沒有「要不要讓 Prometheus 過 Basic Auth」這個問題 |
+
+**push 付出了什麼**（這些是真痛，不是為了對稱而列）
+
+| 代價 | 說明 |
+|---|---|
+| **失去 `up`** | 最大的損失。scrape 模式下 Prometheus 每抓一次就自動生一條 `up{job=...}`，app 掛了 → `up == 0`，這是最可靠的告警基礎。push 模式下「app 掛了」「網路斷了」「Alloy 掛了」「依賴沒裝所以根本沒推」在圖上**長得一模一樣**：都是沒資料。要偵測只能寫 `absent(...)` 或 `time() - timestamp(...) > 60` 這類彆扭查詢，閾值還得自己拍 |
+| 除錯直觀性差一級 | scrape 模式 `curl http://app:8787/actuator/prometheus` 就看到 app 這一刻的全部指標，一眼定位。push 模式你**看不到 app 認為自己的指標是什麼**，只能沿鏈路一段段猜。§6 那棵決策樹之所以需要那麼多步，就是這個代價的帳單 |
+| 鏈越長，靜默失敗的位置越多 | §6.1 那個坑（少一個 artifact → 沒有 `OtlpMeterRegistry` bean → 靜默斷了 54 天）在 pull 模式下藏不住：端點回 404 或空白，太明顯 |
+| 背壓方向反了 | pull 模式是 Prometheus 決定抓多快，它忙就慢慢抓，app 不受影響。push 模式是 app 決定推多快，後端撐不住只能靠 Alloy 的 queue/WAL 頂著，滿了就**丟資料** |
+| 多一個要自己顧的元件 | Alloy 自己會不會掛、WAL 會不會塞爆磁碟、它自己的指標誰在看 —— 監控系統也需要被監控 |
+| 多一層格式轉換 = 多一個能設錯的地方 | 就是 [`09-monitoring.md` 的設定表](./agents/09-monitoring.md#指標匯出設定改動前務必了解)那三列：`base-time-unit` 錯 → 指標名帶 `_milliseconds`、單位全錯；`percentiles-histogram` 沒開 → 沒有 `_bucket`、p99 永遠空；`aggregation-temporality` 改 delta → 所有 `rate()` 失效。pull 模式下 exporter 吐什麼就是什麼 |
+| 指標名會被改寫 | `.` → `_`、加單位/型別後綴，跟 app 裡宣告的名字不同 —— 所以寫 dashboard 前**必須先去 Prometheus 問真名**（§6 決策樹第 2 步）。pull 模式所見即所得 |
+
+**實務上怎麼選**
+
+兩者不對立，主流是混搭：k8s 內用 pull（現成的 service discovery、白送的 `up`），k8s 外／短命／跨網段用 OTLP push。
+
+還有第三條路，很多團隊實際落在這裡：**讓 collector 自己去 scrape，再 remote_write 出去**（Alloy 的 `prometheus.scrape` 元件）—— 對 app 是 pull（保住 `up`、保住 `curl` 除錯），對後端是 push（保住集中處理與網路方向）。想清楚的話這通常是最好的組合。
+
+本專案選 push 的理由是簡單（compose 內一條線、不用 service discovery）加上教學價值（OTLP 是現在的通用語）。**具體少掉的就是 `up`** —— 所以之後要加告警的話（§9），第一條規則不會是「錯誤率 > 5%」，而是「資料不見了」。
 
 ---
 
@@ -411,7 +450,7 @@ drwxrwxrwx  1 1000    1000  dashboards      ← 掛載進來的
 | **Tracing**（Micrometer Tracing + Tempo） | 需新增依賴與 compose 服務，範圍比「看得見」大 | 從 p99 尖峰**直接跳到那一筆**慢請求，看它在 `*Client` 跨模組呼叫的哪一段卡住。這才是原本 `LoggingAspect` 想做卻做不到的方法級追蹤的正解 |
 | **`@Timed` 業務層指標** | `http.server.requests` 與 `resilience4j.*` 已覆蓋大部分需求；等真的有「想知道扣庫存那段花多久」的需求再加 | 用業務語彙命名的指標（如 `order.create`）。需先開 `management.observations.annotations.enabled`（Spring Boot 預設 `false`） |
 | **結構化日誌 + Loki** | 要先把 `accountId`/`orderId` 放進 MDC 而非訊息字串 | 用欄位查日誌，並與 trace id 關聯 |
-| **告警規則** | 有 dashboard 才知道正常長什麼樣，才定得出閾值 | 錯誤率 > 5% 持續 5 分鐘就通知，不必盯著螢幕 |
+| **告警規則** | 有 dashboard 才知道正常長什麼樣，才定得出閾值 | 錯誤率 > 5% 持續 5 分鐘就通知，不必盯著螢幕。**第一條規則不該是錯誤率，而是「資料不見了」** —— push 模式沒有 `up`，理由見 §2.1 |
 
 ---
 

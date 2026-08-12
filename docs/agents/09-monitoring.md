@@ -14,6 +14,7 @@ Spring Boot App (OTLP) → Grafana Alloy → Prometheus → Grafana
 - **指標**: `/actuator/metrics`
 - **Prometheus scrape 端點**: 無。本專案只引入 `micrometer-registry-otlp`（見 `build.gradle`），未引入 `micrometer-registry-prometheus`，故 `/actuator/prometheus` 端點不存在（無 registry 就不會 materialize，實際回 404；因此 `application.yml` 的 `exposure.include` 也刻意不列 prometheus）。指標一律走 **OTLP push**（app → Alloy），非 Prometheus 主動 scrape。
 - Prometheus 這一端也不 scrape 任何 target：`prometheus.yml` 的 `scrape_configs` 為空，它是**被推**的一方。接收 remote_write 靠的是 `docker-compose.yml` 裡的 `--web.enable-remote-write-receiver` CLI flag，**不是**設定檔裡的 `remote_write:` 區塊（那個區塊語意相反，是把資料推出去）。
+- **此選擇的代價**：沒有 scrape 就沒有 Prometheus 自動產生的 `up` 時間序列，因此「app 掛了」與「網路斷了」「Alloy 掛了」「依賴不齊靜默不推」在查詢層面無法區分（都是沒資料）。要偵測服務存活只能用 `absent()` / `time() - timestamp(...)`。設計告警規則前先讀 [`docs/monitoring-usage-guide.md` §2.1](../monitoring-usage-guide.md#21-push-與-scrape-的取捨這個代價值不值得)。
 
 ### 健康檢查（HEALTHCHECK）的運作機制
 
