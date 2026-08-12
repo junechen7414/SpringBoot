@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import io.github.resilience4j.bulkhead.BulkheadFullException;
@@ -18,6 +19,9 @@ public class GlobalExceptionHandlerTest {
 
     private GlobalExceptionHandler globalExceptionHandler = new GlobalExceptionHandler();
 
+    // handler 用它記一行 WARN（method + path）；本測試只驗回應，故任一路徑皆可。
+    private MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/test");
+
     @Test
     @DisplayName("處理 BulkheadFullException，應回傳 503 Service Unavailable 狀態碼")
     void handleBulkheadFull_ShouldReturnServiceUnavailableStatus() {
@@ -26,7 +30,7 @@ public class GlobalExceptionHandlerTest {
                 io.github.resilience4j.bulkhead.Bulkhead.ofDefaults("test-bulkhead"));
 
         // Act
-        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleBulkheadFull(ex);
+        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleBulkheadFull(ex, request);
 
         // Assert
         assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
@@ -43,7 +47,7 @@ public class GlobalExceptionHandlerTest {
         ObjectOptimisticLockingFailureException ex = new ObjectOptimisticLockingFailureException("Test Entity", 1L);
 
         // Act
-        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleOptimisticLockingFailure(ex);
+        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleOptimisticLockingFailure(ex, request);
 
         // Assert
         assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
@@ -62,7 +66,7 @@ public class GlobalExceptionHandlerTest {
                 io.github.resilience4j.circuitbreaker.CircuitBreaker.ofDefaults("test-circuit-breaker"));
 
         // Act
-        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleCallNotPermitted(ex);
+        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleCallNotPermitted(ex, request);
 
         // Assert
         assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
@@ -80,7 +84,7 @@ public class GlobalExceptionHandlerTest {
                 io.github.resilience4j.ratelimiter.RateLimiter.ofDefaults("test-rate-limiter"));
 
         // Act
-        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleRateLimiter(ex);
+        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleRateLimiter(ex, request);
 
         // Assert
         assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
