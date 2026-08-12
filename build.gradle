@@ -78,6 +78,13 @@ dependencies {
 	implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
 	// 讓 Micrometer 支持 OTLP
 	implementation 'io.micrometer:micrometer-registry-otlp'
+	// 缺這個 OTLP 指標就完全不會匯出（而且不會有任何錯誤訊息）。
+	// Boot 4 把 actuator 拆成多個模組後，OtlpMetricsExportAutoConfiguration 的
+	// @ConditionalOnClass 同時要求 OtlpMeterRegistry（來自 micrometer-registry-otlp）
+	// 與 org.springframework.boot.opentelemetry.autoconfigure.OpenTelemetryProperties
+	// （來自本模組）。少了後者條件不成立 → 沒有 OtlpMeterRegistry bean → 沒有 publisher
+	// 執行緒 → 靜默不推送。診斷方式見 docs/monitoring-usage-guide.md 的排錯章節。
+	implementation 'org.springframework.boot:spring-boot-opentelemetry'
 	implementation 'io.micrometer:micrometer-java21'
 
 	// ---- 開發工具 ----
