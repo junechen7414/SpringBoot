@@ -1,0 +1,47 @@
+# E2E Test Profile —— 下游 Playwright repo 以 SPRING_PROFILES_ACTIVE=e2e 跑 GHCR image。
+#
+# 這份檔案刻意只放「與環境無關」的設定。DB 主機／帳密、是否接監控堆疊這類**部署端**
+# 參數一律由下游 docker-compose.test.yml 的環境變數提供（`SPRING_DATASOURCE_URL` /
+# `_USERNAME` / `_PASSWORD`），不寫進映像 —— 否則等於把下游拓樸（服務名 oracle-db、
+# secret 名 ORACLE_TEST_*）烘進上游 artifact，耦合方向錯誤。
+#
+# 歷史：本檔原先位於 src/test/resources/，而 Dockerfile 只跑 bootJar，test resources
+# 不進 fat jar，因此它從未生效 —— 下游實際吃的是 application.yml 加上 Spring Boot 預設。
+# 以下各項就是把「當時已經在跑的預設」寫成明示意圖，行為不變。
+
+spring:
+  jpa:
+    hibernate:
+      # schema 由 Flyway 管，Hibernate 不建也不改。這也是 Spring Boot 對非嵌入式
+      # DB 的預設值，明示出來以免被誤讀成「忘了設」。
+      ddl-auto: none
+    properties:
+      hibernate:
+        # 只在有人臨時用 LOGGING_LEVEL_ORG_HIBERNATE_SQL=DEBUG 撈 SQL 時才看得出差別，
+        # 但那正是最需要它可讀的時候。
+        "[format_sql]": true
+  flyway:
+    enabled: true
+    # 下游每次執行都 compose-down -v 清掉 volume，schema 是空的，不需要 baseline；
+    # 維持 false 才能在「schema 非空卻沒有 flyway 歷史」這種髒狀態下明確失敗。
+    baseline-on-migrate: false
+    # 映像不該帶著清空整個 schema 的能力。下游的 Flyway clean globalSetup 已停用，
+    # 改採容器重啟策略（見下游 docs/testing/e2e-cleanup-strategy.md），沒有人需要它。
+    clean-disabled: true
+
+management:
+  otlp:
+    metrics:
+      export:
+        # 下游 compose 目前只有 app + oracle-db，沒有 alloy 服務，因此預設關閉，
+        # 免得每個 step 噴一次 DNS 解析失敗。日後若在下游補上 alloy，設
+        # OTLP_METRICS_ENABLED=true 即可（主機名沿用預設的 alloy）。
+        enabled: ${OTLP_METRICS_ENABLED:false}
+        url: http://${ALLOY_HOST:alloy}:4318/v1/metrics
+        step: 10s
+        # 與 dev 一致：Prometheus 生態一律以秒為單位，預設的 milliseconds 會讓指標名
+        # 帶 _milliseconds 後綴且值為毫秒。目前匯出關閉時不影響，但先寫對免得日後重踩。
+        base-time-unit: seconds
+  metrics:
+    tags:
+      application: ${spring.application.name}

@@ -23,9 +23,12 @@
 #    - See: application-openapi.yml
 #
 # 4. 'e2e' (End-to-End Testing)
-#    - Used for end-to-end and Playwright-based test scenarios
-#    - Configured in src/test/resources/application-e2e.yml
-#    - Uses test-specific settings for E2E execution
+#    - Used by the downstream Playwright repository, which runs the published GHCR
+#      image with SPRING_PROFILES_ACTIVE=e2e
+#    - See: application-e2e.yml (main resources — it must be inside the fat jar to
+#      take effect; a copy under src/test/resources would NOT be packaged by bootJar)
+#    - Deployment-side settings (DB host/credentials, monitoring endpoint) are NOT
+#      in that file: they come from the downstream docker-compose environment
 #
 # Overriding the Default Profile:
 # --------------------------------

@@ -97,13 +97,17 @@
 | **框架** | Playwright (Node.js) |
 | **Profile** | `e2e`（透過 `SPRING_PROFILES_ACTIVE=e2e` 設定） |
 | **資料庫** | Oracle Free（Docker Compose 啟動） |
-| **配置檔** | 本專案的 `src/test/resources/application-e2e.yml` |
-| **環境變數** | `ORACLE_TEST_USERNAME` / `ORACLE_TEST_PASSWORD` |
+| **配置檔** | 本專案的 `src/main/resources/application-e2e.yml`（必須在 main resources 才會進 fat jar）|
+| **環境變數** | `ORACLE_TEST_USERNAME` / `ORACLE_TEST_PASSWORD`（下游 compose 據此組出 `SPRING_DATASOURCE_*`）|
 
 **Docker Compose 架構（在 Playwright Repo）：**
 - `app` - Spring Boot 應用（使用 GHCR image，profile 設為 `e2e`）
 - `oracle-db` - Oracle 資料庫（container-registry.oracle.com/database/free:latest）
-- `alloy` - Grafana Alloy（監控指標收集）
+- **沒有 alloy**：下游堆疊只有上述兩個服務，因此 `application-e2e.yml` 的 OTLP 匯出預設關閉
+  （`OTLP_METRICS_ENABLED=false`），避免每個 step 噴一次 DNS 解析失敗
+
+> **配置分工**：`application-e2e.yml` 只放與環境無關的設定（Flyway、`ddl-auto`、metrics tags）；
+> DB 主機／帳密、是否接監控堆疊等部署端參數一律由下游 compose 的環境變數提供，不寫進映像。
 
 **CI/CD 觸發方式：**
 - `repository_dispatch` 事件（當 Backend image 更新時觸發）
