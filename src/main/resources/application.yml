@@ -9,12 +9,16 @@
 #    - Uses Oracle database with credentials from environment variables
 #    - Enables DEBUG logging for application code
 #    - Configures metrics export to Alloy/Prometheus
-#    - Database schema is recreated on each startup (ddl-auto: create-drop)
+#    - Schema is owned by Flyway; Hibernate only validates it (ddl-auto: validate)
 #    - See: application-dev.yml
 #
-# 2. 'unit-test' (Unit Testing) - Used for automated unit testing
-#    - Configured in src/test/resources/application-unit-test.yml
-#    - Uses test-specific database and settings
+# 2. 'integration-test' (Integration Testing)
+#    - Activated by BaseIntegrationTest's @ActiveProfiles; Testcontainers supplies
+#      the datasource via @ServiceConnection, so no DB settings are needed here
+#    - See: src/test/resources/application-integration-test.yml (test-only, and it
+#      may stay there precisely because it is never needed inside the fat jar)
+#    - NOTE: unit tests do NOT have a profile of their own — they are plain Mockito
+#      tests that never start a Spring context, so there is nothing to configure
 #
 # 3. 'openapi' (OpenAPI Documentation Generation)
 #    - Lightweight profile for generating API documentation during build

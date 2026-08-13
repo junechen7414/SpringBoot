@@ -53,7 +53,7 @@ Tests：
 
 ## Profiles
 
-設定採分層（env/system props > `application-{profile}.yml` > `application.yml`）。Profiles：`dev`、`unit-test`、`integration-test`、`e2e`、`openapi`。
+設定採分層（env/system props > `application-{profile}.yml` > `application.yml`）。Profiles：`dev`、`integration-test`、`e2e`、`openapi`（沒有 `unit-test` —— 單元測試是純 Mockito，不啟動 Spring context）。`e2e` 的設定檔在 **main** resources，因為它必須進 fat jar 才會生效。
 
 ## Git workflow
 

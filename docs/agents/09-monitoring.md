@@ -55,7 +55,7 @@ OTLP 匯出需要 **兩個** artifact 同時在 classpath 上，缺一個就完�
 
 ### 指標匯出設定（改動前務必了解）
 
-設定在 `application-dev.yml`（base `application.yml` 的 `management.otlp.metrics.export.enabled` 預設 **false**，只有 dev profile 打開，讓 `unit-test` / `integration-test` / `openapi` 不會嘗試推送）。
+設定在 `application-dev.yml`（base `application.yml` 的 `management.otlp.metrics.export.enabled` 預設 **false**，只有 dev profile 打開，讓 `integration-test` / `openapi` 不會嘗試推送；`e2e` 預設也是關的，下游若補上 alloy 服務可用 `OTLP_METRICS_ENABLED=true` 打開）。
 
 | 設定 | 值 | 為什麼不能省 |
 |---|---|---|
