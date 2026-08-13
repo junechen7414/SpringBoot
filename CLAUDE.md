@@ -57,7 +57,7 @@ Tests：
 
 ## Git workflow
 
-**Trunk-based。** 小步驟直接 commit 到 `main` — push 前 pre-push hook 自動執行 CI gate 相同的測試（`./gradlew test -Djunit.platform.exclude.tags=SanityTest`）。Push `main` 有副作用：發佈 image、觸發下游 E2E、重新產生 swagger.json。
+**Trunk-based。** 小步驟直接 commit 到 `main` — push 前 pre-push hook 自動執行 CI gate 相同的測試（`./gradlew test -Djunit.platform.exclude.tags=SanityTest`）。Push `main` 有副作用：發佈 image、觸發下游 E2E、重新產生 swagger.json（推快照排在 dispatch 之後，所以改了 API 契約時下游必定報一次「快照與 live spec 有差異」——預期行為，見 `docs/agents/09-monitoring.md`）。
 
 commit message / PR body **不加 AI 協作者署名**（`Co-Authored-By: Claude`、`🤖 Generated with Claude Code` 等）；`.githooks/commit-msg` hook 會擋下含這些署名的 commit。
 

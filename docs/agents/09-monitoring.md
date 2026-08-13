@@ -98,12 +98,34 @@ datasource 與 dashboard **不手動在 UI 建**，一律進 git。手動建的�
 1. **單元測試**: 執行 `./gradlew test` 作為 Quality Gate（排除 SanityTest）
 2. **Docker 建置**: 多階段建置，僅在容器內執行 `bootJar`（跳過測試）
 3. **映像檔推送**: 推送至 GitHub Container Registry (GHCR)
-4. **觸發 E2E**: 透過 `repository_dispatch` 通知 E2E 測試專案
-5. **文件生成** (獨立 Job，依賴 build-and-push):
+4. **觸發 E2E**: 透過 `repository_dispatch` 通知 E2E 測試專案（`build-and-push` 的**最後一步**）
+5. **文件生成** (獨立 Job，`needs: build-and-push`，僅 push `main` 時執行):
    - 執行 `./gradlew generateOpenApiDocs` 產生 `swagger.json`
    - Checkout 目標 repo（保留現有文件）
    - 僅複製 `swagger.json` 至目標 repo 的 `docs/` 目錄
    - Commit and push（使用 checkout+copy 方式，避免覆蓋目標 repo 其他文件）
+
+#### 步驟 4 與 5 的順序：下游快照必定落後一版（**預期行為**）
+
+dispatch 在步驟 4 就發出，而推快照的步驟 5 是 `needs: build-and-push`，因此**下游 E2E 的
+checkout 永遠早於快照 commit**。2026-08-13（`b09b76a`）實測：
+
+| UTC | 事件 |
+|---|---|
+| 11:52:36 | 下游 run #180 開始、checkout → 拿到 8/07 的舊 `docs/swagger.json` |
+| 11:53:39 | `generate-docs` 才把新快照推進下游（**慢 63 秒**，+90/−39） |
+
+後果：**上游只要改了 API 契約，下游 job summary 就一定出現一次「快照與被測 image 的 spec
+有差異」**。它不阻擋測試（下游型別改由被測容器的 live spec 產生，見下游
+`docs/agents/13-advanced-techniques.md`），也不需要手動補快照 —— 下一次自動觸發即恢復 ✅。
+
+真正的異常只有一種：**連續多次 push `main` 都出現相同差異** → `generate-docs` 沒推成功
+（token 過期、job 失敗），去查上游 run。另外上游 PR 貼標籤觸發的 E2E 因為步驟 5 不執行，
+那個 image 的 spec **永遠**沒有對應快照，差異持續到 PR 合併為止，同樣正常。
+
+> 想讓「有差異」恢復成真正的異常訊號，就得把 dispatch 拆成 `needs: [build-and-push,
+> generate-docs]` 的獨立 job；代價是 E2E 晚約 1 分鐘起跑。目前刻意不做，改為在兩邊文件與
+> 下游 summary 訊息把語意寫清楚。
 
 #### 快取策略
 

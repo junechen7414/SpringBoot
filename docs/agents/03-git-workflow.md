@@ -25,7 +25,13 @@
 
 - 推 `latest` tag 的 image 到 `ghcr.io`
 - `repository-dispatch` 觸發**下游 repo 的 E2E**
-- 重新產 `swagger.json` 並推到下游 repo
+- 重新產 `swagger.json` 並推到下游 repo（在 dispatch **之後**才發生，見下）
+
+> **改了 API 契約時，下游 job summary 一定會報一次「快照與被測 image 的 spec 有差異」。**
+> 這是 job 順序的必然結果，不是壞掉：dispatch 是 `build-and-push` 的最後一步，而同步
+> `swagger.json` 的 `generate-docs` 是 `needs: build-and-push`（2026-08-13 實測慢 63 秒），
+> 所以下游 checkout 到的永遠是上一版快照。下一次自動觸發就會恢復 ✅，不需要手動補快照。
+> 細節見 [09-monitoring.md](./09-monitoring.md#cicd-流程)。
 
 CI 的 `Run Unit Tests (Gate)` 跑在 build image **之前**，所以**測試抓得到的錯**不會產出壞 image。風險落在**測試抓不到的錯**（執行期 / 整合問題）—— 這正是 pre-push hook 與「高風險走 PR」要補的洞。
 

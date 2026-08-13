@@ -118,6 +118,14 @@
 - `repository_dispatch` 事件（當 Backend image 更新時觸發）
 - `workflow_dispatch`（手動觸發）
 
+**API 型別與 spec 的來源（別誤讀下游那個提示）：**
+下游的 TypeScript 型別是從**被測容器**的 `/v3/api-docs` 產生，不是讀版控裡的
+`docs/swagger.json`；後者只是上游推過去的**可讀記錄**。而上游的 dispatch 發生在
+`build-and-push` 的最後一步、推快照的 `generate-docs` 卻排在其後（實測慢 63 秒），
+所以**改了 API 契約的那次 push，下游 summary 必定報一次「快照與 live spec 有差異」**——
+這是順序的必然，不是故障，下一次自動觸發就恢復 ✅。判準與例外見
+[`agents/09-monitoring.md`](./agents/09-monitoring.md#步驟-4-與-5-的順序下游快照必定落後一版預期行為)。
+
 ---
 
 ## 🔧 測試執行指令
