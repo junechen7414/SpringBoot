@@ -7,14 +7,31 @@
 #
 # 歷史：本檔原先位於 src/test/resources/，而 Dockerfile 只跑 bootJar，test resources
 # 不進 fat jar，因此它從未生效 —— 下游實際吃的是 application.yml 加上 Spring Boot 預設。
-# 以下各項就是把「當時已經在跑的預設」寫成明示意圖，行為不變。
+# 搬進 main resources 時先原樣照抄那些預設（行為不變），隨後才刻意改了兩項行為：
+# `datasource.url` 的 fail-loud 守衛與 `ddl-auto: validate`，理由見各自註解。
 
 spring:
+  datasource:
+    # 刻意不給預設值：缺這個環境變數時會在建立 dataSource bean 時就中止啟動。
+    # 沒有這一行的話，缺 SPRING_DATASOURCE_URL 時 Spring Boot 會自動配置一個
+    # 記憶體 H2（H2 是 runtime 依賴，在 fat jar 裡），Flyway 照樣 migrate、
+    # healthcheck 照樣 UP —— 下游會拿一個「健康」的容器對空的 in-memory DB 跑
+    # E2E，失敗訊息完全指不到根因。寧可啟動就炸。
+    # 帳密不必比照辦理：URL 在時缺帳密本來就會連線失敗（ORA-01017），已經夠大聲。
+    #
+    # 缺變數時實際看到的錯誤（Boot 的 Binder 對無法解析的 placeholder 是 ignore，
+    # 會把字面值原封不動塞進來，所以訊息不會提到變數名，記在這裡以便日後 grep）：
+    #   Failed to instantiate [com.zaxxer.hikari.HikariDataSource]:
+    #   Factory method 'dataSource' threw exception with message: 'url' must start with "jdbc"
+    url: ${SPRING_DATASOURCE_URL}
   jpa:
     hibernate:
-      # schema 由 Flyway 管，Hibernate 不建也不改。這也是 Spring Boot 對非嵌入式
-      # DB 的預設值，明示出來以免被誤讀成「忘了設」。
-      ddl-auto: none
+      # schema 由 Flyway 管，Hibernate 不建也不改；validate 讓 entity 與 migration
+      # 漂移在容器啟動時就被抓到（healthcheck 失敗 → E2E 紅燈指向後端），而不是
+      # 等到某支測試打到某個欄位才以奇怪的 SQL 錯誤現形。
+      # 這組合已由 integration-test profile 在同一份 migration + Oracle Free 上
+      # 每次 CI gate 驗證過，不是新風險。
+      ddl-auto: validate
     properties:
       hibernate:
         # 只在有人臨時用 LOGGING_LEVEL_ORG_HIBERNATE_SQL=DEBUG 撈 SQL 時才看得出差別，

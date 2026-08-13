@@ -31,11 +31,11 @@
 │  │  Layer 3: E2E Test (Playwright + Docker Compose)              │   │
 │  │                                                              │   │
 │  │  docker-compose.test.yml 啟動：                                │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │   │
-│  │  │ spring-boot  │  │  oracle-db   │  │   alloy      │       │   │
-│  │  │ app (e2e)    │──│  (真實Oracle) │  │  (監控)      │       │   │
-│  │  │ Port: 8787   │  │  Port: 1521  │  │  Port: 4318  │       │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────┘       │   │
+│  │  ┌──────────────┐  ┌──────────────┐                         │   │
+│  │  │ spring-boot  │  │  oracle-db   │   (沒有 alloy，              │   │
+│  │  │ app (e2e)    │──│  (真實Oracle) │    OTLP 匯出預設關閉)         │   │
+│  │  │ Port: 8787   │  │  Port: 1521  │                         │   │
+│  │  └──────────────┘  └──────────────┘                         │   │
 │  │                                                              │   │
 │  │  Profile: e2e                                                │   │
 │  │  環境變數: ORACLE_TEST_USERNAME / ORACLE_TEST_PASSWORD         │   │
@@ -108,6 +108,11 @@
 
 > **配置分工**：`application-e2e.yml` 只放與環境無關的設定（Flyway、`ddl-auto`、metrics tags）；
 > DB 主機／帳密、是否接監控堆疊等部署端參數一律由下游 compose 的環境變數提供，不寫進映像。
+>
+> 唯一的例外是 `spring.datasource.url: ${SPRING_DATASOURCE_URL}` —— 它**刻意不給預設值**，
+> 缺這個環境變數就啟動失敗。否則 Spring Boot 會自動配置一個記憶體 H2（H2 在 fat jar 裡），
+> Flyway 照樣 migrate、healthcheck 照樣 UP，下游就會拿一個「健康」的容器對空的 in-memory DB
+> 跑 E2E，失敗訊息完全指不到根因。
 
 **CI/CD 觸發方式：**
 - `repository_dispatch` 事件（當 Backend image 更新時觸發）
@@ -165,9 +170,12 @@ docker compose -f docker-compose.test.yml down -v
 |---------|------|--------|--------|----------|
 | `dev` | 本地開發 | Oracle (docker-compose.yml) | ✅ enabled | 開發者本機 |
 | `integration-test` | 整合測試 | Oracle (Testcontainers) | ✅ enabled, validate | 本專案 `./gradlew test` |
-| `unit-test` | 單元測試備用 | H2 (in-memory, MODE=Oracle) | ✅ enabled | 備用（目前 Unit Test 不啟動 Context） |
-| `e2e` | E2E 測試 | Oracle (docker-compose.test.yml) | ✅ enabled | Playwright Repo |
+| `e2e` | E2E 測試 | Oracle (docker-compose.test.yml) | ✅ enabled, validate | Playwright Repo |
 | `openapi` | API 文件生成 | H2 | - | Gradle OpenAPI 插件 |
+
+> **沒有 `unit-test` profile。** 單元測試是純 Mockito、不啟動 Spring context（見 Layer 1），
+> 因此沒有、也不需要對應的設定檔。本文與 `CLAUDE.md`、`application.yml` 註解曾把它列為第五個
+> profile，但 `application-unit-test.yml` 從未存在，也沒有任何 `@ActiveProfiles("unit-test")`。
 
 ---
 
@@ -195,12 +203,13 @@ docker compose -f docker-compose.test.yml down -v
 
 ## 🔗 相關文件
 
-- [測試 Profile 配置指南](./test-profile-configuration-guide.md)
-- [Docker Compose Test 說明](./docker-compose-test-explanation.md)
-- [Playwright Repository 遷移指南](./playwright-repo-migration-guide.md)
 - [測試資料初始化指南](./test-data-initialization-guide.md)
+- [Agents 測試指引](./agents/08-testing.md)
+
+（原先列出的 `test-profile-configuration-guide.md`、`docker-compose-test-explanation.md`、
+`playwright-repo-migration-guide.md` 三個連結指向不存在的檔案，已移除。）
 
 ---
 
-**最後更新**: 2026-05-26
-**版本**: 1.0.0
+**最後更新**: 2026-08-13
+**版本**: 1.1.0
