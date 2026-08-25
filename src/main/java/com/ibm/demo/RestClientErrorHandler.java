@@ -11,7 +11,7 @@ import org.springframework.util.StreamUtils;
 import tools.jackson.databind.ObjectMapper;
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.BusinessException;
-import com.ibm.demo.util.ErrorCode;
+import com.ibm.demo.exception.ErrorCode;
 
 @Component
 public class RestClientErrorHandler {

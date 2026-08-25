@@ -1,6 +1,6 @@
 package com.ibm.demo.exception;
 
-import com.ibm.demo.util.ErrorCode;
+import java.util.Objects;
 
 import lombok.Getter;
 
@@ -29,6 +29,8 @@ public class BusinessException extends RuntimeException {
     public BusinessException(ErrorCode errorCode, String message) {
         // 參數依序為 message, cause, enableSuppression, writableStackTrace
         super(message, null, false, false);
-        this.errorCode = errorCode;
+        // errorCode 是 handler 決定 status / code / 記錄等級的唯一依據，缺了它不是「退回預設」
+        // 而是寫錯了 —— 因此在 throw 點就炸，而不是讓 handler 帶著 null 分支往下走。
+        this.errorCode = Objects.requireNonNull(errorCode, "errorCode must not be null");
     }
 }

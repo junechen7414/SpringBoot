@@ -27,7 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessException;
-import com.ibm.demo.util.ErrorCode;
+import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;

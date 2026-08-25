@@ -14,7 +14,7 @@ import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
-import com.ibm.demo.util.ErrorCode;
+import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.util.ServiceValidator;
 
 import lombok.RequiredArgsConstructor;

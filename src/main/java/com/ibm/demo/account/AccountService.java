@@ -13,7 +13,7 @@ import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.util.DBAssertion;
-import com.ibm.demo.util.ErrorCode;
+import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
 

@@ -74,7 +74,7 @@ src/main/java/com/ibm/demo/{domain}/
 
 ### 6. 錯誤處理
 
-- [ ] 在 `util/ErrorCode` 加入該 domain 需要的錯誤碼（HttpStatus + code + message）
+- [ ] 在 `exception/ErrorCode` 加入該 domain 需要的錯誤碼（HttpStatus + code + message）
 - [ ] throw 時用 `new BusinessException(ErrorCode.X, "...")`；**不需要**新增例外子類別（已整併為單一具體 `BusinessException`）
 - [ ] `GlobalExceptionHandler` 已統一處理 `BusinessException`，通常不需要額外改動
 

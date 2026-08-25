@@ -21,7 +21,7 @@ import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.util.DBAssertion;
-import com.ibm.demo.util.ErrorCode;
+import com.ibm.demo.exception.ErrorCode;
 
 import org.springframework.transaction.annotation.Transactional;
 

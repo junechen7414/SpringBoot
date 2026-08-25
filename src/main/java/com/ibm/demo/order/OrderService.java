@@ -24,7 +24,7 @@ import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
-import com.ibm.demo.util.ErrorCode;
+import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
 

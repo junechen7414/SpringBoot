@@ -22,7 +22,7 @@ import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
-import com.ibm.demo.util.ErrorCode;
+import com.ibm.demo.exception.ErrorCode;
 
 @Tag("UnitTest")
 @ExtendWith(MockitoExtension.class)

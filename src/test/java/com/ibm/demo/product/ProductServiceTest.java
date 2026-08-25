@@ -28,7 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.BusinessException;
-import com.ibm.demo.util.ErrorCode;
+import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;

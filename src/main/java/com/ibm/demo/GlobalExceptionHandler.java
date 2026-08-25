@@ -22,7 +22,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.BusinessException;
-import com.ibm.demo.util.ErrorCode;
+import com.ibm.demo.exception.ErrorCode;
 
 /**
  * 全域例外處理，同時是**唯一**記錄例外的地方。
@@ -46,12 +46,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException ex, HttpServletRequest request) {
+        // errorCode 由 BusinessException 建構子以 requireNonNull 保證非 null，此處無須防禦性分支。
         ErrorCode errorCode = ex.getErrorCode();
-        HttpStatus status = (errorCode != null) ? errorCode.getStatus() : HttpStatus.BAD_REQUEST;
-        String errorType = (errorCode != null) ? errorCode.getMessage() : "Business Error";
-        String tag = (errorCode != null) ? errorCode.getCode() : "BUSINESS";
-
-        return respond(status, tag, errorType, ex.getMessage(), request);
+        return respond(errorCode.getStatus(), errorCode.getCode(), errorCode.getMessage(), ex.getMessage(), request);
     }
 
     @ExceptionHandler(BulkheadFullException.class)
@@ -95,8 +92,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
         // 最後一個參數是 Throwable → SLF4J 會印出完整 stack trace。
         log.error("[UNEXPECTED] 500 {} {}", request.getMethod(), request.getRequestURI(), ex);
-        return createResponseEntity(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error",
-                "系統發生未預期的錯誤，請稍後再試。");
+        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+        return new ResponseEntity<>(
+                body(status.value(), "Internal Server Error", "系統發生未預期的錯誤，請稍後再試。"), status);
     }
 
     /**
@@ -117,20 +115,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
         String message = "參數驗證失敗: " + detailedMessage;
 
-        // 這個 override 自己組 ResponseEntity（回應格式與其他 handler 不同），因此只借用 log 那一行。
+        // 這個 override 的回傳型別是父類別規定的 ResponseEntity<Object>，無法直接借用 respond()，
+        // 但回應本體一律由 body() 組裝 —— 格式與其他 handler 保證一致。
         if (request instanceof ServletWebRequest servletWebRequest) {
             logExpected(status.value(), "VALIDATION", message, servletWebRequest.getRequest());
         }
 
-        ApiErrorResponse response = ApiErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(status.value())
-                .error("Validation Error")
-                .message(message)
-                .build();
-
-        return new ResponseEntity<>(response, status);
-
+        return new ResponseEntity<>(body(status.value(), "Validation Error", message), status);
     }
 
     /**
@@ -141,20 +132,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private ResponseEntity<ApiErrorResponse> respond(HttpStatus status, String tag, String errorType, String message,
             HttpServletRequest request) {
         logExpected(status.value(), tag, message, request);
-        return createResponseEntity(status, errorType, message);
+        return new ResponseEntity<>(body(status.value(), errorType, message), status);
     }
 
     private void logExpected(int status, String tag, String message, HttpServletRequest request) {
         log.warn("[{}] {} {} {} - {}", tag, status, request.getMethod(), request.getRequestURI(), message);
     }
 
-    private ResponseEntity<ApiErrorResponse> createResponseEntity(HttpStatus status, String errorType, String message) {
-        ApiErrorResponse apiErrorResponse = ApiErrorResponse.builder()
+    /** 組裝回應本體的**唯一**入口 —— 所有 handler（含父類別的 override）都經由這裡，格式才不會分岔。 */
+    private ApiErrorResponse body(int status, String errorType, String message) {
+        return ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
-                .status(status.value())
+                .status(status)
                 .error(errorType)
                 .message(message)
                 .build();
-        return new ResponseEntity<>(apiErrorResponse, status);
     }
 }

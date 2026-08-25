@@ -14,7 +14,8 @@ Repository (資料存取)                      └─▶ 自呼叫繞回本應�
     ↓
 Entity (資料模型)
 
-Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, ServiceValidator, ErrorCode 等)
+Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, ServiceValidator 等)
+Exception (例外與錯誤契約: BusinessException, ErrorCode, ApiErrorResponse)
 ```
 
 > **關於「Client」一詞的兩種意義**（避免混淆）：
