@@ -76,7 +76,8 @@ src/main/java/com/ibm/demo/{domain}/
 
 - [ ] 在 `exception/ErrorCode` 加入該 domain 需要的錯誤碼（HttpStatus + code + message）
 - [ ] throw 時用 `new BusinessException(ErrorCode.X, "...")`；**不需要**新增例外子類別（已整併為單一具體 `BusinessException`）
-- [ ] `GlobalExceptionHandler` 已統一處理 `BusinessException`，通常不需要額外改動
+- [ ] 系統／整合失敗（下游壞了，不是使用者的錯）拋 `SystemException("...")`，排查資訊用 `.with(key, value)` 掛 context，不要串進 message
+- [ ] `GlobalExceptionHandler` 已統一處理這兩個型別，通常不需要額外改動；**不要在 Service 自己 log 例外**
 
 ### 7. DB Migration
 

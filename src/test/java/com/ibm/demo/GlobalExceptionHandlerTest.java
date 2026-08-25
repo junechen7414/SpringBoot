@@ -1,7 +1,9 @@
 package com.ibm.demo;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.entry;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,7 @@ import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
+import com.ibm.demo.exception.SystemException;
 
 public class GlobalExceptionHandlerTest {
 
@@ -159,6 +162,53 @@ public class GlobalExceptionHandlerTest {
         assertThat(body.error()).isEqualTo("Validation Error");
         assertThat(body.message())
                 .isEqualTo("參數驗證失敗: [accountId: must not be null]; [items: must not be empty]");
+    }
+
+    @Test
+    @DisplayName("處理 SystemException，應回傳不透明的 500，且與未預期例外的回應完全相同")
+    void handleSystemException_ShouldReturnOpaqueInternalServerError() {
+        // Arrange：context 帶了下游細節，正是「不該出現在回應裡」的東西
+        SystemException ex = new SystemException("下游 API 呼叫失敗")
+                .with("remoteStatus", 502)
+                .with("remoteMessage", "Bad Gateway");
+
+        // Act
+        ResponseEntity<ApiErrorResponse> responseEntity = globalExceptionHandler.handleSystemException(ex, request);
+        ResponseEntity<ApiErrorResponse> unexpected = globalExceptionHandler.handleUnexpected(
+                new IllegalStateException("boom"), request);
+
+        // Assert
+        assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(responseEntity.getBody()).isNotNull();
+        assertThat(responseEntity.getBody().status()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        assertThat(responseEntity.getBody().code()).isEqualTo("INTERNAL_ERROR");
+        assertThat(responseEntity.getBody().error()).isEqualTo("Internal Server Error");
+        assertThat(responseEntity.getBody().message()).isEqualTo("系統發生未預期的錯誤，請稍後再試。");
+
+        // context / message 只該進 log，不得洩漏到回應
+        assertThat(responseEntity.getBody().message()).doesNotContain("502", "Bad Gateway", "下游");
+
+        // 「刻意宣告的系統錯誤」與「沒料到的錯誤」對外契約不得分岔（差異只在 log 的資訊量）
+        assertThat(responseEntity.getStatusCode()).isEqualTo(unexpected.getStatusCode());
+        assertThat(responseEntity.getBody().code()).isEqualTo(unexpected.getBody().code());
+        assertThat(responseEntity.getBody().error()).isEqualTo(unexpected.getBody().error());
+        assertThat(responseEntity.getBody().message()).isEqualTo(unexpected.getBody().message());
+    }
+
+    @Test
+    @DisplayName("SystemException 的 context 應保留插入順序，且對外不可變更")
+    void systemException_ContextShouldPreserveOrderAndBeUnmodifiable() {
+        SystemException ex = new SystemException("下游 API 呼叫失敗")
+                .with("remoteStatus", 502)
+                .with("remoteMessage", "Bad Gateway");
+
+        // 順序有意義：log 行的可讀性靠它（LinkedHashMap 的 toString 直接就是 log 要的樣子）
+        assertThat(ex.getContext()).containsExactly(
+                entry("remoteStatus", 502),
+                entry("remoteMessage", "Bad Gateway"));
+
+        assertThatExceptionOfType(UnsupportedOperationException.class)
+                .isThrownBy(() -> ex.getContext().put("injected", "value"));
     }
 
     /** 僅供建構 {@link MethodParameter} 使用 —— MethodArgumentNotValidException 需要一個真實的方法參數。 */

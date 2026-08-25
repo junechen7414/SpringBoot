@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
+import com.ibm.demo.exception.SystemException;
 
 /**
  * 全域例外處理，同時是**唯一**記錄例外的地方。
@@ -37,8 +38,13 @@ import com.ibm.demo.exception.ErrorCode;
  *   <li><b>預期</b>（業務拒絕、流量控制、並發衝突）→ 一行 WARN，不帶 stack trace。
  *       resilience4j 的拒絕雖然是 503/429，仍屬預期 —— 記成 ERROR 會讓系統一飽和就被自己的
  *       ERROR log 洗版，而那正是最需要看清狀況的時刻。</li>
- *   <li><b>未預期</b>（{@link #handleUnexpected}）→ ERROR 並帶完整 stack trace。</li>
+ *   <li><b>未預期</b>→ ERROR 並帶完整 stack trace。分兩種來源：
+ *       {@link SystemException} 是 throw 點**刻意宣告**「這裡壞了」（因此帶得動排查用 context），
+ *       {@link #handleUnexpected} 則是真的沒人料到。兩者對外回應完全相同，差別只在 log 的資訊量。</li>
  * </ul>
+ *
+ * <p>記錄等級因此是**由例外型別決定**、而非各 handler 各自判斷：BusinessException 進 WARN、
+ * SystemException 進 ERROR，不需要誰在 handler 裡再想一次。
  */
 @Slf4j
 @RestControllerAdvice
@@ -79,6 +85,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
+     * 系統／整合失敗：與 {@link #handleUnexpected} 回一模一樣的 500 回應，差別全在 log ——
+     * 這裡多了 throw 點刻意附上的 {@code context}（哪個下游、回了什麼），不必靠 stack trace 反推。
+     */
+    @ExceptionHandler(SystemException.class)
+    public ResponseEntity<ApiErrorResponse> handleSystemException(SystemException ex, HttpServletRequest request) {
+        // 佔位符 4 個、參數 5 個 → SLF4J 把最後的 ex 當 Throwable 處理，印出完整 stack trace。
+        log.error("[SYSTEM_ERROR] 500 {} {} - {} {}", request.getMethod(), request.getRequestURI(),
+                ex.getMessage(), ex.getContext(), ex);
+        return internalServerError();
+    }
+
+    /**
      * 未預期的例外：真的壞了、需要有人去看，因此這是**唯一**該印 stack trace 的地方。
      *
      * <p>訊息不回給呼叫端（避免洩漏內部細節），只回統一的 {@link ApiErrorResponse} 格式。
@@ -92,11 +110,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
         // 最後一個參數是 Throwable → SLF4J 會印出完整 stack trace。
         log.error("[UNEXPECTED] 500 {} {}", request.getMethod(), request.getRequestURI(), ex);
-        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
-        return new ResponseEntity<>(
-                body(status.value(), "INTERNAL_ERROR", "Internal Server Error",
-                        "系統發生未預期的錯誤，請稍後再試。"),
-                status);
+        return internalServerError();
     }
 
     /**
@@ -124,6 +138,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         }
 
         return new ResponseEntity<>(body(status.value(), "VALIDATION", "Validation Error", message), status);
+    }
+
+    /**
+     * 500 的回應本體：訊息固定、不含任何內部細節 —— 呼叫端無法對成因分流，透露實作只是給攻擊者情報。
+     *
+     * <p>{@link #handleSystemException} 與 {@link #handleUnexpected} 共用它，避免「刻意宣告的系統錯誤」
+     * 與「沒料到的錯誤」在對外契約上分岔（那個差異只該出現在 log 裡）。
+     */
+    private ResponseEntity<ApiErrorResponse> internalServerError() {
+        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+        return new ResponseEntity<>(
+                body(status.value(), "INTERNAL_ERROR", "Internal Server Error",
+                        "系統發生未預期的錯誤，請稍後再試。"),
+                status);
     }
 
     /**

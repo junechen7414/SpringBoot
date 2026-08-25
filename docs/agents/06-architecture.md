@@ -15,7 +15,7 @@ Repository (資料存取)                      └─▶ 自呼叫繞回本應�
 Entity (資料模型)
 
 Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, ServiceValidator 等)
-Exception (例外與錯誤契約: BusinessException, ErrorCode, ApiErrorResponse)
+Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode, ApiErrorResponse)
 ```
 
 > **關於「Client」一詞的兩種意義**（避免混淆）：
@@ -35,7 +35,9 @@ Exception (例外與錯誤契約: BusinessException, ErrorCode, ApiErrorResponse
 - 核心業務邏輯所在
 - 使用 `@Transactional` 管理事務
 - 查詢方法標註 `@Transactional(readOnly = true)` 提升效能
-- 拋出 `BusinessException` 並帶入對應的 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`）
+- 業務失敗拋出 `BusinessException` 並帶入對應的 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`）
+- 系統／整合失敗（下游壞了、非業務原因）拋出 `SystemException`，排查用資訊以 `.with(key, value)` 掛在 context 上，**不要**串進 message —— 500 的 message 不回給呼叫端
+- **不要在 Service 記錄例外**：log 一律由 `GlobalExceptionHandler` 依例外型別統一記錄（BusinessException → WARN 一行、SystemException → ERROR 帶 stack trace）
 
 ### Repository 層
 
