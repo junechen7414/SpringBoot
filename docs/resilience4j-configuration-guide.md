@@ -996,11 +996,11 @@ GET /products    20      30ms     50%     20/秒
 **回應內容 (429)**:
 ```json
 {
-  "timestamp": "2026-06-03T06:00:00.000+00:00",
+  "timestamp": "2026-06-03 06:00:00",
   "status": 429,
-  "error": "Too Many Requests",
-  "message": "Rate limit exceeded",
-  "path": "/api/products"
+  "code": "RATE_LIMITED",
+  "error": "Rate Limit Exceeded",
+  "message": "請求過於頻繁，請稍後再試。"
 }
 ```
 
@@ -1085,11 +1085,11 @@ GET /products    30     ~1000ms    50%     ~7.5/秒
 **回應內容 (503)**:
 ```json
 {
-  "timestamp": "2026-06-03T06:00:00.000+00:00",
+  "timestamp": "2026-06-03 06:00:00",
   "status": 503,
-  "error": "Service Unavailable",
-  "message": "Bulkhead is full",
-  "path": "/api/products"
+  "code": "BULKHEAD_FULL",
+  "error": "Service Overloaded",
+  "message": "系統負載過高，請稍後再試。"
 }
 ```
 

@@ -94,7 +94,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         log.error("[UNEXPECTED] 500 {} {}", request.getMethod(), request.getRequestURI(), ex);
         HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
         return new ResponseEntity<>(
-                body(status.value(), "Internal Server Error", "系統發生未預期的錯誤，請稍後再試。"), status);
+                body(status.value(), "INTERNAL_ERROR", "Internal Server Error",
+                        "系統發生未預期的錯誤，請稍後再試。"),
+                status);
     }
 
     /**
@@ -121,18 +123,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             logExpected(status.value(), "VALIDATION", message, servletWebRequest.getRequest());
         }
 
-        return new ResponseEntity<>(body(status.value(), "Validation Error", message), status);
+        return new ResponseEntity<>(body(status.value(), "VALIDATION", "Validation Error", message), status);
     }
 
     /**
      * 預期的例外：記一行、不帶 stack trace，然後組回應。
      *
      * <p>這類例外的資訊量全在 status + tag + 請求路徑 + 訊息裡；stack trace 只會把真正的錯誤淹掉
+     *
+     * <p>{@code tag} 同時扮演兩個角色：log 行的前綴，以及回應的 {@code code} 欄位 —— 刻意共用同一個
+     * 值，客戶端回報的錯誤碼才能直接拿去 grep log。
      */
     private ResponseEntity<ApiErrorResponse> respond(HttpStatus status, String tag, String errorType, String message,
             HttpServletRequest request) {
         logExpected(status.value(), tag, message, request);
-        return new ResponseEntity<>(body(status.value(), errorType, message), status);
+        return new ResponseEntity<>(body(status.value(), tag, errorType, message), status);
     }
 
     private void logExpected(int status, String tag, String message, HttpServletRequest request) {
@@ -140,10 +145,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /** 組裝回應本體的**唯一**入口 —— 所有 handler（含父類別的 override）都經由這裡，格式才不會分岔。 */
-    private ApiErrorResponse body(int status, String errorType, String message) {
+    private ApiErrorResponse body(int status, String code, String errorType, String message) {
         return ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(status)
+                .code(code)
                 .error(errorType)
                 .message(message)
                 .build();
