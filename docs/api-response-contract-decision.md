@@ -357,33 +357,32 @@
   `ProductService.reserveStock(Set<OrderItemRequest>)` 的簽章刻意沒變，`StockChangeRequest` 只是
   controller 層的 wire 形狀，沒有滲進 service。
 
-### Phase 6 —— 改用框架基礎設施重寫 handler ✅ 已完成
+### Phase 6 —— 少寫一點，讓父類別多做一點 ✅ 已完成
 
-**契約零變更**，所以嚴格說不屬於本文件的落地路徑；記在這裡是因為它動了 Phase 2 建立的機制，而
-`ApiErrorContractTest`（21 個錯誤側案例）**一字未改仍全綠**正是「零變更」的證據。
+**契約零變更**（`ApiErrorContractTest` 21 個錯誤側案例一字未改仍全綠），所以嚴格說不屬於本文件的落地
+路徑；記在這裡是因為它動了 Phase 2 建立的機制。
 
-Phase 2 是「先讓格式收斂」，做法上有多少手刻在所不計；這個 phase 回頭把能交給
-`ResponseEntityExceptionHandler` 的都交出去：
+Phase 2 的目標是「先讓格式收斂」，做法上有多少手刻在所不計。回頭看，`ResponseEntityExceptionHandler`
+的 javadoc 早就把可以動的地方講完了 —— 覆寫個別 `handleXxx`、覆寫 `handleExceptionInternal` 做所有例外
+的共同處理、或覆寫 `createResponseEntity` 攔最後一步。本 phase 就是把手刻的部分挪回這三個位置：
 
-- **收尾 hook 從 `createResponseEntity` 換成 `handleExceptionInternal`**，且自訂 handler 也改為經由它
-  （不再自己 `new ResponseEntity`）。三個理由：只有這個 hook 同時看得到**例外**與**最終 status**，
-  記錄等級與 stack trace 的判斷因此不必散在各 handler；自訂路徑也得到父類別「回應已 commit 就別硬寫
-  第二份 body」的保護；補 `code`／`type` 與記 log 從兩處變一處。
-- **body 一律由 `ErrorResponse.builder(...)` 組**，取代手刻的 `ProblemDetail.forStatusAndDetail` +
-  四行 setter。同時接上 `MessageSource` 掛勾（key 用 `ErrorCode` 常數名而非框架預設的例外 FQCN）——
-  **刻意不建 bundle**，查不到 code 就沿用程式碼裡的值，所以行為完全不變。加 bundle 會讓回應隨
-  `Accept-Language` 而變，那是契約變更、是產品決策，不該夾在重構裡。
+- **共同處理從 `createResponseEntity` 移到 `handleExceptionInternal`，自訂 handler 也改為經由它**
+  （不再自己 `new ResponseEntity`）。Phase 2 當時只有「框架攔到的」會經過收尾 hook，自訂 handler 是
+  直接 `new ResponseEntity` 回去的 —— 現在兩條路都走同一段收尾（也因此都會經過 `createResponseEntity`）。
+  換 hook 的原因只有一個：只有 `handleExceptionInternal` 同時看得到**例外**與**最終 status**，
+  而「500 才印 stack trace」需要這兩個資訊。附帶拿到父類別「回應已 commit 就別硬寫第二份 body」的保護。
+- **body 改用 `ErrorResponse.builder(...)`**，取代 `ProblemDetail.forStatusAndDetail` + 四行 setter。
+  純粹是比較短，沒有別的用意；builder 上那組 `*MessageCode()`（訊息外部化）**刻意不接** —— 本專案沒有
+  多語系需求，而放了 bundle 就等於讓回應隨 `Accept-Language` 而變，那是契約變更。
 - **驗證錯誤的抽取改用框架 API**：`getAllErrors()` 取代「先 `getFieldErrors()` 再 `getGlobalErrors()`」
-  （欄位名由 `FieldError` 這個型別本身帶出）、`getBeanResults()`／`getValueResults()` 取代手寫的
-  `instanceof ParameterErrors` 分流、訊息改由 `MessageSource` 解析 `MessageSourceResolvable` 而非直讀
-  `getDefaultMessage()`。
+  （欄位名由 `FieldError` 這個型別本身帶出），`getBeanResults()`／`getValueResults()` 取代手寫的
+  `instanceof ParameterErrors` 分流。
 - **`handleSystemException` 併入 `Exception` 兜底**。Phase 2 已決定兩者對外回應必須相同，但當時是靠
-  兩個 handler 各自維持一致（由測試看守）；共用一個 handler 後，這件事變成結構上不可能分岔，差異只
-  剩 log 的資訊量。
+  兩個 handler 各自維持一致（由測試看守）；共用一個 handler 後變成結構上不可能分岔，差異只剩 log。
 - **刻意不做 `BusinessException implements ErrorResponse`**：那會讓每次 throw 都得配一個
   `ProblemDetail`，與 §6 表格裡「關掉 stack trace 是因為它走高頻控制流」的前提相衝；也會把 `code` 這個
   wire 欄位名推進 `exception` package。而 `RestClientErrorHandler` 也會建 `BusinessException`，那個情境
-  根本不產生 HTTP 回應。實作它的收益是省下 handler 裡的一行。
+  根本不產生 HTTP 回應。收益是省下 handler 裡的一行。
 
 **驗證方式**：`./gradlew test -Djunit.platform.exclude.tags=SanityTest` 全綠（190 個測試），其中
 `ApiErrorContractTest` 未修改 —— 逐位元組比對過的 wire format 沒有漂移。`GlobalExceptionHandlerTest`

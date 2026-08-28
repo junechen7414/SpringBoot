@@ -39,9 +39,7 @@ import com.ibm.demo.exception.ValidationError;
  * {@code instance} 不在這裡斷言 —— 它由 Spring 的回傳值處理器在寫回應時才填，單元測試看到的必然是
  * null，硬要在這層驗只會驗到假的東西。
  *
- * <p>這裡的 handler 是 {@code new} 出來的，因此沒有 {@code MessageSource}（框架靠
- * {@code MessageSourceAware} 注入）。這正是我們要驗的其中一件事：訊息外部化的掛勾接上了，但在沒有
- * message bundle 時行為與硬寫在程式碼裡完全相同。
+ * <p>handler 直接 {@code new} 就能測 —— 它不依賴任何注入的協作者，只需要一個 {@link ServletWebRequest}。
  */
 public class GlobalExceptionHandlerTest {
 

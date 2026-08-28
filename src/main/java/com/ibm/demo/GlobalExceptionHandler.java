@@ -6,9 +6,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.jspecify.annotations.Nullable;
-import org.springframework.context.MessageSource;
 import org.springframework.context.MessageSourceResolvable;
-import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -40,22 +38,21 @@ import com.ibm.demo.exception.ValidationError;
 /**
  * 全域例外處理，同時是**唯一**記錄例外的地方。
  *
- * <p>對外一律回 RFC 9457 的 {@code application/problem+json}（{@link ProblemDetail}）。這不是
- * 「跟隨標準」的姿態問題 —— 而是這個 class 的父類別 {@code ResponseEntityExceptionHandler} 對
- * 它內建處理的那批 Spring MVC 例外（405、415、malformed JSON…）本來就只會產 {@code ProblemDetail}。
- * 自訂 handler 若另立一套 JSON 欄位，同一支 API 就有兩種錯誤格式，而且分岔點是「例外由誰攔到」
- * 這種呼叫端完全無法預測的內部細節。收斂到 {@code ProblemDetail} 是唯一能讓兩條路徑合流的方向。
+ * <p>繼承 {@code ResponseEntityExceptionHandler} 的用意就是它 javadoc 寫的那件事：Spring MVC 自己拋的
+ * 那批例外（405、415、malformed JSON…）它已經處理好，回 RFC 9457 的 {@code application/problem+json}
+ * （{@link ProblemDetail}）。我們只補三件事：
+ * <ol>
+ *   <li>覆寫兩個驗證相關的 {@code handleXxx} —— 父類別預設的 detail 沒說哪個欄位錯了；</li>
+ *   <li>為自己的例外（{@link BusinessException}、resilience4j、Security…）加 {@code @ExceptionHandler}；</li>
+ *   <li>覆寫 {@link #handleExceptionInternal} 做「所有例外的共同處理」—— 補 {@code code}／{@code type}、記 log。</li>
+ * </ol>
  *
- * <p><b>合流的實作方式：所有回應都經過父類別的 {@link #handleExceptionInternal}。</b>自訂 handler
- * 不自己 {@code new ResponseEntity}，而是把組好的 body 交給這個 hook —— 於是「框架攔到的」與
- * 「我們攔到的」共用同一段收尾邏輯（補欄位、記錄、以及父類別對「回應已 commit」的判斷），
- * 不必靠人記得兩邊都要改。
+ * <p><b>自訂 handler 也把 body 交給 {@link #handleExceptionInternal}，不自己 {@code new ResponseEntity}。</b>
+ * 於是「框架攔到的」與「我們攔到的」共用同一段收尾（含父類別對「回應已 commit」的判斷，以及最後那步
+ * {@code createResponseEntity}），格式不會因為「例外由誰攔到」這種呼叫端無法預測的內部細節而分岔。
  *
- * <p>組裝 body 也一律走框架的 {@link ErrorResponse#builder}：它除了填 {@code ProblemDetail} 的欄位，
- * 還會用 {@link MessageSource} 依 message code 查一次 {@code type}／{@code title}／{@code detail}
- * （沿用框架的 {@code problemDetail.[title.]<key>} 慣例，只是 key 從例外類別名換成 {@link ErrorCode}
- * 的常數名）。專案目前沒有 message bundle，查不到就沿用程式碼裡的值 —— 也就是行為與手寫組裝完全
- * 相同，但哪天要把訊息外部化／多語系化，只要新增 {@code messages.properties} 即可，不必回頭改 Java。
+ * <p>body 用框架的 {@link ErrorResponse#builder} 組，理由僅僅是它比 {@code new ProblemDetail} 再加四行
+ * setter 短。
  *
  * <p>標準欄位之外只加一個 extension：{@code code}。{@code type} 雖然也是機器可讀識別碼，但要求
  * 呼叫端剖 URI 才能 switch 並不友善；{@code code} 由 {@link ErrorCode#getCode()} 提供，而
@@ -246,9 +243,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /**
      * 把一批 Bean Validation 錯誤收成 {@link ValidationError}。
      *
-     * <p>訊息一律經 {@link MessageSource} 解析（{@link MessageSourceResolvable} 正是為此設計的）而非
-     * 直接讀 {@code getDefaultMessage()}：這讓 {@code NotNull.accountId=帳號不得為空} 這類 bundle 覆寫
-     * 生效，沒有 bundle 時則退回 Bean Validation 插補出的預設訊息 —— 也就是現行行為。
+     * <p>參數型別取 {@link MessageSourceResolvable} 而非 {@code ObjectError}，因為兩條驗證路徑收到的
+     * 錯誤只有這個共同父型別（純量參數的錯誤不是 {@code ObjectError}）。訊息直接讀
+     * {@code getDefaultMessage()} —— Bean Validation 已經把 {@code {min}} 之類的佔位符插補好了。
      *
      * @param fallbackField 錯誤本身沒帶欄位名時要用的欄位名（純量參數的參數名）；null 表示
      *        「這批錯誤不屬於任何單一欄位」，交由 {@link ValidationError} 以缺席欄位表示
@@ -258,21 +255,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
         for (MessageSourceResolvable resolvable : resolvables) {
             String field = (resolvable instanceof FieldError fieldError) ? fieldError.getField() : fallbackField;
-            target.add(new ValidationError(field, resolveMessage(resolvable)));
+            target.add(new ValidationError(field, resolvable.getDefaultMessage()));
         }
-    }
-
-    private @Nullable String resolveMessage(MessageSourceResolvable resolvable) {
-        MessageSource messageSource = getMessageSource();
-        if (messageSource != null) {
-            try {
-                return messageSource.getMessage(resolvable, LocaleContextHolder.getLocale());
-            } catch (NoSuchMessageException ex) {
-                // 既查不到 code 又沒有 defaultMessage 才會走到這 —— 退回下面那行，不讓一筆訊息缺失
-                // 把整個 400 變成 500。
-            }
-        }
-        return resolvable.getDefaultMessage();
     }
 
     /**
@@ -359,28 +343,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * 組裝回應本體的**唯一**入口 —— 所有自訂 handler（含兩個驗證用的父類別 override）都經由這裡，
      * 格式才不會分岔。
      *
-     * <p>用框架的 {@link ErrorResponse#builder} 而非手刻 {@code ProblemDetail}：除了少寫四行 setter，
-     * {@code build(MessageSource, Locale)} 會依 message code 查一次 bundle，讓三個文字欄位都能被外部化。
-     * code 沿用框架慣例的形狀、但 key 用 {@link ErrorCode} 常數名（框架預設用例外類別名，對本專案沒有
-     * 意義 —— 同一個 {@code BusinessException} 承載 N 種錯誤，能分辨它們的是 ErrorCode）。
+     * <p>用框架的 {@link ErrorResponse#builder} 而非手刻 {@code ProblemDetail}：少寫四行 setter，沒有
+     * 別的用意。builder 上那組 {@code *MessageCode()} 方法（把三個文字欄位搬到
+     * {@code messages.properties}）刻意不接 —— 本專案沒有多語系需求，而一旦放了 bundle，回應內容就會
+     * 隨 {@code Accept-Language} 而變，那是 API 契約變更。
      *
      * <p>{@code instance} 不在此設定：交給 Spring 的回傳值處理器自動填入 request URI，少一處可能漏填。
      */
     private ProblemDetail problem(Exception ex, ErrorCode errorCode, @Nullable String detail) {
         return ErrorResponse.builder(ex, errorCode.getStatus(), detail != null ? detail : errorCode.getTitle())
                 .type(errorCode.getType())
-                .typeMessageCode(messageCode("type.", errorCode))
                 .title(errorCode.getTitle())
-                .titleMessageCode(messageCode("title.", errorCode))
-                .detailMessageCode(messageCode("", errorCode))
                 .property(CODE_PROPERTY, errorCode.getCode())
-                .build(getMessageSource(), LocaleContextHolder.getLocale())
+                .build()
                 .getBody();
-    }
-
-    /** 沿用框架的 {@code problemDetail.[title.|type.]<key>} 慣例，key 為 {@link ErrorCode} 常數名。 */
-    private static String messageCode(String field, ErrorCode errorCode) {
-        return "problemDetail." + field + errorCode.getCode();
     }
 
     /**
