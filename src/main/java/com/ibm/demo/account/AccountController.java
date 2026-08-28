@@ -19,6 +19,7 @@ import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.exception.ApiErrorResponse;
+import com.ibm.demo.util.CreatedResponse;
 import com.ibm.demo.util.PageResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,13 +42,14 @@ public class AccountController {
         // Create Account
         @Operation(summary = "建立新帳戶", description = "建立新帳戶。成功則新增帳戶資料，預設狀態為啟用 'Y'。")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "建立成功，回傳帳戶 ID"),
+                        @ApiResponse(responseCode = "201", description = "建立成功，回傳帳戶 ID 與 Location 標頭"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         @PostMapping
-        public ResponseEntity<Integer> createAccount(@Valid @RequestBody CreateAccountRequest createAccountRequest) {
+        public ResponseEntity<CreatedResponse> createAccount(
+                        @Valid @RequestBody CreateAccountRequest createAccountRequest) {
                 Integer accountId = accountService.createAccount(createAccountRequest);
-                return ResponseEntity.ok(accountId);
+                return CreatedResponse.at(accountId);
         }
 
         // Read Account List (Paginated)
@@ -76,20 +78,20 @@ public class AccountController {
         // Assert Account Order Eligibility (internal)
         @Operation(summary = "驗證帳戶下單資格", description = "內部使用：驗證帳戶是否具下單資格。受限於 SQLRestriction 規則，停用或已軟刪除的帳戶查詢即不可見，故帳戶不存在、已軟刪除或狀態非啟用 'Y' 時一律回傳 NotFound。")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "帳戶具下單資格"),
+                        @ApiResponse(responseCode = "204", description = "帳戶具下單資格"),
                         @ApiResponse(responseCode = "404", description = "帳戶不存在或不可下單", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         @GetMapping("/{id}/order-eligibility")
         public ResponseEntity<Void> assertCanPlaceOrder(
                         @Parameter(description = "帳戶 ID", example = "1", required = true) @PathVariable Integer id) {
                 accountService.assertCanPlaceOrder(id);
-                return ResponseEntity.ok().build();
+                return ResponseEntity.noContent().build();
         }
 
         // Update Account
         @Operation(summary = "更新帳戶", description = "更新現有帳戶資訊。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若欲將狀態從啟用 'Y' 變更為停用 'N'，會先檢查該帳戶是否仍有關聯訂單，若有則拋出 BusinessException（ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED）。")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "更新成功"),
+                        @ApiResponse(responseCode = "204", description = "更新成功"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗或帳戶仍有關聯訂單", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "404", description = "帳戶不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
@@ -98,13 +100,13 @@ public class AccountController {
                         @Parameter(description = "帳戶 ID", example = "1", required = true) @PathVariable Integer id,
                         @Valid @RequestBody UpdateAccountRequest updateAccountRequest) {
                 accountService.updateAccount(id, updateAccountRequest);
-                return ResponseEntity.ok().build();
+                return ResponseEntity.noContent().build();
         }
 
         // Delete Account
         @Operation(summary = "刪除帳戶", description = "執行帳戶軟刪除。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若該帳戶仍有關聯訂單，則拋出 BusinessException（ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED）。")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "刪除成功"),
+                        @ApiResponse(responseCode = "204", description = "刪除成功"),
                         @ApiResponse(responseCode = "400", description = "帳戶仍有關聯訂單，無法刪除", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "404", description = "帳戶不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
@@ -112,7 +114,7 @@ public class AccountController {
         public ResponseEntity<Void> deleteAccount(
                         @Parameter(description = "帳戶 ID", example = "1", required = true) @PathVariable Integer id) {
                 accountService.deleteAccount(id);
-                return ResponseEntity.ok().build();
+                return ResponseEntity.noContent().build();
         }
 
 }

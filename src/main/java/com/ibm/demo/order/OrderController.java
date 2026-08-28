@@ -19,6 +19,8 @@ import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
+import com.ibm.demo.order.DTO.internal.OrderExistenceResponse;
+import com.ibm.demo.util.CreatedResponse;
 import com.ibm.demo.util.PageResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,14 +43,15 @@ public class OrderController {
         // Create Order
         @Operation(summary = "建立新訂單", description = "建立新訂單。先驗證帳戶具下單資格（受 SQLRestriction 限制，停用或不存在的帳戶一律回傳 NotFound），檢查訂單內是否有重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），最後透過商品服務預留庫存（商品不可銷售視為 NotFound、庫存不足則拋出 BusinessException（PRODUCT_STOCK_NOT_ENOUGH））。成功則新增訂單主檔（預設狀態 1001）與明細。")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "建立成功，回傳訂單 ID"),
+                        @ApiResponse(responseCode = "201", description = "建立成功，回傳訂單 ID 與 Location 標頭"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "404", description = "帳戶不具下單資格或商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         @PostMapping
-        public ResponseEntity<Integer> createOrder(@Valid @RequestBody CreateOrderRequest createOrderRequest) {
+        public ResponseEntity<CreatedResponse> createOrder(
+                        @Valid @RequestBody CreateOrderRequest createOrderRequest) {
                 Integer orderId = orderService.createOrder(createOrderRequest);
-                return ResponseEntity.ok(orderId);
+                return CreatedResponse.at(orderId);
         }
 
         // Read Order List (Paginated)
@@ -79,14 +82,16 @@ public class OrderController {
         // Update Order
         @Operation(summary = "更新訂單內容", description = "更新訂單內容。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。接著檢查重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），並透過商品服務調整庫存（包含歸還舊品項庫存與扣除新品項庫存），最後更新訂單狀態與明細。")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "更新成功"),
+                        @ApiResponse(responseCode = "204", description = "更新成功"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
-        @PutMapping
-        public ResponseEntity<Void> updateOrder(@Valid @RequestBody UpdateOrderRequest updateOrderRequest) {
-                orderService.updateOrder(updateOrderRequest);
-                return ResponseEntity.ok().build();
+        @PutMapping("/{orderId}")
+        public ResponseEntity<Void> updateOrder(
+                        @Parameter(description = "訂單 ID", example = "1", required = true) @PathVariable Integer orderId,
+                        @Valid @RequestBody UpdateOrderRequest updateOrderRequest) {
+                orderService.updateOrder(orderId, updateOrderRequest);
+                return ResponseEntity.noContent().build();
         }
 
         // Delete Order
@@ -102,13 +107,13 @@ public class OrderController {
                 return ResponseEntity.noContent().build();
         }
 
-        // Check if account ID exists in any order
-        @Operation(summary = "檢查帳戶ID是否存在於任何有效訂單中", description = "判斷帳戶是否有關聯的有效訂單，用於帳戶更新與刪除時的檢核。受限於系統規則，僅會針對未軟刪除且狀態為 1001 (CREATED) 的訂單進行判定。")
-        @ApiResponse(responseCode = "200", description = "回傳布林值，true 表示有關聯訂單")
-        @GetMapping("/account/{accountId}/exists")
-        public ResponseEntity<Boolean> AccountIdIsInOrder(
+        // Check if account ID exists in any order (internal)
+        @Operation(summary = "查詢帳戶是否仍有有效訂單", description = "內部使用：判斷帳戶是否有關聯的有效訂單，用於帳戶更新與刪除時的檢核。受限於系統規則，僅會針對未軟刪除且狀態為 1001 (CREATED) 的訂單進行判定。true 與 false 都是查詢成功，故一律回 200 帶 body。")
+        @ApiResponse(responseCode = "200", description = "查詢成功；hasActiveOrder 為 true 表示仍有關聯訂單")
+        @GetMapping("/account/{accountId}/existence")
+        public ResponseEntity<OrderExistenceResponse> getOrderExistence(
                         @Parameter(description = "帳戶 ID", example = "1", required = true) @PathVariable Integer accountId) {
-                boolean isExist = orderService.isActiveAccountInOrder(accountId);
-                return ResponseEntity.ok(isExist);
+                boolean hasActiveOrder = orderService.isActiveAccountInOrder(accountId);
+                return ResponseEntity.ok(new OrderExistenceResponse(hasActiveOrder));
         }
 }

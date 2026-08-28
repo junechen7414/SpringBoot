@@ -170,7 +170,7 @@ public class AccountService {
      */
     private void checkAccountHasNoOrdersOrThrow(Integer accountId) {
         ServiceValidator.validateNotNull(accountId, "Account ID");
-        if (orderClient.accountIdIsInOrder(accountId)) {
+        if (orderClient.getOrderExistence(accountId).hasActiveOrder()) {
             throw new BusinessException(ErrorCode.ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED,
                     "Account with id: " + accountId + " has associated orders and cannot be set to deactivate.");
         }

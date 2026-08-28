@@ -10,15 +10,16 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Builder;
 
+/**
+ * 更新訂單請求。
+ *
+ * <p><b>不含 {@code orderId}</b>：要更新哪一筆是由 URI（{@code PUT /order/{orderId}}）指定的。
+ * 兩邊都放會製造「path 與 body 不一致時聽誰的」這種只能靠額外規則回答的問題，而那個規則無論
+ * 怎麼訂都是多出來的複雜度。
+ */
 @Builder
 @Schema(description = "更新訂單請求")
 public record UpdateOrderRequest(
-        @NotNull(message = "Order ID is required")
-        @Digits(integer = 10, fraction = 0, message = "10 characters max")
-        @Positive(message = "Order ID must be positive")
-        @Schema(description = "訂單 ID", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
-        Integer orderId,
-
         @NotNull(message = "Order Status is required")
         @Digits(integer = 4, fraction = 0, message = "4 characters max")
         @Positive(message = "Order Status must be positive")

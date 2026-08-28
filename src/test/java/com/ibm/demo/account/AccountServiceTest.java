@@ -35,6 +35,7 @@ import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.exception.ErrorCode;
+import com.ibm.demo.order.DTO.internal.OrderExistenceResponse;
 
 @Tag("UnitTest")
 @ExtendWith(MockitoExtension.class)
@@ -294,7 +295,8 @@ public class AccountServiceTest {
                     .build();
 
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
-            when(orderClient.accountIdIsInOrder(ACTIVE_ACCOUNT_ID)).thenReturn(true);
+            when(orderClient.getOrderExistence(ACTIVE_ACCOUNT_ID))
+                    .thenReturn(new OrderExistenceResponse(true));
 
             // Act & Assert
             assertThatThrownBy(() -> accountService.updateAccount(ACTIVE_ACCOUNT_ID,request))
@@ -317,7 +319,8 @@ public class AccountServiceTest {
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
             activeAccount.setVersion(1);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
-            when(orderClient.accountIdIsInOrder(ACTIVE_ACCOUNT_ID)).thenReturn(false);
+            when(orderClient.getOrderExistence(ACTIVE_ACCOUNT_ID))
+                    .thenReturn(new OrderExistenceResponse(false));
             // 模擬版本不符更新失敗
             when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1)).thenReturn(0);
 
@@ -335,7 +338,8 @@ public class AccountServiceTest {
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
             activeAccount.setVersion(1);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
-            when(orderClient.accountIdIsInOrder(ACTIVE_ACCOUNT_ID)).thenReturn(false);
+            when(orderClient.getOrderExistence(ACTIVE_ACCOUNT_ID))
+                    .thenReturn(new OrderExistenceResponse(false));
             when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1)).thenReturn(1);
 
             // Act
@@ -388,7 +392,7 @@ public class AccountServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND);
 
-            verify(orderClient, never()).accountIdIsInOrder(any());
+            verify(orderClient, never()).getOrderExistence(any());
         }
 
         @Test
@@ -397,7 +401,8 @@ public class AccountServiceTest {
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
 
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
-            when(orderClient.accountIdIsInOrder(ACTIVE_ACCOUNT_ID)).thenReturn(true);
+            when(orderClient.getOrderExistence(ACTIVE_ACCOUNT_ID))
+                    .thenReturn(new OrderExistenceResponse(true));
 
             assertThatThrownBy(() -> accountService.deleteAccount(ACTIVE_ACCOUNT_ID))
                     .isInstanceOf(BusinessException.class)

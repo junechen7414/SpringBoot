@@ -61,11 +61,10 @@ class OrderDetailSoftDeleteIntegrationTest extends BaseIntegrationTest {
 
         // 更新為只保留 A(數量改 5)、移除 B
         UpdateOrderRequest request = new UpdateOrderRequest(
-                orderId,
                 OrderStatus.CREATED.getCode(),
                 List.of(new UpdateOrderDetailRequest(productAId, 5)));
 
-        orderTransactionalService.updateOrder(request);
+        orderTransactionalService.updateOrder(orderId, request);
         entityManager.flush(); // 強制 orphanRemoval 觸發的 @SQLDelete UPDATE 落地
         entityManager.clear();
 
@@ -91,15 +90,15 @@ class OrderDetailSoftDeleteIntegrationTest extends BaseIntegrationTest {
         Integer orderId = createOrderWithTwoDetails(accountId, productAId, productBId).getId();
 
         // 第一次更新：移除 B(軟刪)
-        orderTransactionalService.updateOrder(
-                new UpdateOrderRequest(orderId, OrderStatus.CREATED.getCode(),
+        orderTransactionalService.updateOrder(orderId,
+                new UpdateOrderRequest(OrderStatus.CREATED.getCode(),
                         List.of(new UpdateOrderDetailRequest(productAId, 5))));
         entityManager.flush();
         entityManager.clear();
 
         // 第二次更新：把 B 加回來
-        orderTransactionalService.updateOrder(
-                new UpdateOrderRequest(orderId, OrderStatus.CREATED.getCode(),
+        orderTransactionalService.updateOrder(orderId,
+                new UpdateOrderRequest(OrderStatus.CREATED.getCode(),
                         List.of(new UpdateOrderDetailRequest(productAId, 5),
                                 new UpdateOrderDetailRequest(productBId, 7))));
         entityManager.flush();
@@ -137,8 +136,8 @@ class OrderDetailSoftDeleteIntegrationTest extends BaseIntegrationTest {
                 .executeUpdate();
 
         // 移除 B：orphanRemoval 觸發的 @SQLDelete WHERE VERSION = 0 將影響 0 列
-        orderTransactionalService.updateOrder(
-                new UpdateOrderRequest(orderId, OrderStatus.CREATED.getCode(),
+        orderTransactionalService.updateOrder(orderId,
+                new UpdateOrderRequest(OrderStatus.CREATED.getCode(),
                         List.of(new UpdateOrderDetailRequest(productAId, 5))));
 
         // flush 透過 repository proxy，Hibernate 的 StaleObjectStateException 會被轉為 Spring 的樂觀鎖例外

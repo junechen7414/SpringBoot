@@ -63,17 +63,17 @@ public class OrderTransactionalService {
         }
 
         @Transactional
-        public void updateOrder(UpdateOrderRequest request) {
+        public void updateOrder(Integer orderId, UpdateOrderRequest request) {
                 log.debug("開始更新訂單，訂單ID: {}, 新狀態: {}, 商品數量: {}",
-                        request.orderId(),
+                        orderId,
                         request.orderStatus(),
                         request.items().size());
 
                 // 交易內自行載入(managed)：關閉 OSIV 後不可沿用外部傳入的 detached entity，否則
                 // 存取 lazy orderDetails 仍會拋 LazyInitializationException。
-                OrderInfo order = orderInfoRepository.findById(request.orderId()).orElseThrow(
+                OrderInfo order = orderInfoRepository.findById(orderId).orElseThrow(
                                 () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                                                "Order not found with ID: " + request.orderId()));
+                                                "Order not found with ID: " + orderId));
 
                 Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
                                 .collect(Collectors.toMap(OrderDetail::getProductId, Function.identity()));
@@ -102,7 +102,7 @@ public class OrderTransactionalService {
                 orderInfoRepository.save(order);
                 
                 log.info("訂單更新成功，訂單ID: {}, 新狀態: {}", 
-                        request.orderId(), 
+                        orderId, 
                         request.orderStatus());
         }
 
