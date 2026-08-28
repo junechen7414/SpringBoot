@@ -43,7 +43,7 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 - 查詢方法標註 `@Transactional(readOnly = true)` 提升效能
 - 業務失敗拋出 `BusinessException` 並帶入對應的 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`）
 - 系統／整合失敗（下游壞了、非業務原因）拋出 `SystemException`，排查用資訊以 `.with(key, value)` 掛在 context 上，**不要**串進 message —— 500 的 message 不回給呼叫端
-- **不要在 Service 記錄例外**：log 一律由 `GlobalExceptionHandler` 依例外型別統一記錄（BusinessException → WARN 一行、SystemException → ERROR 帶 stack trace）
+- **不要在 Service 記錄例外**：log 一律由 `GlobalExceptionHandler` 統一記錄，**等級由最終 HTTP status 決定**而非例外型別（500 → ERROR 帶 stack trace，其餘 → WARN 一行）
 
 ### Repository 層
 

@@ -2,9 +2,14 @@ package com.ibm.demo;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.MessageSource;
+import org.springframework.context.MessageSourceResolvable;
+import org.springframework.context.NoSuchMessageException;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -13,7 +18,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.validation.method.ParameterErrors;
+import org.springframework.validation.FieldError;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -25,7 +31,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
@@ -40,6 +45,17 @@ import com.ibm.demo.exception.ValidationError;
  * 它內建處理的那批 Spring MVC 例外（405、415、malformed JSON…）本來就只會產 {@code ProblemDetail}。
  * 自訂 handler 若另立一套 JSON 欄位，同一支 API 就有兩種錯誤格式，而且分岔點是「例外由誰攔到」
  * 這種呼叫端完全無法預測的內部細節。收斂到 {@code ProblemDetail} 是唯一能讓兩條路徑合流的方向。
+ *
+ * <p><b>合流的實作方式：所有回應都經過父類別的 {@link #handleExceptionInternal}。</b>自訂 handler
+ * 不自己 {@code new ResponseEntity}，而是把組好的 body 交給這個 hook —— 於是「框架攔到的」與
+ * 「我們攔到的」共用同一段收尾邏輯（補欄位、記錄、以及父類別對「回應已 commit」的判斷），
+ * 不必靠人記得兩邊都要改。
+ *
+ * <p>組裝 body 也一律走框架的 {@link ErrorResponse#builder}：它除了填 {@code ProblemDetail} 的欄位，
+ * 還會用 {@link MessageSource} 依 message code 查一次 {@code type}／{@code title}／{@code detail}
+ * （沿用框架的 {@code problemDetail.[title.]<key>} 慣例，只是 key 從例外類別名換成 {@link ErrorCode}
+ * 的常數名）。專案目前沒有 message bundle，查不到就沿用程式碼裡的值 —— 也就是行為與手寫組裝完全
+ * 相同，但哪天要把訊息外部化／多語系化，只要新增 {@code messages.properties} 即可，不必回頭改 Java。
  *
  * <p>標準欄位之外只加一個 extension：{@code code}。{@code type} 雖然也是機器可讀識別碼，但要求
  * 呼叫端剖 URI 才能 switch 並不友善；{@code code} 由 {@link ErrorCode#getCode()} 提供，而
@@ -58,13 +74,13 @@ import com.ibm.demo.exception.ValidationError;
  *   <li><b>預期</b>（業務拒絕、流量控制、並發衝突）→ 一行 WARN，不帶 stack trace。
  *       resilience4j 的拒絕雖然是 503/429，仍屬預期 —— 記成 ERROR 會讓系統一飽和就被自己的
  *       ERROR log 洗版，而那正是最需要看清狀況的時刻。</li>
- *   <li><b>未預期</b>→ ERROR 並帶完整 stack trace。分兩種來源：
- *       {@link SystemException} 是 throw 點**刻意宣告**「這裡壞了」（因此帶得動排查用 context），
- *       {@link #handleUnexpected} 則是真的沒人料到。兩者對外回應完全相同，差別只在 log 的資訊量。</li>
+ *   <li><b>未預期</b>（500）→ ERROR 並帶完整 stack trace。分兩種來源：{@link SystemException} 是
+ *       throw 點**刻意宣告**「這裡壞了」（因此帶得動排查用 context），其餘則是真的沒人料到。
+ *       兩者對外回應完全相同 —— 這點現在由「共用同一個 handler」保證，而非靠兩個 handler 各自
+ *       維持一致；差別只在 log 有沒有 context。</li>
  * </ul>
  *
- * <p>記錄等級因此是**由例外型別決定**、而非各 handler 各自判斷：BusinessException 進 WARN、
- * SystemException 進 ERROR，不需要誰在 handler 裡再想一次。
+ * <p>記錄等級因此由**最終 HTTP status** 決定、而非各 handler 各自判斷：500 進 ERROR，其餘進 WARN。
  */
 @Slf4j
 @RestControllerAdvice
@@ -80,44 +96,31 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final String DEFAULT_TYPE = "about:blank";
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ProblemDetail> handleBusinessException(BusinessException ex, HttpServletRequest request) {
+    public @Nullable ResponseEntity<Object> handleBusinessException(BusinessException ex, WebRequest request) {
         // errorCode 由 BusinessException 建構子保證非 null 且必為 4xx，此處無須防禦性分支。
-        return respond(ex.getErrorCode(), ex.getMessage(), request);
+        return respond(ex, ex.getErrorCode(), ex.getMessage(), request);
     }
 
     @ExceptionHandler(BulkheadFullException.class)
-    public ResponseEntity<ProblemDetail> handleBulkheadFull(BulkheadFullException ex, HttpServletRequest request) {
-        return respond(ErrorCode.BULKHEAD_FULL, "系統負載過高，請稍後再試。", request);
+    public @Nullable ResponseEntity<Object> handleBulkheadFull(BulkheadFullException ex, WebRequest request) {
+        return respond(ex, ErrorCode.BULKHEAD_FULL, "系統負載過高，請稍後再試。", request);
     }
 
     @ExceptionHandler(CallNotPermittedException.class)
-    public ResponseEntity<ProblemDetail> handleCallNotPermitted(CallNotPermittedException ex,
-            HttpServletRequest request) {
-        return respond(ErrorCode.CIRCUIT_OPEN, "服務暫時不可用，請稍後再試。", request);
+    public @Nullable ResponseEntity<Object> handleCallNotPermitted(CallNotPermittedException ex, WebRequest request) {
+        return respond(ex, ErrorCode.CIRCUIT_OPEN, "服務暫時不可用，請稍後再試。", request);
     }
 
     @ExceptionHandler(RequestNotPermitted.class)
-    public ResponseEntity<ProblemDetail> handleRateLimiter(RequestNotPermitted ex, HttpServletRequest request) {
-        return respond(ErrorCode.RATE_LIMITED, "請求過於頻繁，請稍後再試。", request);
+    public @Nullable ResponseEntity<Object> handleRateLimiter(RequestNotPermitted ex, WebRequest request) {
+        return respond(ex, ErrorCode.RATE_LIMITED, "請求過於頻繁，請稍後再試。", request);
     }
 
     // 處理樂觀鎖衝突例外
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex,
-            HttpServletRequest request) {
-        return respond(ErrorCode.OPTIMISTIC_LOCK_CONFLICT, "資料已被其他使用者修改，請重新整理後再試。", request);
-    }
-
-    /**
-     * 系統／整合失敗：與 {@link #handleUnexpected} 回一模一樣的 500 回應，差別全在 log ——
-     * 這裡多了 throw 點刻意附上的 {@code context}（哪個下游、回了什麼），不必靠 stack trace 反推。
-     */
-    @ExceptionHandler(SystemException.class)
-    public ResponseEntity<ProblemDetail> handleSystemException(SystemException ex, HttpServletRequest request) {
-        // 佔位符 4 個、參數 5 個 → SLF4J 把最後的 ex 當 Throwable 處理，印出完整 stack trace。
-        log.error("[SYSTEM_ERROR] 500 {} {} - {} {}", request.getMethod(), request.getRequestURI(),
-                ex.getMessage(), ex.getContext(), ex);
-        return internalServerError();
+    public @Nullable ResponseEntity<Object> handleOptimisticLockingFailure(
+            ObjectOptimisticLockingFailureException ex, WebRequest request) {
+        return respond(ex, ErrorCode.OPTIMISTIC_LOCK_CONFLICT, "資料已被其他使用者修改，請重新整理後再試。", request);
     }
 
     /**
@@ -128,9 +131,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * 與「密碼錯誤」，回給呼叫端等於送出帳號枚舉的線索。要排查看 log 就好。
      */
     @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<ProblemDetail> handleAuthentication(AuthenticationException ex,
-            HttpServletRequest request) {
-        return respond(ErrorCode.UNAUTHORIZED, "需要有效的認證憑證。", request);
+    public @Nullable ResponseEntity<Object> handleAuthentication(AuthenticationException ex, WebRequest request) {
+        return respond(ex, ErrorCode.UNAUTHORIZED, "需要有效的認證憑證。", request);
     }
 
     /**
@@ -141,48 +143,48 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * 「沒權限」會對外表現成「伺服器壞了」。這個 handler 必須排在 catch-all 之前才有意義。
      */
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
-        return respond(ErrorCode.FORBIDDEN, "沒有權限執行此操作。", request);
+    public @Nullable ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
+        return respond(ex, ErrorCode.FORBIDDEN, "沒有權限執行此操作。", request);
     }
 
     /**
-     * 未預期的例外：真的壞了、需要有人去看，因此這是**唯一**該印 stack trace 的地方。
+     * 500：真的壞了、需要有人去看。
      *
-     * <p>訊息不回給呼叫端（避免洩漏內部細節），只回統一的 problem+json 格式。
+     * <p>{@link SystemException}（throw 點刻意宣告「這裡壞了」）與完全沒料到的例外**共用這一個
+     * handler**，因為它們的對外回應必須一模一樣 —— 訊息不回給呼叫端（避免洩漏內部細節）、
+     * {@code detail} 固定、{@code code} 一律 {@code INTERNAL_ERROR}。分成兩個 handler 只會讓
+     * 「兩者不得分岔」變成一條要靠測試看守的約定；共用一個則是結構上不可能分岔。
+     *
+     * <p>差別全在 log，由 {@link #log} 依例外型別決定：{@code SystemException} 多印它帶的 context
+     * （哪個下游、回了什麼），不必靠 stack trace 反推。
      *
      * <p>注意：{@code ResponseEntityExceptionHandler} 內建處理的那批 Spring MVC 例外仍會優先命中
      * （Spring 選最具體的 handler），不會被這個 catch-all 攔走。認證／授權失敗同理，由上面兩個
      * 明確的 handler 接走 —— 新增 handler 時請一併確認它排在這個 catch-all 之前。
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ProblemDetail> handleUnexpected(Exception ex, HttpServletRequest request) {
-        // 最後一個參數是 Throwable → SLF4J 會印出完整 stack trace。
-        log.error("[UNEXPECTED] 500 {} {}", request.getMethod(), request.getRequestURI(), ex);
-        return internalServerError();
+    public @Nullable ResponseEntity<Object> handleUnexpected(Exception ex, WebRequest request) {
+        return respond(ex, ErrorCode.INTERNAL_ERROR, "系統發生未預期的錯誤，請稍後再試。", request);
     }
 
     /**
      * {@code @Valid @RequestBody} 的欄位驗證失敗。父類別預設只回一句
      * {@code "Invalid request content."}，呼叫端得不到「哪個欄位錯了」，因此必須 override。
      *
-     * <p>field error 與 global（class-level）error 都收 —— 後者曾被靜默丟棄，也就是「起始日不得晚於
-     * 結束日」這類跨欄位約束擋下請求後，呼叫端拿到的是一個沒有任何原因的 400。
+     * <p>{@code getAllErrors()} 一次拿到 field error 與 global（class-level）error —— 後者曾被靜默
+     * 丟棄，也就是「起始日不得晚於結束日」這類跨欄位約束擋下請求後，呼叫端拿到的是一個沒有任何
+     * 原因的 400。欄位名由 {@link FieldError} 這個型別本身帶出，不必另外分兩條路徑收集。
      */
     @Override
-    protected ResponseEntity<Object> handleMethodArgumentNotValid(
+    protected @Nullable ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex,
             HttpHeaders headers,
             HttpStatusCode status,
             WebRequest request) {
 
         List<ValidationError> errors = new ArrayList<>();
-        ex.getBindingResult().getFieldErrors()
-                .forEach(error -> errors.add(new ValidationError(error.getField(), error.getDefaultMessage())));
-        // global error 沒有對應欄位（跨欄位約束），field 留 null 由序列化略去
-        ex.getBindingResult().getGlobalErrors()
-                .forEach(error -> errors.add(new ValidationError(null, error.getDefaultMessage())));
-
-        return validationFailed(errors, headers, request);
+        collect(ex.getBindingResult().getAllErrors(), null, errors);
+        return validationFailed(ex, errors, headers, request);
     }
 
     /**
@@ -193,34 +195,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * <p>父類別對它只回一句籠統的 detail。沒有這個 override，同一件事（參數不合法）會因為約束寫在
      * request body 還是 query param 上而回出兩種形狀 —— 而呼叫端在意的是「哪個參數錯了」，不是
      * Spring 用哪個機制檢查的。
+     *
+     * <p>「參數本身是個 bean」與「純量參數」的分流交給框架的
+     * {@code getBeanResults()}／{@code getValueResults()}，不必自己 {@code instanceof}：前者的錯誤
+     * 是 {@link FieldError}（欄位名在錯誤裡），後者的欄位名則是參數名。
      */
     @Override
-    protected ResponseEntity<Object> handleHandlerMethodValidationException(
+    protected @Nullable ResponseEntity<Object> handleHandlerMethodValidationException(
             HandlerMethodValidationException ex,
             HttpHeaders headers,
             HttpStatusCode status,
             WebRequest request) {
 
         List<ValidationError> errors = new ArrayList<>();
-        for (var result : ex.getParameterValidationResults()) {
-            if (result instanceof ParameterErrors parameterErrors) {
-                // 參數本身是個 bean（@Valid 的巢狀物件）：錯誤帶得出欄位名
-                parameterErrors.getFieldErrors()
-                        .forEach(error -> errors.add(new ValidationError(error.getField(), error.getDefaultMessage())));
-                parameterErrors.getGlobalErrors()
-                        .forEach(error -> errors.add(new ValidationError(null, error.getDefaultMessage())));
-            } else {
-                // 純量參數：約束直接掛在參數上，欄位名就是參數名
-                String field = result.getMethodParameter().getParameterName();
-                result.getResolvableErrors()
-                        .forEach(error -> errors.add(new ValidationError(field, error.getDefaultMessage())));
-            }
-        }
-        // 跨參數約束（如「兩個參數不得同時為空」）同樣沒有對應欄位
-        ex.getCrossParameterValidationResults()
-                .forEach(error -> errors.add(new ValidationError(null, error.getDefaultMessage())));
+        // 參數是個 bean（@Valid 的巢狀物件）：欄位名由 FieldError 帶出
+        ex.getBeanResults().forEach(result -> collect(result.getAllErrors(), null, errors));
+        // 純量參數：約束直接掛在參數上，欄位名就是參數名
+        ex.getValueResults().forEach(result ->
+                collect(result.getResolvableErrors(), result.getMethodParameter().getParameterName(), errors));
+        // 跨參數約束（如「兩個參數不得同時為空」）沒有對應欄位
+        collect(ex.getCrossParameterValidationResults(), null, errors);
 
-        return validationFailed(errors, headers, request);
+        return validationFailed(ex, errors, headers, request);
     }
 
     /**
@@ -230,8 +226,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * {@code RestClientErrorHandler} 唯一取用的欄位，因此不能只寫「有 3 個欄位錯誤」這種沒資訊量的話），
      * 後者給程式看。
      */
-    private ResponseEntity<Object> validationFailed(
-            List<ValidationError> errors, HttpHeaders headers, WebRequest request) {
+    private @Nullable ResponseEntity<Object> validationFailed(
+            Exception ex, List<ValidationError> errors, HttpHeaders headers, WebRequest request) {
 
         ErrorCode errorCode = ErrorCode.VALIDATION_FAILED;
         String detail = errors.isEmpty()
@@ -240,50 +236,104 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         .map(ValidationError::describe)
                         .collect(Collectors.joining("; "));
 
-        // 這兩個 override 的回傳型別是父類別規定的 ResponseEntity<Object>，無法直接借用 respond()，
-        // 但回應本體一律由 problem() 組裝 —— 格式與其他 handler 保證一致。
-        if (request instanceof ServletWebRequest servletWebRequest) {
-            logExpected(errorCode, detail, servletWebRequest.getRequest());
-        }
-
-        ProblemDetail problem = problem(errorCode, detail);
-        problem.setProperty(ERRORS_PROPERTY, errors);
-        return new ResponseEntity<>(problem, headers, errorCode.getStatus());
+        ProblemDetail body = problem(ex, errorCode, detail);
+        body.setProperty(ERRORS_PROPERTY, errors);
+        // 父類別規定這兩個 override 回傳 ResponseEntity<Object>，但收尾仍交給同一個 hook，
+        // 因此 headers 不會在這條路徑上被吃掉（415 的 Accept、405 的 Allow 都靠它帶出去）。
+        return handleExceptionInternal(ex, body, headers, errorCode.getStatus(), request);
     }
 
     /**
-     * 父類別內建處理的那批 Spring MVC 例外（405、415、malformed JSON、缺參數…）最後都經過這裡。
+     * 把一批 Bean Validation 錯誤收成 {@link ValidationError}。
      *
-     * <p>攔在這一層做兩件事，讓「框架攔到的」與「我們攔到的」在契約上齊平：
+     * <p>訊息一律經 {@link MessageSource} 解析（{@link MessageSourceResolvable} 正是為此設計的）而非
+     * 直接讀 {@code getDefaultMessage()}：這讓 {@code NotNull.accountId=帳號不得為空} 這類 bundle 覆寫
+     * 生效，沒有 bundle 時則退回 Bean Validation 插補出的預設訊息 —— 也就是現行行為。
+     *
+     * @param fallbackField 錯誤本身沒帶欄位名時要用的欄位名（純量參數的參數名）；null 表示
+     *        「這批錯誤不屬於任何單一欄位」，交由 {@link ValidationError} 以缺席欄位表示
+     */
+    private void collect(List<? extends MessageSourceResolvable> resolvables,
+            @Nullable String fallbackField, List<ValidationError> target) {
+
+        for (MessageSourceResolvable resolvable : resolvables) {
+            String field = (resolvable instanceof FieldError fieldError) ? fieldError.getField() : fallbackField;
+            target.add(new ValidationError(field, resolveMessage(resolvable)));
+        }
+    }
+
+    private @Nullable String resolveMessage(MessageSourceResolvable resolvable) {
+        MessageSource messageSource = getMessageSource();
+        if (messageSource != null) {
+            try {
+                return messageSource.getMessage(resolvable, LocaleContextHolder.getLocale());
+            } catch (NoSuchMessageException ex) {
+                // 既查不到 code 又沒有 defaultMessage 才會走到這 —— 退回下面那行，不讓一筆訊息缺失
+                // 把整個 400 變成 500。
+            }
+        }
+        return resolvable.getDefaultMessage();
+    }
+
+    /**
+     * <b>所有</b>錯誤回應的單一漏斗 —— 父類別內建處理的那批 Spring MVC 例外（405、415、malformed
+     * JSON、缺參數…）與本類別自訂的 handler 最後都經過這裡。
+     *
+     * <p>攔在這一層做三件事：
      * <ul>
      *   <li>補上 {@code code} 與 {@code type}。父類別產的 {@code ProblemDetail} 只有
      *       {@code about:blank} 型別（Spring 不序列化預設值，實際線路上是整個 {@code type} 欄位缺席），
      *       呼叫端拿不到任何機器可讀識別碼，只能對 HTTP status 分流 —— 而多個不同原因共用 400。</li>
-     *   <li>記一行 WARN。這些協定層錯誤原本完全靜默，線上收到 415 時 log 裡查無此事。</li>
+     *   <li>記一行 log。協定層錯誤原本完全靜默，線上收到 415 時 log 裡查無此事。</li>
+     *   <li>保留父類別的收尾行為：回應已 commit 時回 {@code null} 而不是硬寫第二份 body。自訂 handler
+     *       過去自己 {@code new ResponseEntity} 就跳過了這個判斷。</li>
      * </ul>
      *
-     * <p>這批錯誤沒有對應的 {@link ErrorCode}（它們是協定層而非業務層），因此 code 取 HTTP 狀態名
-     * （405 → {@code METHOD_NOT_ALLOWED}），type 仍由 {@link ErrorCode#typeOf} 推導，規則與其餘錯誤同源。
-     * {@code title} 沿用父類別給的 HTTP reason phrase（英文）—— 這類錯誤的讀者是開發者不是終端使用者。
+     * <p>選這個 hook 而非 {@code createResponseEntity}，是因為只有這裡同時看得到**例外**與**最終
+     * status** —— 記錄等級與 stack trace 該不該印，靠的正是這兩個資訊。
      */
     @Override
-    protected ResponseEntity<Object> createResponseEntity(
-            @Nullable Object body, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
+    protected @Nullable ResponseEntity<Object> handleExceptionInternal(
+            Exception ex, @Nullable Object body, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
 
-        if (body instanceof ProblemDetail problem) {
-            String code = frameworkCode(statusCode);
-            // 只在 type 缺值時補：自訂 handler 不會走到這個 hook，但保持 idempotent 才不怕日後改動。
+        // ErrorResponse 例外（父類別內建那批的多數）自己帶 body，父類別會在下面幾行後取出。提前取一次
+        // 才能在記錄與補欄位時看到「真正要寫出去的內容」；取完 body 非 null，父類別那段就會跳過。
+        if (body == null && ex instanceof ErrorResponse errorResponse) {
+            body = errorResponse.updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+        }
+
+        ProblemDetail problem = (body instanceof ProblemDetail detail) ? detail : null;
+        log(ex, complete(problem, statusCode), problem, statusCode, request);
+
+        return super.handleExceptionInternal(ex, body, headers, statusCode, request);
+    }
+
+    /**
+     * 補齊 {@code code} 與 {@code type}，回傳這次錯誤的 code。
+     *
+     * <p>自訂 handler 產的 body 已經帶了 {@link ErrorCode} 的 code，沿用；父類別產的沒有，改由 HTTP
+     * 狀態名推導（405 → {@code METHOD_NOT_ALLOWED}）。這批協定層錯誤沒有對應的 {@link ErrorCode}
+     * ——它們是協定層而非業務層 —— 但 {@code type} 仍由 {@link ErrorCode#typeOf} 推導，規則與其餘錯誤
+     * 同源，{@code title} 則沿用父類別給的 HTTP reason phrase（英文）：這類錯誤的讀者是開發者。
+     */
+    private String complete(@Nullable ProblemDetail problem, HttpStatusCode statusCode) {
+        String code = existingCode(problem);
+        if (code == null) {
+            code = frameworkCode(statusCode);
+        }
+        if (problem != null) {
+            problem.setProperty(CODE_PROPERTY, code);
+            // 只在 type 缺值時補，保持 idempotent。
             if (problem.getType() == null || DEFAULT_TYPE.equals(problem.getType().toString())) {
                 problem.setType(ErrorCode.typeOf(code));
             }
-            problem.setProperty(CODE_PROPERTY, code);
-            if (request instanceof ServletWebRequest servletWebRequest) {
-                log.warn("[{}] {} {} {} - {}", code, statusCode.value(),
-                        servletWebRequest.getRequest().getMethod(),
-                        servletWebRequest.getRequest().getRequestURI(), problem.getDetail());
-            }
         }
-        return super.createResponseEntity(body, headers, statusCode, request);
+        return code;
+    }
+
+    private @Nullable String existingCode(@Nullable ProblemDetail problem) {
+        Map<String, Object> properties = (problem != null) ? problem.getProperties() : null;
+        return (properties != null && properties.get(CODE_PROPERTY) instanceof String code) ? code : null;
     }
 
     /** 協定層錯誤的 code：HTTP 狀態名。無法解析的狀態碼退回 {@code HTTP_<數字>}，保證欄位永遠有值。 */
@@ -293,47 +343,74 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * 500 的回應本體：{@code detail} 固定、不含任何內部細節 —— 呼叫端無法對成因分流，透露實作只是
-     * 給攻擊者情報。
-     *
-     * <p>{@link #handleSystemException} 與 {@link #handleUnexpected} 共用它，避免「刻意宣告的系統錯誤」
-     * 與「沒料到的錯誤」在對外契約上分岔（那個差異只該出現在 log 裡）。
-     */
-    private ResponseEntity<ProblemDetail> internalServerError() {
-        return new ResponseEntity<>(
-                problem(ErrorCode.INTERNAL_ERROR, "系統發生未預期的錯誤，請稍後再試。"),
-                ErrorCode.INTERNAL_ERROR.getStatus());
-    }
-
-    /**
-     * 預期的例外：記一行、不帶 stack trace，然後組回應。
-     *
-     * <p>這類例外的資訊量全在 status + code + 請求路徑 + detail 裡；stack trace 只會把真正的錯誤淹掉。
+     * 組回應 —— 自訂 handler 的共用出口：組 body、交給 {@link #handleExceptionInternal} 收尾。
      *
      * <p>{@code code} 同時扮演兩個角色：log 行的前綴，以及回應的 {@code code} 欄位 —— 刻意共用同一個
      * 值，客戶端回報的錯誤碼才能直接拿去 grep log。
      */
-    private ResponseEntity<ProblemDetail> respond(ErrorCode errorCode, String detail, HttpServletRequest request) {
-        logExpected(errorCode, detail, request);
-        return new ResponseEntity<>(problem(errorCode, detail), errorCode.getStatus());
-    }
+    private @Nullable ResponseEntity<Object> respond(
+            Exception ex, ErrorCode errorCode, @Nullable String detail, WebRequest request) {
 
-    private void logExpected(ErrorCode errorCode, String detail, HttpServletRequest request) {
-        log.warn("[{}] {} {} {} - {}", errorCode.getCode(), errorCode.getStatus().value(),
-                request.getMethod(), request.getRequestURI(), detail);
+        return handleExceptionInternal(
+                ex, problem(ex, errorCode, detail), new HttpHeaders(), errorCode.getStatus(), request);
     }
 
     /**
-     * 組裝回應本體的**唯一**入口 —— 所有自訂 handler（含 {@code handleMethodArgumentNotValid} 這個
-     * 父類別 override）都經由這裡，格式才不會分岔。
+     * 組裝回應本體的**唯一**入口 —— 所有自訂 handler（含兩個驗證用的父類別 override）都經由這裡，
+     * 格式才不會分岔。
+     *
+     * <p>用框架的 {@link ErrorResponse#builder} 而非手刻 {@code ProblemDetail}：除了少寫四行 setter，
+     * {@code build(MessageSource, Locale)} 會依 message code 查一次 bundle，讓三個文字欄位都能被外部化。
+     * code 沿用框架慣例的形狀、但 key 用 {@link ErrorCode} 常數名（框架預設用例外類別名，對本專案沒有
+     * 意義 —— 同一個 {@code BusinessException} 承載 N 種錯誤，能分辨它們的是 ErrorCode）。
      *
      * <p>{@code instance} 不在此設定：交給 Spring 的回傳值處理器自動填入 request URI，少一處可能漏填。
      */
-    private ProblemDetail problem(ErrorCode errorCode, String detail) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(errorCode.getStatus(), detail);
-        problem.setType(errorCode.getType());
-        problem.setTitle(errorCode.getTitle());
-        problem.setProperty(CODE_PROPERTY, errorCode.getCode());
-        return problem;
+    private ProblemDetail problem(Exception ex, ErrorCode errorCode, @Nullable String detail) {
+        return ErrorResponse.builder(ex, errorCode.getStatus(), detail != null ? detail : errorCode.getTitle())
+                .type(errorCode.getType())
+                .typeMessageCode(messageCode("type.", errorCode))
+                .title(errorCode.getTitle())
+                .titleMessageCode(messageCode("title.", errorCode))
+                .detailMessageCode(messageCode("", errorCode))
+                .property(CODE_PROPERTY, errorCode.getCode())
+                .build(getMessageSource(), LocaleContextHolder.getLocale())
+                .getBody();
+    }
+
+    /** 沿用框架的 {@code problemDetail.[title.|type.]<key>} 慣例，key 為 {@link ErrorCode} 常數名。 */
+    private static String messageCode(String field, ErrorCode errorCode) {
+        return "problemDetail." + field + errorCode.getCode();
+    }
+
+    /**
+     * 唯一的記錄點。等級由**最終 HTTP status** 決定，而非各 handler 自己想一次：500 是「沒人料到、
+     * 要有人去看」，其餘（含 resilience4j 的 503/429）是預期結果，一行就夠。
+     *
+     * <p>500 的那行刻意印出例外類別名：它取代了舊版 {@code [SYSTEM_ERROR]}／{@code [UNEXPECTED]}
+     * 兩個前綴，而且資訊更多 —— 前綴位置現在讓給對外回的 {@code code}，客戶端回報的錯誤碼才能直接
+     * 拿去 grep。
+     */
+    private void log(Exception ex, String code, @Nullable ProblemDetail problem,
+            HttpStatusCode statusCode, WebRequest request) {
+
+        String method = "-";
+        String uri = request.getDescription(false);
+        if (request instanceof ServletWebRequest servletWebRequest) {
+            method = servletWebRequest.getRequest().getMethod();
+            uri = servletWebRequest.getRequest().getRequestURI();
+        }
+
+        if (statusCode.value() == HttpStatus.INTERNAL_SERVER_ERROR.value()) {
+            // throw 點刻意附上的 context（哪個下游、回了什麼）不必靠 stack trace 反推。
+            Object context = (ex instanceof SystemException systemEx) ? systemEx.getContext() : Map.of();
+            // 佔位符 6 個、參數 7 個 → SLF4J 把最後的 ex 當 Throwable 處理，印出完整 stack trace。
+            log.error("[{}] 500 {} {} - {}: {} {}", code, method, uri,
+                    ex.getClass().getSimpleName(), ex.getMessage(), context, ex);
+        } else {
+            // 這類例外的資訊量全在 status + code + 請求路徑 + detail 裡；stack trace 只會把真正的錯誤淹掉。
+            String detail = (problem != null) ? problem.getDetail() : ex.getMessage();
+            log.warn("[{}] {} {} {} - {}", code, statusCode.value(), method, uri, detail);
+        }
     }
 }
