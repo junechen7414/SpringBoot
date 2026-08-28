@@ -94,8 +94,12 @@ dependencies {
 
 	// ---- 測試 ----
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	// 供未來 @WithMockUser 等 web 層安全測試
-	testImplementation 'org.springframework.security:spring-security-test'
+	// Boot 4 把 @WebMvcTest / MockMvc 這一組 slice 從 spring-boot-test-autoconfigure 拆成獨立模組，
+	// 不再由 starter-test 帶進來；契約測試（wire format）靠它才跑得起來。
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	// @WithMockUser 等 web 層安全測試；Boot 4 的 starter 另外帶進「把測試 SecurityContext 接到
+	// MockMvc filter chain」的那段自動設定，少了它 @WithMockUser 會被 filter chain 當成未認證。
+	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation "org.testcontainers:testcontainers-oracle-free:2.0.5"
