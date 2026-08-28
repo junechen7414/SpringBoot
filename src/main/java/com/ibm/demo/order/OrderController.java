@@ -3,6 +3,7 @@ package com.ibm.demo.order;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,8 +42,8 @@ public class OrderController {
         @Operation(summary = "建立新訂單", description = "建立新訂單。先驗證帳戶具下單資格（受 SQLRestriction 限制，停用或不存在的帳戶一律回傳 NotFound），檢查訂單內是否有重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），最後透過商品服務預留庫存（商品不可銷售視為 NotFound、庫存不足則拋出 BusinessException（PRODUCT_STOCK_NOT_ENOUGH））。成功則新增訂單主檔（預設狀態 1001）與明細。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "建立成功，回傳訂單 ID"),
-                        @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
-                        @ApiResponse(responseCode = "404", description = "帳戶不具下單資格或商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+                        @ApiResponse(responseCode = "404", description = "帳戶不具下單資格或商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         @PostMapping
         public ResponseEntity<Integer> createOrder(@Valid @RequestBody CreateOrderRequest createOrderRequest) {
@@ -66,7 +67,7 @@ public class OrderController {
         @Operation(summary = "獲取訂單詳細資訊", description = "獲取指定訂單的詳細資訊。受限於SQLRestriction規則，若訂單不存在、已被軟刪除或狀態非 1001 (CREATED)，將回傳 NotFound。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "成功取得訂單詳細資訊"),
-                        @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         @GetMapping("/{orderId}")
         public ResponseEntity<GetOrderDetailResponse> getOrderDetails(
@@ -79,8 +80,8 @@ public class OrderController {
         @Operation(summary = "更新訂單內容", description = "更新訂單內容。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。接著檢查重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），並透過商品服務調整庫存（包含歸還舊品項庫存與扣除新品項庫存），最後更新訂單狀態與明細。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "更新成功"),
-                        @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
-                        @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+                        @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         @PutMapping
         public ResponseEntity<Void> updateOrder(@Valid @RequestBody UpdateOrderRequest updateOrderRequest) {
@@ -92,7 +93,7 @@ public class OrderController {
         @Operation(summary = "刪除訂單", description = "刪除訂單。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。執行時會對訂單主檔與明細進行軟刪除，並透過商品服務歸還商品庫存。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "204", description = "刪除成功"),
-                        @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         @DeleteMapping("/{orderId}")
         public ResponseEntity<Void> deleteOrder(

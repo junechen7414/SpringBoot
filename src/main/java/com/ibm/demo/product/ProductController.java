@@ -6,6 +6,7 @@ import java.util.Set;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -47,7 +48,7 @@ public class ProductController {
     @Operation(summary = "新增商品", description = "建立新商品。若已存在同名商品則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。成功則新增商品資料，預設銷售狀態為 1001 (AVAILABLE)。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "建立成功，回傳商品 ID"),
-            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PostMapping
     public ResponseEntity<Integer> createProduct(@Valid @RequestBody CreateProductRequest createProductRequest) {
@@ -78,7 +79,7 @@ public class ProductController {
     @Operation(summary = "獲取單一商品詳細資訊", description = "根據 ID 獲取商品詳細資訊。受限於 SQLRestriction 規則，若商品不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將回傳 NotFound。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "成功取得商品詳細資訊"),
-            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @GetMapping("/{id}")
     public ResponseEntity<GetProductDetailResponse> getProductDetail(
@@ -91,8 +92,8 @@ public class ProductController {
     @Operation(summary = "更新商品", description = "更新現有商品資訊。受限於 SQLRestriction 規則，若商品 ID 不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將拋出 NotFound。若嘗試更改為已存在的商品名稱，則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "更新成功"),
-            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PutMapping("/{id}")
     public ResponseEntity<Void> updateProduct(
@@ -106,7 +107,7 @@ public class ProductController {
     @Operation(summary = "刪除商品", description = "執行商品軟刪除。受限於 SQLRestriction 規則，若商品 ID 不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將拋出 NotFound。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "刪除成功"),
-            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProduct(
