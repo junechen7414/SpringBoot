@@ -212,19 +212,24 @@ UserResponse:
 
 ### 原則 8：Error Response 標準化
 
-**好的做法：**
+**好的做法：** 用 **RFC 9457**（`application/problem+json`）—— 不必自己發明格式，而且 Spring 的
+`ProblemDetail` 原生支援：
+
 ```json
 {
-  "timestamp": "2026-06-08 12:00:00",
+  "type": "urn:problem:product-stock-not-enough",
+  "title": "商品庫存不足",
   "status": 400,
-  "code": "PRODUCT_003",
-  "error": "商品庫存不足",
-  "message": "商品 5 庫存不足（需要 10、剩 3）"
+  "detail": "商品 5 庫存不足（需要 10、剩 3）",
+  "instance": "/product/5/stock",
+  "code": "PRODUCT_STOCK_NOT_ENOUGH"
 }
 ```
 
-所有 API 都共用同一個格式。`code` 是機器可讀識別碼（呼叫端唯一能用來分辨錯誤種類的欄位，
-因為同一個 400 可能有好幾種原因）、`error` 是可直接顯示的類型標籤、`message` 是這次請求的具體細節。
+所有 API 都共用同一個格式。`code`（標準欄位之外唯一的 extension）是機器可讀識別碼，也是呼叫端唯一
+該用來分辨錯誤種類的欄位 —— `status` 太粗（同一個 400 可能有好幾種原因）、`detail` 是給人看的且隨時
+會改字。`title` 是這「類」問題的固定摘要，可直接顯示。驗證失敗會多帶一個 `errors` 陣列，逐筆給出
+`field` / `message`，讓表單 UI 不必剖字串就能把訊息掛回對應的輸入欄位。
 
 **不好的做法：** 每個 API 回傳不同結構
 ```json
@@ -235,6 +240,10 @@ UserResponse:
 // C API
 { "code": 404 }
 ```
+
+**也不好：** 自訂一套與 problem+json 平行的格式。只要 handler 繼承了 `ResponseEntityExceptionHandler`，
+框架內建例外（405、415、malformed JSON…）本來就會產 `ProblemDetail` —— 自訂格式只會讓同一支 API 有
+兩種錯誤形狀，而分岔點是「例外由誰攔到」這種呼叫端無法預測的內部細節。
 
 ---
 
@@ -326,6 +335,14 @@ status:
 
 **不要為了包而包。**
 
+但「不包信封」不等於「回裸純量」。建立資源回一個裸 `5` 同樣是壞契約 —— 線路上那個數字沒有名字，
+呼叫端只能靠文件外的默契解讀，而且日後想多回一個欄位就是破壞性變更。回 `{"id": 5}` 不是信封，
+而是**給值一個名字**；信封指的是 `success` / `data` 這種與業務無關、每個回應都重複一次的外層。
+同理，`{"hasActiveOrder": true}` 優於裸 `true`。
+
+至於「這次成功沒有內容可回」（更新、刪除）—— 那就回 `204 No Content`，不要回一個 `{}` 佔位，也不要
+回 `{"success": true}`：status line 已經把這件事說完了。
+
 ---
 
 ### 🔑 大型 Spring Boot 專案三大核心原則
@@ -350,12 +367,12 @@ status:
 | 4. 寫 description | ✅ 已改善 | 所有 DTO 欄位皆有 `description` |
 | 5. 提供 example | ✅ 已改善 | 所有 DTO 欄位皆有 `example` |
 | 6. Request/Response DTO 分離 | ✅ 優秀 | 完全分離：`CreateXxxRequest` / `UpdateXxxRequest` / `GetXxxResponse` |
-| 7. Pagination 統一格式 | ⚠️ 未實作 | 目前 List API 直接回傳 `List<T>`，無分頁（已規劃統一格式） |
-| 8. Error Response 標準化 | ✅ 優秀 | `ApiErrorResponse` 統一格式 + `GlobalExceptionHandler` |
+| 7. Pagination 統一格式 | ✅ 已實作 | List 端點接受 `Pageable`（標 `@ParameterObject`）回傳 `PageResponse<T>`，預設 `page=0, size=20`；不提供非分頁列表 |
+| 8. Error Response 標準化 | ✅ 優秀 | RFC 9457 `application/problem+json`（`ProblemDetail` + extension `code`，驗證失敗另帶 `errors`），由 `GlobalExceptionHandler` 單一組裝；`ApiErrorResponse` 僅為 schema 宣告 |
 | 9. Enum 定義清楚 | ✅ 已改善 | DTO 中使用 `@Schema(description)` 說明可選值含義 |
 | 10. Schema 不暴露 Entity | ✅ 優秀 | Entity 已移除所有 `@Schema`，僅 DTO 有 Swagger 註解 |
 | 11. 善用巢狀物件 | ✅ 良好 | Order items 使用獨立 `OrderItemDTO` |
-| 12. Response Wrapper | ✅ 良好 | 沒有多餘包裝，直接回傳資料 |
+| 12. Response Wrapper | ✅ 優秀 | 沒有成功信封：建立回 `201` + `Location` + `{"id": n}`、無內容回 `204`、有內容才 `200` + 具名 DTO；契約由 `ApiSuccessContractTest` 釘住 |
 
 ---
 
@@ -440,12 +457,13 @@ public class AccountController {
         description = "建立新帳戶。成功則新增帳戶資料，預設狀態為啟用 'Y'。"
     )
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "建立成功，回傳帳戶 ID"),
+        @ApiResponse(responseCode = "201", description = "建立成功；Location 指向新資源，body 為 {\"id\": n}"),
         @ApiResponse(responseCode = "400", description = "參數驗證失敗",
-            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            content = @Content(mediaType = "application/problem+json",
+                schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PostMapping
-    public ResponseEntity<Integer> createAccount(...) { ... }
+    public ResponseEntity<CreatedResponse> createAccount(...) { ... }   // CreatedResponse.at(id)
 }
 ```
 

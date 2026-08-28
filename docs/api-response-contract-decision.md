@@ -1,9 +1,9 @@
 # API 回應契約決策（ADR）
 
 > **狀態**：已採用（2026-08-27）· **範圍**：對外 HTTP 回應格式（成功與失敗）
-> **本文件不描述現況** —— 決策已定，但程式碼尚未完全符合。現況見 §5，落地路徑見 §7。
-> `CLAUDE.md` / `AGENTS.md` / `docs/agents/*` 目前描述的 `ApiErrorResponse` 契約仍是**現況正確描述**，
-> 刻意不在本文件生效時同步修改，以免文件領先程式碼；同步時機見 §7 Phase 2。
+> **進度**：Phase 0 ~ 5 ✅ 全部完成（錯誤側 RFC 9457、成功側 HTTP 原生語意），文件同步亦已完成（見 §8）。
+> §5「現況稽核」是**2026-08-27 當時**的盤點，刻意保留原文作為變更前的存證 —— 讀它請對照 §7 各 phase
+> 的完成註記，不要當成今天的現況。
 
 ---
 
@@ -95,7 +95,11 @@
 
 ---
 
-## 5. 現況稽核
+## 5. 現況稽核（2026-08-27 盤點，保留原文）
+
+> 以下是**變更前**的狀態。Phase 1 消滅了格式 #3、Phase 2 消滅了格式 #1、Phase 4 補齊了 validation
+> 的資訊遺漏，因此 §5.1 的三種格式今天只剩一種（RFC 9457）。保留原文的理由是：這些條目正是各 phase
+> 的驗收標準，刪掉就無從檢查「當初列的問題是否真的都收掉了」。
 
 ### 5.1 錯誤側：三種 wire format 並存
 
@@ -162,7 +166,15 @@
 
 ### 成功：維持無信封
 
-裸 DTO 或 `PageResponse<T>`；建立資源回 **201 + `Location`**；無 body 一律 **204**。這部分屬 §7 Phase 5，風險最高。
+沒有全域信封（沒有 `success` / `data` 外層），狀態碼由 HTTP 語意決定，三條規則涵蓋所有端點：
+
+| 情形 | 回應 | 說明 |
+|---|---|---|
+| 建立資源 | **201** + `Location` + `{"id": n}` | `Location` 指向新資源的 URI，body 只帶 `id`。統一由 `util/CreatedResponse.at(id)` 組出 —— 「201 該長什麼樣」只有一個實作，不會逐個 controller 各寫一次 |
+| 成功但沒有內容可回 | **204**，body 為空 | 更新、刪除、內部庫存變動、資格驗證。「沒東西可回」與「回一個空殼」是不同的兩件事，前者用狀態碼表達即可 |
+| 成功且有內容 | **200** + 裸 DTO 或 `PageResponse<T>` | 一律具名物件，**不回裸純量**（裸 `5` / 裸 `true` 在線路上沒有說自己是什麼，且無法相容擴充） |
+
+例外（刻意保留，見 §8）：`GET /product/batch` 回裸 array；`PageResponse<T>` 不動；testdata controller 不視為產品 API。
 
 ---
 
@@ -213,6 +225,28 @@
 
 **此 phase 完成時同步文件**：`CLAUDE.md`、`AGENTS.md`、`docs/agents/*`、`.github/instructions/Global.instructions.md`、`docs/handout/03-exception-handling.md`、`docs/swagger-openapi-design-guide.md` 原則 8。
 
+**已完成的實作與過程中確認的事實：**
+
+- **`ErrorCode` 從 3 個引數收斂為 2 個**（`HttpStatus` + `title`），代碼即 enum 名（`getCode()` 就是
+  `name()`），並移入 `com.ibm.demo.exception`。§5.2 的命名空間分裂是這樣消滅的：不是把 `RATE_LIMITED`
+  這些字面值搬進 enum 再各配一個編號，而是**讓「代碼」與「enum 名」成為同一件事** —— 於是不存在
+  第二套命名法可以漂移。`SYS_001` / `PRODUCT_003` 風格的編號代碼因此全部消失。
+- **`type` 由 `code` 機械推導**（`ErrorCode.typeOf()` → `urn:problem:<kebab-code>`），不是另一個可以獨立
+  填錯的欄位。兩者結構上不可能不一致。
+- **父類別處理的例外也補上 `code` / `type`**：覆寫 `createResponseEntity(...)` —— 它是
+  `ResponseEntityExceptionHandler` 所有內建 handler 的**唯一出口**。在那裡補，比逐一覆寫十幾個
+  `handleXxx` 可靠：未來 Spring 新增一種內建例外時自動涵蓋，不會靜默漏掉。
+- **`Content-Type` 不必手動指定**：`AbstractJacksonHttpMessageConverter.getSupportedMediaTypes(Class<?>)`
+  依 **body 的執行期型別**選 media type，所以回 `ProblemDetail` 就是 `application/problem+json`，與
+  `Accept` 無關（已讀原始碼確認，不是推測）。
+- **`instance` 由框架填**：Spring 的回傳值處理器在寫回應時才從 `request.getRequestURI()` 補上。因此
+  單元測試看到的必然是 `null`，只有契約測試（走真實 DispatcherServlet）看得到值 —— 在單元測試層斷言
+  它只會驗到假的東西。
+- **新增 `SystemException`** 區分「系統失敗」與「業務失敗」，並讓 `BusinessException` 建構子**拒絕
+  非 4xx 的 `ErrorCode`**。§6 表格提到的 `writableStackTrace=false` 前提，就此從註解裡的口頭約定變成
+  建構時可驗證的不變式。
+- **`timestamp` 已移除**（§6 的決定）。
+
 ### Phase 3 —— `RestClientErrorHandler`（必須與 Phase 2 同一次上線）
 
 否則跨 domain 錯誤訊息會靜默降級成 status text（§5.2）。
@@ -235,17 +269,91 @@
 
 （`ExtractingResponseErrorHandler` 是 `DefaultResponseErrorHandler` 既有子類別，但語意不符——它把 error body 抽成自訂 `RestClientException` 子類別，而這裡要的是依 status 分流成 domain 的 `BusinessException` / `SystemException`。）
 
-### Phase 4 —— validation
+**✅ 已完成，但範圍刻意縮小 —— 實際做的是最小正確變更：**
+
+改用 **JSON tree** 讀 `detail`（`JsonMapper.readTree(...)` 後取 `detail` 節點），不綁任何 DTO；解析失敗
+退回 `response.getStatusText()`，並把原本**空的、無 log** 的 `catch` 補上記錄。這樣一來：
+
+- 不再綁死 `ApiErrorResponse`，也不會因為 problem body 日後多了 extension 欄位而炸；
+- 不依賴 `ProblemDetailJacksonMixin` 是否註冊 —— 讀 tree 不需要任何 mixin，而 `RestClient` 手上的
+  mapper 未必註冊過。`RestClientErrorHandlerTest` 刻意用**裸** `JsonMapper.builder().build()`，就是為了
+  讓「不依賴 mixin」這件事被測到而不只是被相信。
+
+**`extends DefaultResponseErrorHandler` 的遷移刻意延後**（不是忘記，理由如下）：
+
+1. 它要求子類別自行 `setMessageConverters(...)`（見上方 ⚠️ 段落），等於把 converter 設定複製到第二個
+   地方 —— 而「兩套設定各自漂移」正是要解決的問題本身。在 `RestClient` 願意把自己的 converters 交給
+   adapted status handler 之前，換過去只是把漂移點搬家。
+2. 目前只需要 `detail` 一個欄位，`getResponseBodyAs(ProblemDetail.class)` 的完整反序列化能力用不到。
+   等到需要跨 domain 傳遞 `code`（呼叫端要依遠端 `ErrorCode` 分流）時再換，遷移才有回報。
+3. 現行行為已被 6 個案例釘住（含 body 不可解析 / 合法 JSON 但缺 `detail` / 空 body 三種退化路徑），
+   所以這個遷移可以是純內部替換，不必與對外契約變更綁在同一次上線。
+
+### Phase 4 —— validation ✅ 已完成
 
 改用 `errors` extension array；補 `getGlobalErrors()`；覆寫 `HandlerMethodValidationException`，讓 `@RequestParam` / `@PathVariable` 的驗證也走同一格式。
 
-### Phase 5 —— 成功側衛生（可選）
+**已完成的實作與過程中確認的事實：**
+
+- 新增 `exception/ValidationError`（`field` / `message`）。它與 `ApiErrorResponse` 不同 —— **會真的被
+  序列化**，所以不存在「文件與 wire format 漂移」的空間。
+- **`field` 缺席（而非 `null`、也不是空字串）代表「不屬於任何欄位」**：class-level 跨欄位約束的訊息
+  該顯示在表單層級而非某個輸入框旁，呼叫端就是靠「有沒有 field」判斷。以 `@JsonInclude(NON_NULL)`
+  實作，並由契約測試的 `empty()` 斷言釘住。
+- **刻意不收 `rejectedValue`**：驗證失敗的輸入可能正是密碼或身分證號，不該回傳、也不該進 log；
+  呼叫端本來就握有自己送出的內容，回傳它並無資訊增益。
+- **`detail` 仍帶完整的欄位清單**，沒有換成「有 3 個欄位錯誤」這類摘要 —— 因為 `RestClientErrorHandler`
+  跨 domain 只取 `detail`，摘要化等於在內部整合路徑上丟資訊。`detail` 與 `errors` 由**同一個
+  `List<ValidationError>`** 產出（`ValidationError.describe()`），結構上不可能各說各話。
+- 單筆格式從 `[field: message]` 改為 `field message`：global error 沒有欄位名，套上原格式會讀起來
+  像有個叫做空字串的欄位。
+- **覆寫 `handleHandlerMethodValidationException`**，讓參數上的約束失敗回出同一種形狀。目前沒有任何
+  domain controller 會觸發它 —— 但探針端點讓它可測，且等到哪天有人在 `@RequestParam` 上加約束時，
+  形狀分岔已經先被消滅，而不是在下游踩到才發現。Spring 7 的存取子是
+  `getParameterValidationResults()` + `getCrossParameterValidationResults()`（**沒有**
+  `getAllValidationResults()`）；結果為 `ParameterErrors` 時該參數本身是 bean，取 `getFieldErrors()`，
+  否則欄位名就是參數名。
+
+### Phase 5 —— 成功側衛生 ✅ 已完成
 
 201 + `Location`、`DELETE` 統一 204、裸純量改小 DTO、`/exists` 改語意化端點、`PUT /order` 補 path variable。
 
 **風險比原先評估的低**：`expectOk()` 只斷言 2xx 區間，所以 `200 → 201/204` 下游完全無感（§5.4）。真正會踩到下游的是**回應形狀**變化——建立類端點從裸數字改成 `{ "id": N }`（`expect(typeof accountId).toBe('number')` 這類斷言）與 `PUT /order` 的 path variable。也就是說本 phase 的下游影響面**明確且可枚舉**，不像 Phase 2 是全域欄位改名。
 
 仍要注意 push `main` 的副作用順序——推快照排在 dispatch 之後，所以改 API 契約時下游必定先報一次「快照與 live spec 有差異」（見 `docs/agents/09-monitoring.md`）。
+
+**已完成的實作與過程中確認的事實：**
+
+- **§5.3 的六種形狀收斂為三種**：`PageResponse<T>`、裸 DTO、空 body（204）。裸 `Integer` 由
+  `util/CreatedResponse`（201 + `Location`）取代、裸 `Boolean` 由 `OrderExistenceResponse` 取代、
+  三個裸 `void` 的內部庫存端點改為 `ResponseEntity<Void>` + 204。
+- **`Location` 用 `fromCurrentRequestUri()` 而非 `fromCurrentRequest()`**：後者會把 query string 併進
+  `Location`，而新資源的位置與建立它時帶了什麼查詢參數無關。這件事沒有型別能保護，只由契約測試
+  釘住（`locationExcludesQueryString`）。`CreatedResponse.at()` 的**前提**是「建立端點的 URI 就是集合
+  URI」；日後若出現 `POST /account/{id}/xxx` 這種子資源建立，得自行組 `Location`。
+- **順手修掉一個真的驗證破口**：`/product/reserve|release` 原本收裸 `Set<OrderItemRequest>`，而
+  `@Valid @RequestBody Set<...>` 走的是 DataBinder 對「整個集合物件」驗證，**元素上的約束根本不會被
+  套用**。包成 `StockChangeRequest`（`Set<@Valid OrderItemRequest> items`）後才與
+  `CreateOrderRequest.items` 是同一種尋常 cascade。同時給 `OrderItemRequest` 的兩個欄位補上
+  `@NotNull` / `@Positive` —— 先前它們只靠上游 DTO 的約束「順便」成立，是慣例而非型別保證。
+  （`AdjustStockRequest.from` / `to` **刻意不加 `@NotEmpty`**：空 `from` 是純新增預留、空 `to` 是全數歸還。）
+- **`/existence` 與 `/order-eligibility` 的形狀刻意不同**：前者 200 + body，因為 `true` 與 `false`
+  都是「查詢成功」的答案；後者 204，因為不合格會拋錯，成功時沒有資訊可回。這不是不一致 —— 是同一條
+  規則（有內容才回 body）套在兩種語意上的結果。
+- **`updateOrder` 的 id 只有一個來源**：`UpdateOrderRequest` 移除 `orderId`，改由 `PUT /order/{orderId}`
+  指定。兩邊都放會製造「path 與 body 不一致時聽誰的」這種只能靠額外規則回答的問題。
+- **URI 改名一併做掉**：`/product/adjustStock` → `/adjust-stock`（camelCase 不是 URI 慣例）、
+  `/order/account/{id}/exists` → `/existence`（名詞化，與既有的 `/order-eligibility` 一致）。
+  兩者都**不在下游 endpoint map**（只有 account / product / order / testData），所以是下游安全的改名。
+- **新增 `ApiSuccessContractTest`（15 個案例）**：與錯誤側刻意用不同做法 —— 錯誤格式與 domain 無關，
+  所以用探針 controller；成功側的「201 / 204 / 200」是**每個端點各自的行為**，用探針只會驗到探針自己。
+  因此這裡以 `@TestConfiguration @Import` 明確載入**真正的三個 domain controller**、service 以
+  `@MockitoBean` 頂替。`Location` 的斷言不只比字串，還會真的 GET 一次那個 URI —— 否則測到的只是
+  「字串組得出來」，而不是「它指向一個存在的資源」。
+- **測試側改動的範圍就是契約變更的範圍**：`OrderServiceTest`、`AccountServiceTest`、
+  `OrderDetailSoftDeleteIntegrationTest` 共 3 個檔案。`ProductServiceTest` 完全沒動 —— 因為
+  `ProductService.reserveStock(Set<OrderItemRequest>)` 的簽章刻意沒變，`StockChangeRequest` 只是
+  controller 層的 wire 形狀，沒有滲進 service。
 
 ---
 
@@ -254,7 +362,8 @@
 - **不導入成功回應信封**（立場 B / C 已否決，理由見 §3）。
 - **不改 `util/PageResponse.java`**（見 §3 末段）。`docs/pagination-strategies-guide.md` 的 `CursorPageResponse<T>` 提案與本 ADR 無關，各自獨立。
 - **不在本階段導入 `traceId` / Micrometer Tracing**（列為後續選項）。
-- **不在本 ADR 生效時同步 `CLAUDE.md` / `AGENTS.md`**（見文件開頭與 §7 Phase 2）。
+- ~~**不在本 ADR 生效時同步 `CLAUDE.md` / `AGENTS.md`**~~ —— Phase 5 完成後已一併同步，因此此項不再是非目標。實際更新的檔案：`CLAUDE.md`、`docs/agents/06-architecture.md`、`docs/agents/10-troubleshooting.md`、`docs/handout/HANDOUT.md`、`docs/handout/01-architecture-layering.md`、`docs/handout/03-exception-handling.md`（§1／§3／§4 重寫，「已知不一致」改記為已解決）、`docs/swagger-openapi-design-guide.md`（原則 8／12 與現況評估表）、`docs/resilience4j-configuration-guide.md`、`docs/security-external-idp-migration.md`（端點改名）、`筆記.md`、`new-domain-scaffold` skill（`.claude` 與 `.bob` 兩份，內容相同）。
+  `AGENTS.md` 本身只有 `@`-import、不含契約內容，`.github/instructions/Global.instructions.md` 也只有回應語言／指令執行／文檔管理三段而無 API 契約敘述 —— 兩者確認無需改動。
 
 ---
 

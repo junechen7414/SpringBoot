@@ -996,11 +996,12 @@ GET /products    20      30ms     50%     20/秒
 **回應內容 (429)**:
 ```json
 {
-  "timestamp": "2026-06-03 06:00:00",
+  "type": "urn:problem:rate-limited",
+  "title": "請求過於頻繁",
   "status": 429,
-  "code": "RATE_LIMITED",
-  "error": "Rate Limit Exceeded",
-  "message": "請求過於頻繁，請稍後再試。"
+  "detail": "請求過於頻繁，請稍後再試。",
+  "instance": "/product",
+  "code": "RATE_LIMITED"
 }
 ```
 
@@ -1085,11 +1086,12 @@ GET /products    30     ~1000ms    50%     ~7.5/秒
 **回應內容 (503)**:
 ```json
 {
-  "timestamp": "2026-06-03 06:00:00",
+  "type": "urn:problem:bulkhead-full",
+  "title": "系統負載過高",
   "status": 503,
-  "code": "BULKHEAD_FULL",
-  "error": "Service Overloaded",
-  "message": "系統負載過高，請稍後再試。"
+  "detail": "系統負載過高，請稍後再試。",
+  "instance": "/product",
+  "code": "BULKHEAD_FULL"
 }
 ```
 
@@ -1661,17 +1663,21 @@ public List<Product> getProducts() {
     // RequestNotPermitted 異常 → 500 錯誤
 }
 
-// ✅ 全域異常處理器捕獲它
+// ✅ 全域異常處理器捕獲它（本專案已內建）
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(RequestNotPermitted.class)
-    public ResponseEntity<ApiErrorResponse> handleRateLimitExceeded(
-        RequestNotPermitted ex) {
-        return ResponseEntity.status(429)   // 返回 429
-            .body(new ApiErrorResponse("Rate limit exceeded"));
+    public ResponseEntity<ProblemDetail> handleRateLimiter(
+        RequestNotPermitted ex, HttpServletRequest request) {
+        // 429 / code / title 全由 ErrorCode.RATE_LIMITED 決定，不硬編碼；
+        // 對外格式為 RFC 9457 application/problem+json，code = "RATE_LIMITED"
+        return respond(ErrorCode.RATE_LIMITED, "請求過於頻繁，請稍後再試。", request);
     }
 }
 ```
+
+> 拒絕雖然是 429/503，但屬**預期**行為 → 只記一行 WARN、不印 stack trace。記成 ERROR 會讓系統一飽和
+> 就被自己的 ERROR log 洗版，而那正是最需要看清狀況的時刻。
 
 **原因 2: 錯誤的異常類型**
 ```java

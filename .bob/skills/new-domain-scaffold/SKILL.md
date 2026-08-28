@@ -59,7 +59,11 @@ src/main/java/com/ibm/demo/{domain}/
 
 - [ ] 標註 `@RestController`、`@RequestMapping("/api/{domains}")`、`@RequiredArgsConstructor`
 - [ ] 參數驗證用 `@Valid`
-- [ ] 回傳 `ResponseEntity<T>`，明確控制 HTTP status
+- [ ] 回傳 `ResponseEntity<T>`，明確控制 HTTP status，且**不加成功信封**：
+  - 建立資源 → `util/CreatedResponse.at(id)`（`201` + `Location` + `{"id": n}`），不要回裸 `Integer`
+  - 成功但沒有內容可回（更新／刪除／內部操作）→ `ResponseEntity.noContent().build()`（`204`，body 必須為空）
+  - 有內容才 `200` + 具名 DTO 或 `PageResponse<T>`；**不回裸純量**（線路上的 `true`／`5` 沒有名字，呼叫端還會踩到隱含的 auto-unboxing NPE，且無法相容擴充）
+  - 新端點請一併加進 `src/test/java/com/ibm/demo/contract/ApiSuccessContractTest.java`
 - [ ] 列表端點接受 `Pageable` 參數，回傳 `ResponseEntity<PageResponse<{Domain}Response>>`
   - 預設 `page=0, size=20`
   - **不提供非分頁的列表端點**
@@ -74,10 +78,11 @@ src/main/java/com/ibm/demo/{domain}/
 
 ### 6. 錯誤處理
 
-- [ ] 在 `exception/ErrorCode` 加入該 domain 需要的錯誤碼（HttpStatus + code + message）
+- [ ] 在 `exception/ErrorCode` 加入該 domain 需要的錯誤碼（`HttpStatus` + `title` 兩個參數）；**不要**另外帶 `SYS_001` 風格的編號 —— `getCode()` 就是常數名，`type` 由它機械推導
 - [ ] throw 時用 `new BusinessException(ErrorCode.X, "...")`；**不需要**新增例外子類別（已整併為單一具體 `BusinessException`）
 - [ ] 系統／整合失敗（下游壞了，不是使用者的錯）拋 `SystemException("...")`，排查資訊用 `.with(key, value)` 掛 context，不要串進 message
 - [ ] `GlobalExceptionHandler` 已統一處理這兩個型別，通常不需要額外改動；**不要在 Service 自己 log 例外**
+- [ ] 對外錯誤格式是 RFC 9457 `application/problem+json`（`type`/`title`/`status`/`detail`/`instance` + extension `code`，驗證失敗另帶 `errors`），**不要自己組 error body**；Swagger 上的 error response 用 `@Schema(implementation = ApiErrorResponse.class)` 引用（它只是 schema 宣告，不參與執行期序列化）
 
 ### 7. DB Migration
 
