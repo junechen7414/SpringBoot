@@ -1,5 +1,7 @@
 package com.ibm.demo;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import org.jspecify.annotations.Nullable;
@@ -11,11 +13,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.method.ParameterErrors;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import io.github.resilience4j.bulkhead.BulkheadFullException;
@@ -26,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.exception.SystemException;
+import com.ibm.demo.exception.ValidationError;
 
 /**
  * 全域例外處理，同時是**唯一**記錄例外的地方。
@@ -67,6 +72,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     /** {@code code} extension 的欄位名，供契約測試引用，避免測試裡散落字面值。 */
     public static final String CODE_PROPERTY = "code";
+
+    /** 驗證失敗時逐筆列出欄位錯誤的 extension 欄位名。 */
+    public static final String ERRORS_PROPERTY = "errors";
 
     /** {@code ProblemDetail} 未指定 type 時的預設值；Spring 不會序列化它，等同「沒有 type」。 */
     private static final String DEFAULT_TYPE = "about:blank";
@@ -154,10 +162,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * 欄位驗證失敗。父類別預設只回一句 {@code "Invalid request content."}，呼叫端得不到「哪個欄位錯了」，
-     * 因此保留這個 override 把欄位錯誤壓進 {@code detail}。
+     * {@code @Valid @RequestBody} 的欄位驗證失敗。父類別預設只回一句
+     * {@code "Invalid request content."}，呼叫端得不到「哪個欄位錯了」，因此必須 override。
      *
-     * <p>例如：{@code 參數驗證失敗: [accountId: must not be null]; [quantity: must be positive]}
+     * <p>field error 與 global（class-level）error 都收 —— 後者曾被靜默丟棄，也就是「起始日不得晚於
+     * 結束日」這類跨欄位約束擋下請求後，呼叫端拿到的是一個沒有任何原因的 400。
      */
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
@@ -165,22 +174,81 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpHeaders headers,
             HttpStatusCode status,
             WebRequest request) {
-        String detailedMessage = ex.getBindingResult()
-                .getFieldErrors()
-                .stream()
-                .map(error -> String.format("[%s: %s]", error.getField(), error.getDefaultMessage()))
-                .collect(Collectors.joining("; "));
 
-        String detail = "參數驗證失敗: " + detailedMessage;
+        List<ValidationError> errors = new ArrayList<>();
+        ex.getBindingResult().getFieldErrors()
+                .forEach(error -> errors.add(new ValidationError(error.getField(), error.getDefaultMessage())));
+        // global error 沒有對應欄位（跨欄位約束），field 留 null 由序列化略去
+        ex.getBindingResult().getGlobalErrors()
+                .forEach(error -> errors.add(new ValidationError(null, error.getDefaultMessage())));
+
+        return validationFailed(errors, headers, request);
+    }
+
+    /**
+     * 方法參數層級的驗證失敗：{@code @RequestParam}／{@code @PathVariable} 上的約束
+     * （如 {@code @Positive int page}）由 Spring 6.1 起內建的 method validation 檢查，拋的是本例外
+     * 而非 {@link MethodArgumentNotValidException}。
+     *
+     * <p>父類別對它只回一句籠統的 detail。沒有這個 override，同一件事（參數不合法）會因為約束寫在
+     * request body 還是 query param 上而回出兩種形狀 —— 而呼叫端在意的是「哪個參數錯了」，不是
+     * Spring 用哪個機制檢查的。
+     */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(
+            HandlerMethodValidationException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+
+        List<ValidationError> errors = new ArrayList<>();
+        for (var result : ex.getParameterValidationResults()) {
+            if (result instanceof ParameterErrors parameterErrors) {
+                // 參數本身是個 bean（@Valid 的巢狀物件）：錯誤帶得出欄位名
+                parameterErrors.getFieldErrors()
+                        .forEach(error -> errors.add(new ValidationError(error.getField(), error.getDefaultMessage())));
+                parameterErrors.getGlobalErrors()
+                        .forEach(error -> errors.add(new ValidationError(null, error.getDefaultMessage())));
+            } else {
+                // 純量參數：約束直接掛在參數上，欄位名就是參數名
+                String field = result.getMethodParameter().getParameterName();
+                result.getResolvableErrors()
+                        .forEach(error -> errors.add(new ValidationError(field, error.getDefaultMessage())));
+            }
+        }
+        // 跨參數約束（如「兩個參數不得同時為空」）同樣沒有對應欄位
+        ex.getCrossParameterValidationResults()
+                .forEach(error -> errors.add(new ValidationError(null, error.getDefaultMessage())));
+
+        return validationFailed(errors, headers, request);
+    }
+
+    /**
+     * 驗證失敗的共用回應：兩條驗證路徑（request body / 方法參數）在此合流，格式因此不可能分岔。
+     *
+     * <p>{@code detail} 與 {@code errors} 都由同一個 list 產出：前者給人看（也是本專案跨 domain 呼叫時
+     * {@code RestClientErrorHandler} 唯一取用的欄位，因此不能只寫「有 3 個欄位錯誤」這種沒資訊量的話），
+     * 後者給程式看。
+     */
+    private ResponseEntity<Object> validationFailed(
+            List<ValidationError> errors, HttpHeaders headers, WebRequest request) {
+
         ErrorCode errorCode = ErrorCode.VALIDATION_FAILED;
+        String detail = errors.isEmpty()
+                ? errorCode.getTitle() + "。"
+                : errorCode.getTitle() + ": " + errors.stream()
+                        .map(ValidationError::describe)
+                        .collect(Collectors.joining("; "));
 
-        // 這個 override 的回傳型別是父類別規定的 ResponseEntity<Object>，無法直接借用 respond()，
+        // 這兩個 override 的回傳型別是父類別規定的 ResponseEntity<Object>，無法直接借用 respond()，
         // 但回應本體一律由 problem() 組裝 —— 格式與其他 handler 保證一致。
         if (request instanceof ServletWebRequest servletWebRequest) {
             logExpected(errorCode, detail, servletWebRequest.getRequest());
         }
 
-        return new ResponseEntity<>(problem(errorCode, detail), headers, errorCode.getStatus());
+        ProblemDetail problem = problem(errorCode, detail);
+        problem.setProperty(ERRORS_PROPERTY, errors);
+        return new ResponseEntity<>(problem, headers, errorCode.getStatus());
     }
 
     /**

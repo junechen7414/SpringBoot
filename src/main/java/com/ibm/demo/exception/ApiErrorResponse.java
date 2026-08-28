@@ -1,5 +1,7 @@
 package com.ibm.demo.exception;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
@@ -23,6 +25,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *   <li>{@code instance} —— 出錯的請求路徑，由框架自動填入。</li>
  *   <li>{@code code} —— <b>機器可讀</b>的穩定識別碼，呼叫端唯一該用來分流的欄位：
  *       {@code status} 太粗（同一個 400 有五種原因），{@code detail} 是給人看的、隨時會改字。</li>
+ *   <li>{@code errors} —— 逐筆的欄位驗證失敗，<b>僅在 {@code code} 為 {@code VALIDATION_FAILED} 時出現</b>。
+ *       其餘錯誤沒有「哪個欄位」的概念，欄位缺席而非給空陣列。</li>
  * </ul>
  */
 @Schema(name = "ApiErrorResponse", description = "錯誤回應（RFC 9457 application/problem+json）")
@@ -41,5 +45,8 @@ public record ApiErrorResponse(
         @Schema(description = "出錯的請求路徑", example = "/product/5/stock") String instance,
 
         @Schema(description = "機器可讀的穩定錯誤碼，呼叫端應以此分流",
-                example = "PRODUCT_STOCK_NOT_ENOUGH") String code) {
+                example = "PRODUCT_STOCK_NOT_ENOUGH") String code,
+
+        @Schema(description = "逐筆的參數驗證失敗；僅 code = VALIDATION_FAILED 時出現，"
+                + "其餘錯誤此欄位缺席") List<ValidationError> errors) {
 }

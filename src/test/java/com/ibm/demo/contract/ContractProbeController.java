@@ -113,13 +113,26 @@ public class ContractProbeController {
         return new ProbeResponse(String.valueOf(amount));
     }
 
+    /**
+     * 約束直接掛在 {@code @RequestParam} 上 → {@code HandlerMethodValidationException}
+     * （Spring 6.1 起內建的 controller method validation，不需要 {@code @Validated}）。
+     *
+     * <p>與 {@code /validate} 成對存在：同一件事（參數不合法）走的是完全不同的例外型別，
+     * 契約測試要確認兩者回出同一種形狀。
+     */
+    @GetMapping("/param-validate")
+    public ProbeResponse paramValidate(
+            @RequestParam("page") @Positive(message = "must be positive") Integer page) {
+        return new ProbeResponse(String.valueOf(page));
+    }
+
     public record ProbeResponse(String value) {
     }
 
     /**
      * 同時帶得動 field error 與 global（class-level）error 的請求體 —— 後者是刻意的：
-     * 現行 handler 只讀 {@code getFieldErrors()}，global error 會被靜默丟棄，
-     * 這個型別讓那個缺口變成可斷言的事實。
+     * global error 沒有對應欄位，是最容易在組裝回應時被漏掉的一種（本專案就漏過），
+     * 這個型別讓「有沒有被漏掉」變成可斷言的事實。
      */
     @ProbeConsistent
     public record ProbeRequest(

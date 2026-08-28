@@ -1,7 +1,9 @@
 package com.ibm.demo.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -16,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -25,8 +28,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 import com.ibm.demo.exception.ApiErrorResponse;
+import com.ibm.demo.exception.ValidationError;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -42,16 +47,20 @@ import tools.jackson.databind.json.JsonMapper;
  * 的重構都必須先讓這裡變紅，而紅的範圍就是那次契約變更的實際範圍。
  *
  * <p>契約本體是 RFC 9457（{@code application/problem+json}）：{@code type} / {@code title} /
- * {@code status} / {@code detail} / {@code instance} 五個標準欄位，加上唯一的 extension
- * {@code code}。「應用層攔到的」與「框架攔到的」兩條路徑必須產出同一組欄位 —— 呼叫端無法預測
- * 例外是誰攔到的，格式就不能因此分岔。
+ * {@code status} / {@code detail} / {@code instance} 五個標準欄位，加上兩個 extension —— 一律出現的
+ * {@code code}，以及只在驗證失敗時出現的 {@code errors}。「應用層攔到的」與「框架攔到的」兩條路徑
+ * 必須產出同一組欄位 —— 呼叫端無法預測例外是誰攔到的，格式就不能因此分岔。
  */
 @WebMvcTest
 @DisplayName("錯誤回應 wire format 契約")
 class ApiErrorContractTest {
 
-    /** RFC 9457 標準欄位 + 唯一的 extension；順序無意義，只比對集合。 */
+    /** RFC 9457 標準欄位 + 每個錯誤都有的 extension；順序無意義，只比對集合。 */
     private static final List<String> PROBLEM_FIELDS = List.of("type", "title", "status", "detail", "instance", "code");
+
+    /** 驗證失敗多一個 {@code errors} —— 這是線路上會出現的欄位「上界」。 */
+    private static final List<String> VALIDATION_FIELDS = Stream.concat(PROBLEM_FIELDS.stream(), Stream.of("errors"))
+            .toList();
 
     @Autowired
     private MockMvc mockMvc;
@@ -75,19 +84,51 @@ class ApiErrorContractTest {
     void documentedSchemaMatchesWireFormat() throws Exception {
         // ApiErrorResponse 是給 springdoc 看的「影子」型別，不參與序列化 —— 因此它會不會說謊，
         // 只能靠這裡比對。漂移在這裡變紅，而不是等下游 codegen 少了一個欄位才發現。
-        String body = mockMvc.perform(get("/contract-probe/business/{code}", "PRODUCT_STOCK_NOT_ENOUGH"))
+        List<String> businessFields = wireFields(mockMvc.perform(
+                get("/contract-probe/business/{code}", "PRODUCT_STOCK_NOT_ENOUGH"))
+                .andExpect(status().isBadRequest()));
+        List<String> validationFields = wireFields(mockMvc.perform(post("/contract-probe/validate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountId\": null, \"quantity\": -1, \"min\": 10, \"max\": 1}"))
+                .andExpect(status().isBadRequest()));
+
+        List<String> documentedFields = Arrays.stream(ApiErrorResponse.class.getRecordComponents())
+                .map(RecordComponent::getName)
+                .toList();
+
+        // 一般錯誤沒有 errors —— 是欄位缺席，不是空陣列（空陣列會讓呼叫端誤以為「有驗證錯誤但沒細節」）
+        assertThat(businessFields).containsExactlyInAnyOrderElementsOf(PROBLEM_FIELDS);
+        assertThat(validationFields).containsExactlyInAnyOrderElementsOf(VALIDATION_FIELDS);
+        // 文件宣告的欄位集合必須恰好等於線路上可能出現的欄位聯集：多宣告是說謊，少宣告是漏文件
+        assertThat(documentedFields).containsExactlyInAnyOrderElementsOf(validationFields);
+    }
+
+    @Test
+    @WithMockUser
+    @DisplayName("errors 元素的欄位也必須與 ValidationError 宣告一致")
+    void documentedValidationErrorMatchesWireFormat() throws Exception {
+        String body = mockMvc.perform(post("/contract-probe/validate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountId\": null, \"quantity\": 1, \"min\": 1, \"max\": 2}"))
                 .andExpect(status().isBadRequest())
                 .andReturn()
                 .getResponse()
                 .getContentAsString(StandardCharsets.UTF_8);
 
-        List<String> wireFields = JsonMapper.builder().build().readTree(body).propertyNames().stream().toList();
-        List<String> documentedFields = Arrays.stream(ApiErrorResponse.class.getRecordComponents())
+        List<String> wireFields = JsonMapper.builder().build().readTree(body).path("errors").get(0)
+                .propertyNames().stream().toList();
+        List<String> documentedFields = Arrays.stream(ValidationError.class.getRecordComponents())
                 .map(RecordComponent::getName)
                 .toList();
 
-        assertThat(documentedFields).containsExactlyInAnyOrderElementsOf(PROBLEM_FIELDS);
+        assertThat(documentedFields).containsExactlyInAnyOrderElementsOf(List.of("field", "message"));
         assertThat(wireFields).containsExactlyInAnyOrderElementsOf(documentedFields);
+    }
+
+    /** 取回應 body 的頂層 JSON key —— 契約比對的是欄位「有哪些」，不是值。 */
+    private List<String> wireFields(ResultActions result) throws Exception {
+        String body = result.andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        return JsonMapper.builder().build().readTree(body).propertyNames().stream().toList();
     }
 
     @Nested
@@ -198,7 +239,7 @@ class ApiErrorContractTest {
         }
 
         @Test
-        @DisplayName("欄位驗證失敗：欄位錯誤壓成單一 detail 字串，global error 被丟棄")
+        @DisplayName("@Valid @RequestBody 驗證失敗：errors 逐筆列出欄位，global error 也在其中")
         void validationFailure() throws Exception {
             mockMvc.perform(post("/contract-probe/validate")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -208,13 +249,37 @@ class ApiErrorContractTest {
                     .andExpect(jsonPath("$.status").value(400))
                     .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                     .andExpect(jsonPath("$.title").value("參數驗證失敗"))
-                    // 目前沒有逐欄位的結構化陣列，呼叫端只能拿到一個人類可讀字串
-                    .andExpect(jsonPath("$.errors").doesNotExist())
+                    // 結構化陣列讓呼叫端能把訊息掛回對應的輸入欄位，不必剖 detail 字串
+                    .andExpect(jsonPath("$.errors.length()").value(3))
+                    .andExpect(jsonPath("$.errors[?(@.field == 'accountId')].message")
+                            .value(contains("must not be null")))
+                    .andExpect(jsonPath("$.errors[?(@.field == 'quantity')].message")
+                            .value(contains("must be positive")))
+                    // class-level 約束不屬於任何欄位 —— field 缺席（而非 null 或空字串）
+                    .andExpect(jsonPath("$.errors[?(@.message == 'min must not exceed max')].field")
+                            .value(empty()))
+                    // detail 與 errors 同源：三筆都在，跨 domain 呼叫只取 detail 時也不會漏資訊
                     .andExpect(jsonPath("$.detail").value(startsWith("參數驗證失敗: ")))
-                    .andExpect(jsonPath("$.detail").value(containsString("[accountId: must not be null]")))
-                    .andExpect(jsonPath("$.detail").value(containsString("[quantity: must be positive]")))
-                    // class-level（global）約束的訊息目前被靜默丟棄
-                    .andExpect(jsonPath("$.detail").value(not(containsString("min must not exceed max"))));
+                    .andExpect(jsonPath("$.detail").value(containsString("accountId must not be null")))
+                    .andExpect(jsonPath("$.detail").value(containsString("quantity must be positive")))
+                    .andExpect(jsonPath("$.detail").value(containsString("min must not exceed max")));
+        }
+
+        @Test
+        @DisplayName("@RequestParam 上的約束失敗：走另一個例外型別，但回出同一種形狀")
+        void parameterValidationFailure() throws Exception {
+            mockMvc.perform(get("/contract-probe/param-validate").param("page", "-1"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.status").value(400))
+                    // 與 @Valid @RequestBody 完全相同的 code/title —— 呼叫端不必知道 Spring 用哪個機制檢查
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.title").value("參數驗證失敗"))
+                    .andExpect(jsonPath("$.type").value("urn:problem:validation-failed"))
+                    .andExpect(jsonPath("$.errors.length()").value(1))
+                    .andExpect(jsonPath("$.errors[0].field").value("page"))
+                    .andExpect(jsonPath("$.errors[0].message").value("must be positive"))
+                    .andExpect(jsonPath("$.detail").value("參數驗證失敗: page must be positive"));
         }
     }
 

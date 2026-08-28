@@ -16,6 +16,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.context.request.ServletWebRequest;
 
@@ -26,6 +27,7 @@ import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.exception.SystemException;
+import com.ibm.demo.exception.ValidationError;
 
 /**
  * {@code GlobalExceptionHandler} 的單元測試：直接呼叫 handler、斷言 {@link ProblemDetail} 的欄位。
@@ -182,8 +184,33 @@ public class GlobalExceptionHandlerTest {
         assertThat(body.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(codeOf(body)).isEqualTo("VALIDATION_FAILED");
         assertThat(body.getTitle()).isEqualTo("參數驗證失敗");
-        assertThat(body.getDetail())
-                .isEqualTo("參數驗證失敗: [accountId: must not be null]; [items: must not be empty]");
+        assertThat(body.getDetail()).isEqualTo("參數驗證失敗: accountId must not be null; items must not be empty");
+        // 結構化陣列與 detail 同源，兩者不可能各說各話
+        assertThat(errorsOf(body)).containsExactly(
+                new ValidationError("accountId", "must not be null"),
+                new ValidationError("items", "must not be empty"));
+    }
+
+    @Test
+    @DisplayName("global（跨欄位）約束的錯誤不得被丟棄，且 field 為 null 以示「不屬於任何欄位」")
+    void handleMethodArgumentNotValid_ShouldKeepGlobalErrors() throws Exception {
+        MethodParameter parameter = new MethodParameter(
+                GlobalExceptionHandlerTest.class.getDeclaredMethod("methodParameterSource", String.class), 0);
+        BeanPropertyBindingResult bindingResult = new BeanPropertyBindingResult(new Object(), "createOrderRequest");
+        bindingResult.addError(new FieldError("createOrderRequest", "accountId", "must not be null"));
+        bindingResult.addError(new ObjectError("createOrderRequest", "min must not exceed max"));
+        MethodArgumentNotValidException ex = new MethodArgumentNotValidException(parameter, bindingResult);
+
+        ResponseEntity<Object> responseEntity = globalExceptionHandler.handleMethodArgumentNotValid(
+                ex, new HttpHeaders(), HttpStatus.BAD_REQUEST, new ServletWebRequest(request));
+
+        ProblemDetail body = (ProblemDetail) responseEntity.getBody();
+        assertThat(body).isNotNull();
+        assertThat(errorsOf(body)).containsExactly(
+                new ValidationError("accountId", "must not be null"),
+                new ValidationError(null, "min must not exceed max"));
+        // 沒有欄位名可寫時，detail 只放訊息本身
+        assertThat(body.getDetail()).isEqualTo("參數驗證失敗: accountId must not be null; min must not exceed max");
     }
 
     @Test
@@ -234,6 +261,13 @@ public class GlobalExceptionHandlerTest {
 
         assertThatExceptionOfType(UnsupportedOperationException.class)
                 .isThrownBy(() -> ex.getContext().put("injected", "value"));
+    }
+
+    /** {@code errors} 與 {@code code} 同樣是 extension；型別由 handler 保證，測試裡直接轉。 */
+    @SuppressWarnings("unchecked")
+    private static java.util.List<ValidationError> errorsOf(ProblemDetail problem) {
+        assertThat(problem.getProperties()).isNotNull();
+        return (java.util.List<ValidationError>) problem.getProperties().get(GlobalExceptionHandler.ERRORS_PROPERTY);
     }
 
     /** {@code code} 是 {@link ProblemDetail} 的 extension，存在 properties map 裡而非具名欄位。 */
