@@ -6,6 +6,7 @@ import java.util.Set;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +24,8 @@ import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.GetProductListResponse;
 import com.ibm.demo.product.DTO.UpdateProductRequest;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
-import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.product.DTO.internal.StockChangeRequest;
+import com.ibm.demo.util.CreatedResponse;
 import com.ibm.demo.util.PageResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,13 +48,14 @@ public class ProductController {
     // Create Product
     @Operation(summary = "新增商品", description = "建立新商品。若已存在同名商品則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。成功則新增商品資料，預設銷售狀態為 1001 (AVAILABLE)。")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "建立成功，回傳商品 ID"),
-            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "201", description = "建立成功，回傳商品 ID 與 Location 標頭"),
+            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PostMapping
-    public ResponseEntity<Integer> createProduct(@Valid @RequestBody CreateProductRequest createProductRequest) {
+    public ResponseEntity<CreatedResponse> createProduct(
+            @Valid @RequestBody CreateProductRequest createProductRequest) {
         Integer productId = productService.createProduct(createProductRequest);
-        return ResponseEntity.ok(productId);
+        return CreatedResponse.at(productId);
     }
 
     // Read Product List (Paginated)
@@ -78,7 +81,7 @@ public class ProductController {
     @Operation(summary = "獲取單一商品詳細資訊", description = "根據 ID 獲取商品詳細資訊。受限於 SQLRestriction 規則，若商品不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將回傳 NotFound。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "成功取得商品詳細資訊"),
-            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @GetMapping("/{id}")
     public ResponseEntity<GetProductDetailResponse> getProductDetail(
@@ -90,50 +93,67 @@ public class ProductController {
     // Update Product
     @Operation(summary = "更新商品", description = "更新現有商品資訊。受限於 SQLRestriction 規則，若商品 ID 不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將拋出 NotFound。若嘗試更改為已存在的商品名稱，則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "更新成功"),
-            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "204", description = "更新成功"),
+            @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PutMapping("/{id}")
     public ResponseEntity<Void> updateProduct(
             @Parameter(description = "商品 ID", example = "1", required = true) @PathVariable Integer id,
             @Valid @RequestBody UpdateProductRequest updateProductRequest) {
         productService.updateProduct(id, updateProductRequest);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 
     // Delete Product
     @Operation(summary = "刪除商品", description = "執行商品軟刪除。受限於 SQLRestriction 規則，若商品 ID 不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將拋出 NotFound。")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "刪除成功"),
-            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "204", description = "刪除成功"),
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProduct(
             @Parameter(description = "商品 ID", example = "1", required = true) @PathVariable Integer id) {
         productService.deleteProduct(id);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 
+    // 以下三個庫存端點僅供 order domain 經 ProductClient 呼叫。它們回 204：庫存變動成功時沒有
+    // 任何呼叫端需要的內容，硬回一個 body 只是製造未來的相容性包袱。
     @Operation(summary = "預留商品庫存", description = "內部使用：建立訂單時預留(reserve)商品庫存。")
-    @ApiResponse(responseCode = "200", description = "預留成功")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "預留成功"),
+            @ApiResponse(responseCode = "400", description = "參數驗證失敗或庫存不足", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
     @PostMapping("/reserve")
-    public void reserveStock(@RequestBody Set<OrderItemRequest> items) {
-        productService.reserveStock(items);
+    public ResponseEntity<Void> reserveStock(@Valid @RequestBody StockChangeRequest request) {
+        productService.reserveStock(request.items());
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "釋放商品庫存", description = "內部使用：刪除訂單時釋放(release)商品庫存。")
-    @ApiResponse(responseCode = "200", description = "釋放成功")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "釋放成功"),
+            @ApiResponse(responseCode = "400", description = "參數驗證失敗", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
     @PostMapping("/release")
-    public void releaseStock(@RequestBody Set<OrderItemRequest> items) {
-        productService.releaseStock(items);
+    public ResponseEntity<Void> releaseStock(@Valid @RequestBody StockChangeRequest request) {
+        productService.releaseStock(request.items());
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "調整商品庫存", description = "內部使用：更新訂單時依新舊項目差值調整(adjust)商品庫存的預留量。")
-    @ApiResponse(responseCode = "200", description = "調整成功")
-    @PostMapping("/adjustStock")
-    public void adjustStock(@RequestBody AdjustStockRequest request) {
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "調整成功"),
+            @ApiResponse(responseCode = "400", description = "參數驗證失敗或庫存不足", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    @PostMapping("/adjust-stock")
+    public ResponseEntity<Void> adjustStock(@Valid @RequestBody AdjustStockRequest request) {
         productService.adjustStock(request);
+        return ResponseEntity.noContent().build();
     }
 
 }

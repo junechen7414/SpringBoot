@@ -15,7 +15,8 @@ Repository (資料存取)                      └─▶ 自呼叫繞回本應�
 Entity (資料模型)
 
 Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, ServiceValidator 等)
-Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode, ApiErrorResponse)
+Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode, ValidationError;
+           ApiErrorResponse 僅為 OpenAPI schema 宣告,執行期實際寫出的是 Spring ProblemDetail)
 ```
 
 > **關於「Client」一詞的兩種意義**（避免混淆）：
@@ -28,7 +29,12 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 
 - 僅負責請求映射與參數驗證 (`@Valid`)
 - 不包含業務邏輯
-- 使用 `ResponseEntity<T>` 明確控制 HTTP 回應
+- 使用 `ResponseEntity<T>` 明確控制 HTTP 回應，且**走 HTTP 原生語意、不加成功信封**（沒有 `{"success": ..., "data": ...}` 這種外層）：
+  - **建立資源** → `201 Created` + `Location` 標頭 + body `{"id": n}`，一律用 `util/CreatedResponse.at(id)` 組（`Location` 由目前請求 URI 推導，且不含 query string）
+  - **成功但沒有內容可回**（更新／刪除／內部庫存變動／資格驗證）→ `204 No Content`，body 必須真的是空的
+  - **成功且有內容** → `200 OK` + 具名 DTO 或 `PageResponse<T>`；**不回裸純量** —— 線路上的 `true` 或 `5` 沒有說自己是「什麼」，呼叫端只能靠文件外的默契解讀，且日後補第二個欄位就是破壞性變更（範例見 `order/DTO/internal/OrderExistenceResponse`）
+  - 這三條由 `src/test/java/com/ibm/demo/contract/ApiSuccessContractTest.java` 釘住 —— 改回裸純量仍然編譯得過、單元測試也全綠，只有它會紅
+- 錯誤側完全交給 `GlobalExceptionHandler`：controller 不寫 `try-catch`、不手組 error body。對外格式是 RFC 9457 `application/problem+json`（見 `docs/handout/03-exception-handling.md`）
 
 ### Service 層
 
@@ -37,7 +43,7 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 - 查詢方法標註 `@Transactional(readOnly = true)` 提升效能
 - 業務失敗拋出 `BusinessException` 並帶入對應的 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`）
 - 系統／整合失敗（下游壞了、非業務原因）拋出 `SystemException`，排查用資訊以 `.with(key, value)` 掛在 context 上，**不要**串進 message —— 500 的 message 不回給呼叫端
-- **不要在 Service 記錄例外**：log 一律由 `GlobalExceptionHandler` 依例外型別統一記錄（BusinessException → WARN 一行、SystemException → ERROR 帶 stack trace）
+- **不要在 Service 記錄例外**：log 一律由 `GlobalExceptionHandler` 統一記錄，**等級由最終 HTTP status 決定**而非例外型別（500 → ERROR 帶 stack trace，其餘 → WARN 一行）
 
 ### Repository 層
 

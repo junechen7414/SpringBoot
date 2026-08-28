@@ -172,14 +172,14 @@ JwtAuthenticationConverter jwtAuthenticationConverter() {
 
 | 端點 | 呼叫者 |
 |---|---|
-| `POST /product/reserve`、`/release`、`/adjustStock` | `ProductClient` |
+| `POST /product/reserve`、`/release`、`/adjust-stock` | `ProductClient` |
 | `GET /product/batch` | `ProductClient` |
 | `GET /account/{id}/order-eligibility` | `AccountClient` |
-| `GET /order/account/{accountId}/exists` | `OrderClient` |
+| `GET /order/account/{accountId}/existence` | `OrderClient` |
 
 > ✅ **已查核下游，上表可安全啟用**（2026-08-05 對 `junechen7414/Playwright-TS`）。下游唯一的呼叫面是
 > `services/apis/springboot-api-client.ts`，只用 `/account`、`/product`、`/order`（含 `/{id}`、
-> `/order/account/{accountId}`）的 CRUD 與列表；`reserve`、`release`、`adjustStock`、`batch`、
+> `/order/account/{accountId}`）的 CRUD 與列表；`reserve`、`release`、`adjust-stock`、`batch`、
 > `order-eligibility`、`exists` 這些字串在該 repo **只出現在產出的 `docs/swagger.json`**，沒有任何測試引用。
 > 這仍是行為變更而非重構 —— 下次調整這批端點前要重新查核，下游隨時可能新增測試。
 

@@ -27,16 +27,34 @@
 
 ### 如何處理樂觀鎖衝突？
 
+本專案的 `GlobalExceptionHandler` 已內建。衝突屬**預期**行為（有人先改了），對應 409 —— 記錄等級由最終 status 決定，所以自動只記一行 WARN、不印 stack trace：
+
 ```java
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<ApiErrorResponse> handleOptimisticLock(Exception e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-            .body(new ApiErrorResponse("資料已被其他使用者修改，請重新整理後再試"));
-    }
+@ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+public @Nullable ResponseEntity<Object> handleOptimisticLockingFailure(
+        ObjectOptimisticLockingFailureException ex, WebRequest request) {
+    // status / code / title / type 全由 ErrorCode 決定，不在此硬編碼
+    return respond(ex, ErrorCode.OPTIMISTIC_LOCK_CONFLICT, "資料已被其他使用者修改，請重新整理後再試。", request);
 }
 ```
+
+（簽章跟著父類別 `ResponseEntityExceptionHandler` 走：收 `WebRequest`、回 `ResponseEntity<Object>`，
+才能與框架內建的那批 handler 共用 `handleExceptionInternal` 這個收尾點。）
+
+呼叫端收到的是 RFC 9457 `application/problem+json`：
+
+```json
+{
+  "type": "urn:problem:optimistic-lock-conflict",
+  "title": "資料版本衝突",
+  "status": 409,
+  "detail": "資料已被其他使用者修改，請重新整理後再試。",
+  "instance": "/order/1",
+  "code": "OPTIMISTIC_LOCK_CONFLICT"
+}
+```
+
+呼叫端請以 `code` 分流（不要剖 `detail` —— 那是給人看的、隨時會改字），並在 UI 上引導重新載入後再送出。
 
 ### 參考資源
 

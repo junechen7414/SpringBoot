@@ -11,7 +11,7 @@ import org.springframework.web.service.annotation.PostExchange;
 
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
-import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.product.DTO.internal.StockChangeRequest;
 
 @HttpExchange("/product")
 public interface ProductClient {
@@ -27,17 +27,17 @@ public interface ProductClient {
      * 預留庫存（建立訂單）
      */
     @PostExchange("/reserve")
-    void reserveStock(@RequestBody Set<OrderItemRequest> items);
+    void reserveStock(@RequestBody StockChangeRequest request);
 
     /**
      * 釋放庫存（刪除訂單）
      */
     @PostExchange("/release")
-    void releaseStock(@RequestBody Set<OrderItemRequest> items);
+    void releaseStock(@RequestBody StockChangeRequest request);
 
     /**
      * 調整庫存（更新訂單，依新舊差值處理）
      */
-    @PostExchange("/adjustStock")
+    @PostExchange("/adjust-stock")
     void adjustStock(@RequestBody AdjustStockRequest request);
 }

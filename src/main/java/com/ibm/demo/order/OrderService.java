@@ -24,6 +24,7 @@ import com.ibm.demo.product.ProductClient;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.product.DTO.internal.StockChangeRequest;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.util.ServiceValidator;
@@ -72,7 +73,7 @@ public class OrderService {
                                 detail -> detail.productId(),
                                 detail -> detail.quantity());
 
-                productClient.reserveStock(uniqueItems);
+                productClient.reserveStock(new StockChangeRequest(uniqueItems));
 
                 // 將資料庫操作委派給交易服務，若失敗則補償歸還庫存
                 try {
@@ -80,7 +81,7 @@ public class OrderService {
                 } catch (Exception e) {
                         // 補償: 釋放已預留的庫存
                         try {
-                                productClient.releaseStock(uniqueItems);
+                                productClient.releaseStock(new StockChangeRequest(uniqueItems));
                         } catch (Exception compensationEx) {
                                 log.error("建立訂單失敗後，補償歸還庫存也失敗，需人工介入處理。" +
                                                 "帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",
@@ -169,14 +170,14 @@ public class OrderService {
         }
 
         /**
-         * @param updateOrderRequest
-         * @return UpdateOrderResponse
+         * @param orderId 要更新的訂單 ID（由 URI 指定，不在 request body 內）
+         * @param request 更新內容
          */
         @Bulkhead(name = "order-write")
         @RateLimiter(name = "order-write")
-        public void updateOrder(UpdateOrderRequest request) {
+        public void updateOrder(Integer orderId, UpdateOrderRequest request) {
+                ServiceValidator.validateNotNull(orderId, "Order ID");
                 ServiceValidator.validateNotNull(request, "Update order request");
-                ServiceValidator.validateNotNull(request.orderId(), "Update order id");
                 ServiceValidator.validateNotNull(request.orderStatus(), "Update order status");
                 ServiceValidator.validateNotEmpty(request.items(), "Update order items");
                 // 1. 先驗證請求本身（同一商品只能一筆），失敗即擋下，不必查 DB 或動庫存
@@ -186,7 +187,7 @@ public class OrderService {
                                 detail -> detail.quantity());
 
                 // 2. 交易內載入現有訂單快照（取得原明細與帳戶，避免交易外碰 lazy）
-                OrderView view = orderTransactionalService.loadOrderView(request.orderId());
+                OrderView view = orderTransactionalService.loadOrderView(orderId);
                 Set<OrderItemRequest> originalItems = Set.copyOf(view.items());
 
                 productClient.adjustStock(AdjustStockRequest.builder()
@@ -196,7 +197,7 @@ public class OrderService {
 
                 // 將資料庫操作委派給交易服務（交易內自行載入 managed 實體），失敗則補償反轉庫存操作
                 try {
-                        orderTransactionalService.updateOrder(request);
+                        orderTransactionalService.updateOrder(orderId, request);
                 } catch (Exception e) {
                         // 補償: 將庫存調整回原狀 (from 與 to 互換)
                         try {
@@ -207,7 +208,7 @@ public class OrderService {
                         } catch (Exception compensationEx) {
                                 log.error("更新訂單失敗後，補償反轉庫存也失敗，需人工介入處理。" +
                                                 "訂單ID: {}, 帳戶ID: {}, 原商品清單: {}, 新商品清單: {}, 原始異常: {}, 補償異常: {}",
-                                                request.orderId(),
+                                                orderId,
                                                 view.accountId(),
                                                 originalItems.stream()
                                                                 .map(item -> String.format("商品%d(數量%d)",
@@ -237,7 +238,7 @@ public class OrderService {
                 OrderDeletionPlan plan = orderTransactionalService.prepareOrderDeletion(orderId);
 
                 // 2. 先歸還庫存（外部服務調用放在前面且在交易外，失敗時訂單不受影響）
-                productClient.releaseStock(plan.items());
+                productClient.releaseStock(new StockChangeRequest(plan.items()));
 
                 // 3. 再刪除訂單，若失敗則補償重新扣回庫存
                 try {
@@ -245,7 +246,7 @@ public class OrderService {
                 } catch (Exception e) {
                         // 補償: 重新預留已歸還的庫存
                         try {
-                                productClient.reserveStock(plan.items());
+                                productClient.reserveStock(new StockChangeRequest(plan.items()));
                         } catch (Exception compensationEx) {
                                 log.error("刪除訂單失敗後，補償重新扣回庫存也失敗，需人工介入處理。" +
                                                 "訂單ID: {}, 帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",

@@ -36,6 +36,7 @@ import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
+import com.ibm.demo.product.DTO.internal.StockChangeRequest;
 import com.ibm.demo.product.ProductClient;
 
 @Tag("UnitTest")
@@ -238,7 +239,6 @@ class OrderServiceTest {
                 void updateOrder_Success() {
                         // Arrange
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        EXISTING_ORDER_ID,
                                         STATUS_CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
@@ -246,10 +246,10 @@ class OrderServiceTest {
                                         new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED, List.of()));
 
                         // Act
-                        orderService.updateOrder(request);
+                        orderService.updateOrder(EXISTING_ORDER_ID, request);
 
-                        // Assert：交易層以 request 更新（交易內自行載入 managed 實體），庫存由商品服務同步
-                        verify(orderTransactionalService).updateOrder(request);
+                        // Assert：交易層以 orderId + request 更新（交易內自行載入 managed 實體），庫存由商品服務同步
+                        verify(orderTransactionalService).updateOrder(EXISTING_ORDER_ID, request);
                         verify(productClient).adjustStock(any(AdjustStockRequest.class));
                 }
 
@@ -258,7 +258,6 @@ class OrderServiceTest {
                 void updateOrder_WhenTransactionFails_ShouldCompensateAndThrow() {
                         // Arrange
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        EXISTING_ORDER_ID,
                                         STATUS_CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
@@ -267,10 +266,10 @@ class OrderServiceTest {
 
                         // 模擬交易服務拋出異常
                         doThrow(new RuntimeException("DB update failed"))
-                                        .when(orderTransactionalService).updateOrder(any());
+                                        .when(orderTransactionalService).updateOrder(any(), any());
 
                         // Act & Assert
-                        assertThatThrownBy(() -> orderService.updateOrder(request))
+                        assertThatThrownBy(() -> orderService.updateOrder(EXISTING_ORDER_ID, request))
                                         .isInstanceOf(RuntimeException.class)
                                         .hasMessageContaining("DB update failed");
 
@@ -293,7 +292,6 @@ class OrderServiceTest {
                 void updateOrder_WhenOrderNotFound_ShouldThrowException(String scenario, Integer nonExistentId) {
                         // Arrange：NotFound 由 loadOrderView（交易內載入）拋出
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        nonExistentId,
                                         STATUS_CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)));
 
@@ -301,7 +299,7 @@ class OrderServiceTest {
                                         .thenThrow(new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Order not found with ID: " + nonExistentId));
 
                         // Act & Assert
-                        assertThatThrownBy(() -> orderService.updateOrder(request))
+                        assertThatThrownBy(() -> orderService.updateOrder(nonExistentId, request))
                                         .isInstanceOf(BusinessException.class)
                                         .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                                         .hasMessageContaining("Order not found")
@@ -309,14 +307,14 @@ class OrderServiceTest {
 
                         // 載入失敗 → 不動庫存、不執行更新
                         verifyNoInteractions(productClient);
-                        verify(orderTransactionalService, never()).updateOrder(any());
+                        verify(orderTransactionalService, never()).updateOrder(any(), any());
                 }
 
                 @Test
                 @DisplayName("更新時若包含庫存不足的商品，應拋出 ProductStockNotEnoughException")
                 void updateOrder_WhenInsufficientStock_ShouldThrowException() {
                         // Arrange
-                        UpdateOrderRequest request = new UpdateOrderRequest(EXISTING_ORDER_ID, STATUS_CREATED,
+                        UpdateOrderRequest request = new UpdateOrderRequest(STATUS_CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
@@ -328,13 +326,13 @@ class OrderServiceTest {
                                         .adjustStock(any(AdjustStockRequest.class));
 
                         // Act & Assert
-                        assertThatThrownBy(() -> orderService.updateOrder(request))
+                        assertThatThrownBy(() -> orderService.updateOrder(EXISTING_ORDER_ID, request))
                                         .isInstanceOf(BusinessException.class)
                                         .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PRODUCT_STOCK_NOT_ENOUGH)
                                         .hasMessageContaining("庫存不足");
 
                         // 驗證流程在拋出異常後中斷，沒有執行交易服務的更新
-                        verify(orderTransactionalService, never()).updateOrder(any());
+                        verify(orderTransactionalService, never()).updateOrder(any(), any());
                 }
 
                 @Test
@@ -342,14 +340,13 @@ class OrderServiceTest {
                 void updateOrder_WhenDuplicateProduct_ShouldThrowException() {
                         // Arrange：同一 productId 兩筆、數量不同 —— 以 productId 判重應在查 DB 前攔下
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        EXISTING_ORDER_ID,
                                         STATUS_CREATED,
                                         List.of(
                                                         new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2),
                                                         new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         // Act & Assert
-                        assertThatThrownBy(() -> orderService.updateOrder(request))
+                        assertThatThrownBy(() -> orderService.updateOrder(EXISTING_ORDER_ID, request))
                                         .isInstanceOf(BusinessException.class)
                                         .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_REQUEST)
                                         .hasMessageContaining("同一訂單中同一商品只能有一筆明細");
@@ -377,7 +374,7 @@ class OrderServiceTest {
                         orderService.deleteOrder(EXISTING_ORDER_ID);
 
                         // Assert
-                        verify(productClient).releaseStock(plan.items());
+                        verify(productClient).releaseStock(new StockChangeRequest(plan.items()));
                         verify(orderTransactionalService).deleteOrder(EXISTING_ORDER_ID, version);
                 }
         }
@@ -446,8 +443,8 @@ class OrderServiceTest {
 
                         verify(orderTransactionalService).deleteOrder(EXISTING_ORDER_ID, version);
                         // Verify: 先釋放庫存，補償時再重新預留庫存
-                        verify(productClient).releaseStock(plan.items());
-                        verify(productClient).reserveStock(plan.items());
+                        verify(productClient).releaseStock(new StockChangeRequest(plan.items()));
+                        verify(productClient).reserveStock(new StockChangeRequest(plan.items()));
                 }
         }
 

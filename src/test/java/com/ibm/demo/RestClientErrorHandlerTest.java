@@ -28,6 +28,10 @@ import com.ibm.demo.exception.SystemException;
  * <p>重點在**遠端狀態如何翻譯成本地例外型別**：4xx 是遠端業務上拒絕了呼叫（BusinessException，
  * 呼叫端流程可處理），其餘代表整合鏈壞了（SystemException，需要有人去看）。翻錯型別的後果是
  * 記錄等級也跟著錯 —— 下游掛掉被記成 WARN，或業務拒絕洗出一堆 ERROR。
+ *
+ * <p>{@code JsonMapper.builder().build()} 是刻意的**裸** mapper（沒有 Spring Boot 註冊的
+ * {@code ProblemDetailJacksonMixin}）：真正的 {@code RestClient} 也可能拿到未註冊 mixin 的 mapper，
+ * 而讀 JSON tree 不依賴任何 mixin —— 用裸 mapper 測，才測得到這件事。
  */
 public class RestClientErrorHandlerTest {
 
@@ -41,23 +45,25 @@ public class RestClientErrorHandlerTest {
         return response;
     }
 
-    private String errorBody(int status, String code, String error, String message) {
+    /** 下游是自己，因此收到的一定是 {@code GlobalExceptionHandler} 產的 RFC 9457 problem+json。 */
+    private String problemBody(int status, String code, String title, String detail) {
         return """
                 {
-                  "timestamp": "2026-08-25 12:00:00",
+                  "type": "urn:problem:%s",
+                  "title": "%s",
                   "status": %d,
-                  "code": "%s",
-                  "error": "%s",
-                  "message": "%s"
+                  "detail": "%s",
+                  "instance": "/account/99",
+                  "code": "%s"
                 }
-                """.formatted(status, code, error, message);
+                """.formatted(code.toLowerCase().replace('_', '-'), title, status, detail, code);
     }
 
     @Test
-    @DisplayName("遠端回 404，應翻成 RESOURCE_NOT_FOUND 的 BusinessException 並沿用遠端訊息")
+    @DisplayName("遠端回 404，應翻成 RESOURCE_NOT_FOUND 的 BusinessException 並沿用遠端 detail")
     void handle_RemoteNotFound_ShouldThrowResourceNotFound() throws IOException {
         ClientHttpResponse response = responseWith(HttpStatus.NOT_FOUND,
-                errorBody(404, "SYS_001", "找不到資源", "Account not found with id: 99"), "Not Found");
+                problemBody(404, "RESOURCE_NOT_FOUND", "找不到資源", "Account not found with id: 99"), "Not Found");
 
         assertThatThrownBy(() -> errorHandler.handle(response))
                 .isInstanceOf(BusinessException.class)
@@ -70,7 +76,7 @@ public class RestClientErrorHandlerTest {
     @DisplayName("遠端回 400，應翻成 INVALID_REQUEST 的 BusinessException")
     void handle_RemoteBadRequest_ShouldThrowInvalidRequest() throws IOException {
         ClientHttpResponse response = responseWith(HttpStatus.BAD_REQUEST,
-                errorBody(400, "PRODUCT_003", "商品庫存不足", "商品 5 庫存不足"), "Bad Request");
+                problemBody(400, "PRODUCT_STOCK_NOT_ENOUGH", "商品庫存不足", "商品 5 庫存不足"), "Bad Request");
 
         assertThatThrownBy(() -> errorHandler.handle(response))
                 .isInstanceOf(BusinessException.class)
@@ -83,7 +89,7 @@ public class RestClientErrorHandlerTest {
     @DisplayName("遠端回 5xx，應拋 SystemException，遠端細節進 context 而非 message")
     void handle_RemoteServerError_ShouldThrowSystemExceptionWithContext() throws IOException {
         ClientHttpResponse response = responseWith(HttpStatus.BAD_GATEWAY,
-                errorBody(502, "INTERNAL_ERROR", "Internal Server Error", "系統發生未預期的錯誤，請稍後再試。"),
+                problemBody(502, "INTERNAL_ERROR", "伺服器內部錯誤", "系統發生未預期的錯誤，請稍後再試。"),
                 "Bad Gateway");
 
         SystemException thrown = catchThrowableOfType(SystemException.class, () -> errorHandler.handle(response));
@@ -106,5 +112,27 @@ public class RestClientErrorHandlerTest {
         assertThatThrownBy(() -> errorHandler.handle(response))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("Not Found");
+    }
+
+    @Test
+    @DisplayName("body 是合法 JSON 但沒有 detail 欄位時，同樣退回 statusText，不得炸在解析上")
+    void handle_JsonWithoutDetail_ShouldFallBackToStatusText() throws IOException {
+        // 例如經過反向代理改寫、或下游哪天換了錯誤格式
+        ClientHttpResponse response = responseWith(HttpStatus.NOT_FOUND,
+                "{\"message\": \"舊格式\", \"error\": \"Not Found\"}", "Not Found");
+
+        assertThatThrownBy(() -> errorHandler.handle(response))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Not Found");
+    }
+
+    @Test
+    @DisplayName("body 為空時退回 statusText")
+    void handle_EmptyBody_ShouldFallBackToStatusText() throws IOException {
+        ClientHttpResponse response = responseWith(HttpStatus.BAD_REQUEST, "", "Bad Request");
+
+        assertThatThrownBy(() -> errorHandler.handle(response))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Bad Request");
     }
 }
