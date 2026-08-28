@@ -182,11 +182,20 @@
 - **Boot 4 把 MVC test slice 拆成獨立模組**：`@WebMvcTest` 不再位於 `spring-boot-test-autoconfigure`，套件改為 `org.springframework.boot.webmvc.test.autoconfigure`，且 `spring-boot-starter-test` **不會**帶進來，須自行加 `spring-boot-starter-webmvc-test`。
 - **`@WithMockUser` 不可掛在最外層類別**：`@Nested` 會繼承外層的測試 SecurityContext，「未帶憑證應回 401」的案例會因此拿到 200。認證要逐一掛在需要的方法／nested class 上。另外 `spring-security-test` 單獨存在還不夠 —— 把測試 SecurityContext 接進 MockMvc filter chain 的那段自動設定在 `spring-boot-starter-security-test`，少了它 `@WithMockUser` 全部被當成未認證（一次 401 洗掉 16 個案例）。
 
-### Phase 1 —— 消滅格式 #3（Security）
+### Phase 1 —— 消滅格式 #3（Security）✅ 已完成
 
-- `SecurityConfig` 補 `exceptionHandling { authenticationEntryPoint / accessDeniedHandler }`，讓 401 / 403 也輸出 `problem+json`（401 需保留 `WWW-Authenticate` header）。
+- `SecurityConfig` 補 `exceptionHandling { authenticationEntryPoint / accessDeniedHandler }`，把 401 / 403 導回應用層的統一格式（401 需保留 `WWW-Authenticate` header）。
 - 同時補 `AuthorizationDeniedException` 的明確 handler，拆掉 §5.2 的 `@PreAuthorize` 定時炸彈——**在 `handleUnexpected` 之前**。
 - 注意 `openApiFilterChain`（`SecurityConfig.java:79-86`，`@Profile("openapi")` 全放行）不受影響。
+
+**已完成的實作與過程中確認的事實：**
+
+- **本 phase 收斂到「現行的 `ApiErrorResponse`」，不是直接跳到 `problem+json`。** 原計畫寫的是後者，但那會製造一個中間狀態：401/403 已是 problem+json、其餘 8 個應用層錯誤還是 `ApiErrorResponse`——格式數量沒減少，只是換了一組不一致的組合。改成先讓 Security 走同一個組裝漏斗，Phase 2 再讓漏斗整體翻成 `ProblemDetail`，就只需要改一個地方。
+- **委派機制**：Security filter chain 跑在 DispatcherServlet 之前，`@RestControllerAdvice` 永遠接不到 401/403。作法是 entry point / denied handler 注入 `@Qualifier("handlerExceptionResolver")` 的 `HandlerExceptionResolver`，以 `handler = null` 呼叫 `resolveException(...)`——advice 不綁定特定 handler method，可正常解析。解析回傳 `null` 時 `sendError(fallbackStatus)` 兜底：這不是裝飾用的，少了它「認證失敗」會變成 200。
+- **entry point 要掛兩處**：`httpBasic(basic -> basic.authenticationEntryPoint(...))` 管「帶了憑證但錯」，`exceptionHandling(...)` 管「完全沒帶憑證」。只設一邊，另一半會掉回 servlet 容器的錯誤頁（也就是格式 #3 沒被消滅）。
+- **`WWW-Authenticate` 必須自己補**：繞過 `BasicAuthenticationEntryPoint` 之後沒人會設它，漏掉就等於把 Basic 的認證挑戰從對外契約上拿掉。
+- **401 / 403 的 `message` 固定為常數**，不帶 `ex.getMessage()`：Spring Security 的訊息會區分「找不到使用者」與「密碼錯誤」，回給呼叫端等於送出帳號枚舉的線索。要排查看 log 就好。
+- **契約測試的紅區恰好等於本次變更範圍**：Phase 0 的 17 條斷言只有 `unauthenticated`（401 body 原本沒有 `code`）與 `accessDeniedBecomesInternalServerError`（403 原本被 catch-all 吃成 500）變紅，其餘 15 條全綠——證明 Security 的改動沒有溢出到其他錯誤路徑。改寫後為 18 條（新增一條「憑證錯誤時 message 仍不透明」）。
 
 ### Phase 2 —— 消滅格式 #1（`GlobalExceptionHandler`，**下游風險最高**）
 

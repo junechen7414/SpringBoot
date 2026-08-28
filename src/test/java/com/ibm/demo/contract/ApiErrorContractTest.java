@@ -11,6 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -243,27 +246,52 @@ class ApiErrorContractTest {
     }
 
     @Nested
-    @DisplayName("Security filter chain 產生的回應（不經 @RestControllerAdvice）")
+    @DisplayName("認證／授權失敗的回應（Security filter chain 委派回 GlobalExceptionHandler）")
     class SecurityHandled {
 
         @Test
-        @DisplayName("未帶憑證：401 且 body 不由應用層產生 —— 沒有 code 可供呼叫端分流")
+        @DisplayName("未帶憑證：401，body 與其他錯誤同格式，且仍保留 WWW-Authenticate 挑戰")
         void unauthenticated() throws Exception {
             mockMvc.perform(get("/contract-probe/ok"))
                     .andExpect(status().isUnauthorized())
-                    .andExpect(header().exists("WWW-Authenticate"))
-                    // Security 走 sendError()，MockMvc 不會轉派 /error，因此 body 是空的；
-                    // 真實執行時由 BasicErrorController 填成 {timestamp,status,error,path}（無 code）
-                    .andExpect(jsonPath("$.code").doesNotExist());
+                    // 委派給 MVC 的 handlerExceptionResolver 後，Basic 的挑戰 header 要自己補回來
+                    .andExpect(header().string("WWW-Authenticate", startsWith("Basic realm=")))
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.timestamp").value(matchesPattern(TIMESTAMP_PATTERN)))
+                    .andExpect(jsonPath("$.status").value(401))
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                    .andExpect(jsonPath("$.error").value("Unauthorized"))
+                    .andExpect(jsonPath("$.message").value("需要有效的認證憑證。"));
         }
 
         @Test
-        @DisplayName("AccessDeniedException 在 controller 內拋出時被 catch-all 吃成 500（已知缺陷）")
+        @DisplayName("未帶憑證：401 的 message 固定，不得洩漏 Spring Security 的帳號枚舉線索")
+        void unauthenticatedMessageIsOpaque() throws Exception {
+            mockMvc.perform(get("/contract-probe/ok").header("Authorization", "Basic " + basicCredentials()))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.message").value("需要有效的認證憑證。"))
+                    // 「找不到使用者」與「密碼錯誤」在對外回應上必須無法區分
+                    .andExpect(content().string(not(containsString("Bad credentials"))))
+                    .andExpect(content().string(not(containsString("no-such-user"))));
+        }
+
+        @Test
+        @DisplayName("AccessDeniedException：403 而非 500 —— 方法級授權導入後不會表現成伺服器故障")
         @WithMockUser
-        void accessDeniedBecomesInternalServerError() throws Exception {
+        void accessDeniedBecomesForbidden() throws Exception {
             mockMvc.perform(get("/contract-probe/access-denied"))
-                    .andExpect(status().isInternalServerError())
-                    .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
+                    .andExpect(status().isForbidden())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.status").value(403))
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                    .andExpect(jsonPath("$.error").value("Forbidden"))
+                    .andExpect(jsonPath("$.message").value("沒有權限執行此操作。"))
+                    .andExpect(content().string(not(containsString("探針拒絕存取"))));
+        }
+
+        private String basicCredentials() {
+            return Base64.getEncoder()
+                    .encodeToString("no-such-user:wrong-password".getBytes(StandardCharsets.UTF_8));
         }
     }
 }

@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -97,14 +99,40 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
+     * 認證失敗（401）。由 {@code SecurityConfig} 的 authenticationEntryPoint 委派過來 —— filter chain
+     * 在 DispatcherServlet 之前，@RestControllerAdvice 本身接不到它。
+     *
+     * <p>訊息固定、不帶 {@code ex.getMessage()}：Spring Security 的訊息會區分「找不到使用者」與
+     * 「密碼錯誤」，回給呼叫端等於送出帳號枚舉的線索。要排查看 log 就好。
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiErrorResponse> handleAuthentication(AuthenticationException ex,
+            HttpServletRequest request) {
+        return respond(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Unauthorized",
+                "需要有效的認證憑證。", request);
+    }
+
+    /**
+     * 授權失敗（403）。兩個來源：Security filter chain 委派過來的，以及 controller/service 內直接拋的。
+     *
+     * <p>後者原本會被 {@link #handleUnexpected} 吃成 500 —— 也就是說一旦導入方法級授權
+     * （{@code @PreAuthorize} 拋的 {@code AuthorizationDeniedException} 是本型別的子類別），
+     * 「沒權限」會對外表現成「伺服器壞了」。這個 handler 必須排在 catch-all 之前才有意義。
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        return respond(HttpStatus.FORBIDDEN, "FORBIDDEN", "Forbidden",
+                "沒有權限執行此操作。", request);
+    }
+
+    /**
      * 未預期的例外：真的壞了、需要有人去看，因此這是**唯一**該印 stack trace 的地方。
      *
      * <p>訊息不回給呼叫端（避免洩漏內部細節），只回統一的 {@link ApiErrorResponse} 格式。
      *
      * <p>注意：{@code ResponseEntityExceptionHandler} 內建處理的那批 Spring MVC 例外仍會優先命中
-     * （Spring 選最具體的 handler），不會被這個 catch-all 攔走。但若日後導入方法級 authZ
-     * （{@code @PreAuthorize}），{@code AuthorizationDeniedException} 會被這裡吃掉變成 500 ——
-     * 屆時須在它之前補一個明確的 handler 以保住 403。
+     * （Spring 選最具體的 handler），不會被這個 catch-all 攔走。認證／授權失敗同理，由上面兩個
+     * 明確的 handler 接走 —— 新增 handler 時請一併確認它排在這個 catch-all 之前。
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
