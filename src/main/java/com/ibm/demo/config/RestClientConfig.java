@@ -71,7 +71,9 @@ public class RestClientConfig {
      * 設定 "internal" group 中所有 client 共用的 RestClient：base URL、自訂連線池 factory、
      * 以及將 HTTP error 轉譯為領域例外的 status handler。
      *
-     * factory 在 lambda 外建立一次後共用，讓三個 client 共享同一個連線池（與重構前行為一致）。
+     * forEachClient 的 callback 是「每個 group 跑一次」，不是每個 client interface 跑一次：一個 group
+     * 只有一個 RestClient.Builder，group 內三個 proxy 天生共用同一個 RestClient 與連線池，與 factory
+     * 寫在 lambda 內或外無關。提到 lambda 外是為了將來多出第二個 group 時也共用同一個池。
      *
      * base URL 指向本應用自己（loopback），因此加了 Spring Security 後這些自呼叫會撞上自己的
      * filter chain；為此掛上 internal 服務帳號的 HTTP Basic 憑證（見 SecurityConfig），讓自呼叫

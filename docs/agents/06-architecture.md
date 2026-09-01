@@ -57,8 +57,9 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 - `AccountClient`、`ProductClient`、`OrderClient` 與 Repository 同樣只宣告 interface 契約，實際注入的是 framework 在執行期建立的 proxy bean，不需要自行撰寫 `Impl`，也不要加 `@Component`／`@Controller`。
 - 兩者雖然都以 Spring AOP `ProxyFactory` 建立介面 proxy，卻是不同管線：Repository 走 Spring Data repository scanner／`JpaRepositoryFactoryBean`；HTTP Client 走 `@ImportHttpServices`／HTTP Service registry／`HttpServiceProxyFactory`。
 - `@ImportHttpServices(group = "internal", types = {...})` 負責指定哪些 `@HttpExchange` interface 要註冊成 client bean；新增 `*Client` 時必須同步加入 `types`。
-- `@HttpExchange` 與 `@GetExchange`／`@PostExchange` 描述 request 契約；`RestClientHttpServiceGroupConfigurer` 只設定 group 背後的 RestClient（base URL、request factory／共用連線池、Basic header、status handler），**不負責發現或註冊 client interface**。
-- Boot 4 將原本由應用程式手動撰寫的 `RestClientAdapter`／`HttpServiceProxyFactory.createClient(...)` 接線自動化；底層仍使用這套 adapter 與 proxy factory，並非完全移除。
+- `@HttpExchange` 與 `@GetExchange`／`@PostExchange` 描述 request 契約；`RestClientHttpServiceGroupConfigurer` 只設定 group 背後的 RestClient（base URL、request factory／共用連線池、Basic header、status handler），**不負責發現或註冊 client interface**。configurer 的 `forEachClient` callback 是**每個 group 跑一次**（一個 group 只有一個 `RestClient.Builder`），group 內所有 proxy 共用該 `RestClient` 與其連線池 —— 不是每個 client interface 各跑一次。
+- configurer bean 的型別**必須**宣告成 `RestClientHttpServiceGroupConfigurer`：registry 是用 `HttpServiceGroupAdapter.getConfigurerType()` 去查 bean，泛型會被 erasure 抹掉。寫成 `HttpServiceGroupConfigurer<RestClient.Builder>` 能編譯但永遠不會被套用，且無任何錯誤訊息。
+- 這套機制屬於 **Spring Framework 7**（`spring-web` 的 HTTP Service registry，`@since 7.0`）；Boot 4 額外提供的是 `spring.http.serviceclient.*` 屬性繫結與 `RestClientCustomizer` 橋接兩個 configurer bean。原本由應用程式手動撰寫的 `RestClientAdapter`／`HttpServiceProxyFactory.createClient(...)` 接線改由 framework 自動完成；底層仍使用這套 adapter 與 proxy factory，並非完全移除。
 
 ### Entity 層
 
