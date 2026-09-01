@@ -280,15 +280,36 @@
   mapper 未必註冊過。`RestClientErrorHandlerTest` 刻意用**裸** `JsonMapper.builder().build()`，就是為了
   讓「不依賴 mixin」這件事被測到而不只是被相信。
 
+**追加（`code` 也一併沿用）**：上面那版只讀 `detail`，`ErrorCode` 純由 HTTP status 推導，於是**業務碼
+在跨 domain 那一跳被抹平** —— product domain 的 `PRODUCT_STOCK_NOT_ENOUGH` 經 `ProductClient` 回到 order
+domain 後被重建成 `INVALID_REQUEST`，`POST /order` 的 400 因此同時代表「庫存不足」與「訂單內重複商品」
+（order 本地拋的真正 `INVALID_REQUEST`），呼叫端只能比對 `detail` 字串分辨。由下游整合測試回報後修正：
+同一棵 tree 多讀一個 `code` 欄位，還原成本地 `ErrorCode`，status 只當退路。三種情況刻意不沿用 ——
+認不出的 code（body 被改寫，或日後 domain 真的拆成獨立服務時的版本落差）、對應 status 非 4xx
+（`BusinessException` 建構子會拋 `IllegalArgumentException`，而這裡身處 error handler，二次爆炸會把原始
+錯誤換成更難查的 500）、以及帶 `errors` 陣列的驗證失敗（`BusinessException` 承載不了那個陣列，沿用碼
+會讓對外回應宣稱 `VALIDATION_FAILED` 卻沒有 `errors`，違反 Phase 4 自己定的契約）。
+
+> **判斷取捨**：這件事正是下面第 2 點所說的「需要跨 domain 傳遞 `code`」觸發條件，但遷移到
+> `DefaultResponseErrorHandler` **仍然延後** —— 因為第 1 點（converter 設定漂移）完全沒變，而從既有的
+> tree 上多讀一個字串欄位只花一行。遷移的回報是「完整反序列化能力」，而我們要的仍只是兩個字串欄位。
+
 **`extends DefaultResponseErrorHandler` 的遷移刻意延後**（不是忘記，理由如下）：
 
 1. 它要求子類別自行 `setMessageConverters(...)`（見上方 ⚠️ 段落），等於把 converter 設定複製到第二個
    地方 —— 而「兩套設定各自漂移」正是要解決的問題本身。在 `RestClient` 願意把自己的 converters 交給
    adapted status handler 之前，換過去只是把漂移點搬家。
-2. 目前只需要 `detail` 一個欄位，`getResponseBodyAs(ProblemDetail.class)` 的完整反序列化能力用不到。
-   等到需要跨 domain 傳遞 `code`（呼叫端要依遠端 `ErrorCode` 分流）時再換，遷移才有回報。
-3. 現行行為已被 6 個案例釘住（含 body 不可解析 / 合法 JSON 但缺 `detail` / 空 body 三種退化路徑），
-   所以這個遷移可以是純內部替換，不必與對外契約變更綁在同一次上線。
+2. ~~目前只需要 `detail` 一個欄位~~ 現在也讀 `code`（見上方追加段落），但兩者都是字串欄位，
+   `getResponseBodyAs(ProblemDetail.class)` 的完整反序列化能力仍然用不到 —— 何況 `code` 是 extension，
+   綁 `ProblemDetail` 反而要處理 mixin 有無註冊的問題，讀 tree 沒有這個包袱。
+3. 現行行為已被 9 個案例釘住（除 body 不可解析 / 合法 JSON 但缺 `detail` / 空 body 三種退化路徑外，
+   原本的 400 案例改為斷言「沿用下游業務碼」，另加認不出的 code / 非 4xx code / 帶 `errors` 三條退回
+   預設碼的路徑），所以這個遷移可以是純內部替換，不必與對外契約變更綁在同一次上線。
+
+**尚未覆蓋**：整合測試是 `@SpringBootTest` 的 MOCK web environment，loopback 自呼叫不會真的走上 HTTP，
+`OrderCreateCascadeIntegrationTest` 這類測試也是直接呼叫 `OrderTransactionalService`。因此「業務碼跨得過
+這一跳」目前只由 `RestClientErrorHandlerTest` 的單元測試守住，端到端（`POST /order` 真的收到
+`PRODUCT_STOCK_NOT_ENOUGH`）靠下游 E2E。要在本 repo 補，需要 `RANDOM_PORT` + 真實憑證的新測試基底。
 
 ### Phase 4 —— validation ✅ 已完成
 
