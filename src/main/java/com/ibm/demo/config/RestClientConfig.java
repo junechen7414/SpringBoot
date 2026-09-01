@@ -25,9 +25,12 @@ import com.ibm.demo.product.ProductClient;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 透過 Boot 4 HTTP Service Clients 自動註冊 {@code @HttpExchange} 介面為 bean。
- * {@code @ImportHttpServices} 將三個 client 歸入 "internal" group；底層 RestClient
- * （baseUrl / 自訂連線池 / 錯誤轉譯）由下方的 group configurer 統一設定。
+ * 透過 Boot 4 HTTP Service Clients 自動註冊 {@code @HttpExchange} 介面的 proxy bean。
+ * {@code @ImportHttpServices} 明確指定三個 client 並歸入 "internal" group；這條註冊流程不靠
+ * component scan，因此 client interface 不需要 {@code @Component} 或 {@code @Controller}。
+ * 底層 RestClient（baseUrl / 自訂連線池 / 認證 / 錯誤轉譯）由下方的 group configurer 統一設定；
+ * configurer 只設定傳輸，不負責發現或註冊 client。
+ * https://docs.spring.io/spring-framework/reference/integration/rest-clients.html#rest-http-service-client-group-config
  */
 @Configuration
 @RequiredArgsConstructor
