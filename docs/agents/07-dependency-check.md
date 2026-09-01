@@ -6,7 +6,7 @@
 
 **修改 Service 層時**，必須檢查：
 1. ✅ **Controller 層**: 方法簽名、參數傳遞、import 語句
-2. ✅ **Client 層**: 若 Service 被其他模組呼叫，檢查 Client 介面與實作
+2. ✅ **Client 層**: 若 Service 被其他模組呼叫，檢查宣告式 Client 介面、HTTP exchange 契約與 DTO（實作由 proxy 動態建立，沒有手寫 `Impl`）
 3. ✅ **DTO 層**: 新增或修改的 DTO 是否在所有使用處都正確 import
 4. ✅ **測試層**: 單元測試與整合測試是否需要更新
 
@@ -18,7 +18,8 @@
 **修改 Client 層時**，必須檢查：
 1. ✅ **Service 層**: 呼叫 Client 的 Service 是否需要更新
 2. ✅ **DTO 層**: 跨模組傳遞的 DTO 是否正確 import
-3. ✅ **RestClient 配置**: 是否需要更新 URL 或錯誤處理
+3. ✅ **HTTP Service 註冊**: 新增 `*Client` 時，是否已加入 `RestClientConfig` 的 `@ImportHttpServices(types = ...)`；interface 不靠 `@Component` 自動成為 bean
+4. ✅ **RestClient group 配置**: 是否需要更新 base URL、共用 request factory／連線池、認證 header 或錯誤處理；`RestClientHttpServiceGroupConfigurer` 只設定傳輸，不負責註冊 client
 
 **修改 Repository 層時**，必須檢查：
 1. ✅ **Service 層**: 查詢方法的呼叫是否需要調整

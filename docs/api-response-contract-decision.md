@@ -65,7 +65,7 @@
 不是抽象上的偏好問題，而是這個 repo 導入信封會直接踩到：
 
 1. **三個 `*Client` 全部裸型別反序列化。** `AccountClient` / `ProductClient` / `OrderClient` 是 Boot 4 `@HttpExchange` 介面，回傳型別**就是** controller 的 body 型別，沒有任何 unwrap 層。包一層後全部要改。
-2. **`AccountService.java:173` 會 NPE。** `if (orderClient.accountIdIsInOrder(accountId))` 直接把裸 `Boolean` 當條件用；包一層後反序列化拿到 `null`，`if (null)` 就是 NPE——而這條路徑是「刪除帳戶前檢查是否仍有訂單」。
+2. **`AccountService` 的刪除前檢查依賴精確 wire shape。** 現行程式呼叫 `orderClient.getOrderExistence(accountId).hasActiveOrder()`，期待 body 直接反序列化為 `OrderExistenceResponse`；若無同步修改 client 回傳型別就擅自再包成功信封，該欄位無法按既有契約取得，而這條路徑正是「刪除帳戶前檢查是否仍有訂單」。
 3. **`OpenApiConfig.java` 沒有掛點。** 只宣告 security scheme，沒有 `OpenAPI` bean、沒有 `GroupedOpenApi`、沒有 `OpenApiCustomizer`，要讓 springdoc 正確描述 `Envelope<T>` 得從零建。
 4. **兩個 testdata controller 回 plain `String`。** `JMeterTestDataController` / `PlaywrightTestDataController` 的 body 是人類可讀字串，而下游 Playwright E2E 直接依賴 `/PlaywrightTestData/*`。
 5. **需要改寫既有設計文件。** `docs/swagger-openapi-design-guide.md` 原則 12（第 307–327 行）明文寫「不要為了包而包」，自評表（第 358 行）把「沒有多餘包裝」列為 ✅ 良好。選 B 等於推翻既有決策。

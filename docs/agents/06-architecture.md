@@ -50,6 +50,15 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 - 繼承 `JpaRepository` 或 `SoftDeleteRepository`
 - 優先使用方法名衍生查詢
 - 複雜查詢使用 `@Query` (JPQL 優先於 Native SQL)
+- Repository interface 不靠 `@Component` 建立：Spring Data 會透過 `JpaRepositoryFactoryBean`／repository factory 在執行期建立 proxy bean；標準 CRUD、衍生查詢與 `@Query` 都由該 proxy 分派。
+
+### 宣告式 HTTP Client
+
+- `AccountClient`、`ProductClient`、`OrderClient` 與 Repository 同樣只宣告 interface 契約，實際注入的是 framework 在執行期建立的 proxy bean，不需要自行撰寫 `Impl`，也不要加 `@Component`／`@Controller`。
+- 兩者雖然都以 Spring AOP `ProxyFactory` 建立介面 proxy，卻是不同管線：Repository 走 Spring Data repository scanner／`JpaRepositoryFactoryBean`；HTTP Client 走 `@ImportHttpServices`／HTTP Service registry／`HttpServiceProxyFactory`。
+- `@ImportHttpServices(group = "internal", types = {...})` 負責指定哪些 `@HttpExchange` interface 要註冊成 client bean；新增 `*Client` 時必須同步加入 `types`。
+- `@HttpExchange` 與 `@GetExchange`／`@PostExchange` 描述 request 契約；`RestClientHttpServiceGroupConfigurer` 只設定 group 背後的 RestClient（base URL、request factory／共用連線池、Basic header、status handler），**不負責發現或註冊 client interface**。
+- Boot 4 將原本由應用程式手動撰寫的 `RestClientAdapter`／`HttpServiceProxyFactory.createClient(...)` 接線自動化；底層仍使用這套 adapter 與 proxy factory，並非完全移除。
 
 ### Entity 層
 

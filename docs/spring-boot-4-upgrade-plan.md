@@ -375,7 +375,7 @@ class JacksonSerializationTest {
 | # | 動作 | 說明 |
 |---|------|------|
 | 5.1 | 移除 `spring-boot-properties-migrator` | 升級完成，不再需要 |
-| 5.2 | 簡化 RestClientConfig | 如果 Boot 4 支援 auto-proxy，移除手動 Factory 配置 |
+| 5.2 | 簡化 RestClientConfig | ✅ 已完成：以 `@ImportHttpServices` 註冊 proxy bean，移除應用程式手動建立 `RestClientAdapter`／`HttpServiceProxyFactory` 的接線 |
 | 5.3 | 移除 deprecated `BaseEntity` | ✅ 已完成：`BaseEntity` 已整個移除，entity 改用 `@Embedded` 組合（`AuditMetadata`/`SoftDeleteMetadata`）+ entity 上的 `@Version` |
 | 5.4 | 更新 Dockerfile | Gradle 版本對齊 |
 | 5.5 | 依賴快照比對 | `./gradlew dependencies > after-upgrade.txt` + `diff` |
@@ -430,7 +430,7 @@ class JacksonSerializationTest {
 | 方向 | 說明 |
 |------|------|
 | Resilience4j → Spring 原生 | Spring Framework 7 內建 Retry/Timeout/Concurrency Limit，未來可評估遷移 |
-| RestClientConfig 簡化 | 利用 Boot 4 的 `@HttpExchange` auto-proxy 進一步簡化 |
+| RestClientConfig 簡化 | ✅ 已完成：`@ImportHttpServices` + `RestClientHttpServiceGroupConfigurer`；底層 proxy factory 由 framework 接線 |
 | GraalVM Native Image | Boot 4 對 Native Image 支援更完整，可作為效能優化方向 |
 | PostgreSQL 遷移 | 本次升級完成後的下一步 |
 | Render 部署 | PostgreSQL 遷移完成後部署上線 |

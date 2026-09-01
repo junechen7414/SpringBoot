@@ -9,7 +9,7 @@
 - **資料庫**: Oracle Database (生產) / H2 (測試與文件生成)
 - **資料遷移**: Flyway
 - **容錯處理**: Resilience4j (Bulkhead, Circuit Breaker, Rate Limiter)
-- **HTTP 客戶端**: RestClient (取代 WebClient)
+- **HTTP 客戶端**: RestClient（取代 WebClient）；`@ImportHttpServices` 註冊 `@HttpExchange` interface 的 runtime proxy bean，`RestClientHttpServiceGroupConfigurer` 統一設定傳輸
 - **API 文件**: SpringDoc OpenAPI 3
 - **監控系統**: Grafana Alloy + Prometheus + Grafana
 - **測試框架**: JUnit 5, Mockito, Testcontainers
