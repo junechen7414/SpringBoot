@@ -28,24 +28,39 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *   <li>{@code errors} —— 逐筆的欄位驗證失敗，<b>僅在 {@code code} 為 {@code VALIDATION_FAILED} 時出現</b>。
  *       其餘錯誤沒有「哪個欄位」的概念，欄位缺席而非給空陣列。</li>
  * </ul>
+ *
+ * <p><b>為什麼前六個標 {@code required}</b>：它們每個錯誤回應都會出現（{@code ApiErrorContractTest}
+ * 對應用層／框架層／Security 三條路徑逐一釘住欄位集合），只有 {@code errors} 是條件性的。不標的話
+ * 下游 codegen 產出的型別全是 optional，等於逼呼叫端另外手寫一份平行 interface —— 而手寫副本正是
+ * 契約漂移的來源。
  */
 @Schema(name = "ApiErrorResponse", description = "錯誤回應（RFC 9457 application/problem+json）")
 public record ApiErrorResponse(
 
         @Schema(description = "問題類型的穩定識別 URI，由 code 推導而來",
-                example = "urn:problem:product-stock-not-enough") String type,
+                example = "urn:problem:product-stock-not-enough",
+                requiredMode = Schema.RequiredMode.REQUIRED) String type,
 
         @Schema(description = "這類問題的人類可讀摘要；同一個 code 永遠相同",
-                example = "商品庫存不足") String title,
+                example = "商品庫存不足",
+                requiredMode = Schema.RequiredMode.REQUIRED) String title,
 
-        @Schema(description = "HTTP 狀態碼", example = "400") int status,
+        @Schema(description = "HTTP 狀態碼", example = "400",
+                requiredMode = Schema.RequiredMode.REQUIRED) int status,
 
-        @Schema(description = "本次請求的具體說明", example = "商品 5 庫存不足（需要 10、剩 3）") String detail,
+        @Schema(description = "本次請求的具體說明", example = "商品 5 庫存不足（需要 10、剩 3）",
+                requiredMode = Schema.RequiredMode.REQUIRED) String detail,
 
-        @Schema(description = "出錯的請求路徑", example = "/product/5/stock") String instance,
+        @Schema(description = "出錯的請求路徑", example = "/product/5/stock",
+                requiredMode = Schema.RequiredMode.REQUIRED) String instance,
 
-        @Schema(description = "機器可讀的穩定錯誤碼，呼叫端應以此分流",
-                example = "PRODUCT_STOCK_NOT_ENOUGH") String code,
+        // 刻意不列 enum：值域是 ErrorCode 常數名 ∪ 錯誤類 HttpStatus 名（50+ 個），列出來沒人會逐項
+        // 讀，只會把 spec 撐胖，並在每次新增 ErrorCode 時多一次「文件說不允許」的假違約。值域寫在
+        // description 就夠 —— enum 留給狀態類欄位（見 docs/swagger-openapi-design-guide.md 原則 9）。
+        @Schema(description = "機器可讀的穩定錯誤碼，呼叫端應以此分流。值為 ErrorCode 的常數名；"
+                + "框架攔下的協定層錯誤（405、415…）則為對應的 HTTP 狀態名（METHOD_NOT_ALLOWED…）",
+                example = "PRODUCT_STOCK_NOT_ENOUGH",
+                requiredMode = Schema.RequiredMode.REQUIRED) String code,
 
         @Schema(description = "逐筆的參數驗證失敗；僅 code = VALIDATION_FAILED 時出現，"
                 + "其餘錯誤此欄位缺席") List<ValidationError> errors) {

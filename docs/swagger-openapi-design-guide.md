@@ -110,6 +110,14 @@ User:
 - 哪些一定要傳
 - 哪些可省略
 
+在 Java 側寫成 `@Schema(requiredMode = Schema.RequiredMode.REQUIRED)`（record component 上同樣有效）。
+**這不只是文件好看的問題**：`required` 缺席時 `openapi-typescript` 之類的 codegen 會把每個欄位都產成
+optional，呼叫端為了拿到堪用的型別只能另外手寫一份平行 interface —— 而手寫副本正是契約漂移能潛伏到
+下游的原因（文件說謊時，手抄的那份不會紅）。
+
+反過來也要誠實：只有**真的每次都出現**的欄位才標 required，否則就是拿文件騙 codegen。判準是「有沒有
+測試釘住它一定出現」，不是「通常都有」。
+
 ---
 
 ### 原則 4：寫 description，不要讓欄位名稱自己說明自己
@@ -245,6 +253,11 @@ UserResponse:
 框架內建例外（405、415、malformed JSON…）本來就會產 `ProblemDetail` —— 自訂格式只會讓同一支 API 有
 兩種錯誤形狀，而分岔點是「例外由誰攔到」這種呼叫端無法預測的內部細節。
 
+**格式標準化只做了一半**：光是「所有 API 同一個形狀」不夠，那個形狀還得在 spec 裡**說清楚**，否則下游
+只是換個地方手抄。六個欄位（`type`/`title`/`status`/`detail`/`instance`/`code`）標 `required`、`errors`
+維持 optional（僅驗證失敗時出現）。至於 `code` 為什麼**不**列 enum，見下面原則 9。決策記錄見
+`docs/api-response-contract-decision.md` Phase 7。
+
 ---
 
 ### 原則 9：Enum 要定義清楚
@@ -264,6 +277,21 @@ status:
 ```
 
 **不好的做法：** 只寫 `type: string` 或 `type: integer`，使用者不知道可以傳什麼值。
+
+**也不好：** 用 `@Schema(allowableValues = {...})` 手抄一份值清單。那只是把「description 會漂移」換成
+「allowableValues 會漂移」—— 清單要從 enum 本身推導出來：**讓欄位型別就是 Java enum**（springdoc 自動
+產出 `enum` 與各常數名），沒辦法改型別時退而用 `@Schema(implementation = SomeEnum.class)`，它在
+`String` 欄位上同樣有效。
+
+**enum 的判準是「人看得完」**：`enum` 存在的意義是讓讀文件的人知道該填什麼、Swagger UI 能給下拉選單。
+所以它適合**小而封閉、呼叫端要照著填**的值域 —— 訂單／商品／帳戶狀態這種。反過來，值域大到人不會逐項
+閱讀時（本專案的 `ApiErrorResponse.code` 就有 50+ 個值），列 enum 的收益是零，成本卻是實的：spec 被撐
+胖、每新增一個錯誤碼就多一次「文件說不允許」的假違約。**那種欄位把值域寫在 `description` 就好。**
+
+> 💡 改完 enum 相關的 schema，dump 一次 `/v3/api-docs` 確認，不要憑 annotation 相信結果。用
+> `generateOpenApiDocs` 驗證時**先確認 8787 沒有殘留的 app 行程** —— plugin 抓到舊 app 不會報錯，
+> 只會靜默寫出舊 spec（徵兆：build 幾秒就結束，正常要 20~30 秒）。最保險是寫個 `@SpringBootTest`
+> 用 MockMvc 打 `/v3/api-docs`。
 
 ---
 

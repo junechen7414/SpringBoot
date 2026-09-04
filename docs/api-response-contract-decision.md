@@ -410,6 +410,36 @@ Phase 2 的目標是「先讓格式收斂」，做法上有多少手刻在所不
 有改，但改的是**簽章**（`HttpServletRequest` → `WebRequest`、`ResponseEntity<ProblemDetail>` →
 `ResponseEntity<Object>`）與合併後的 500 測試，斷言的字串一字未動。
 
+### Phase 7 —— 讓錯誤契約對 codegen 也成立 ✅ 已完成
+
+**只改 OpenAPI 文件，wire format 零變更**（`ApiErrorContractTest` 既有斷言一字未改仍全綠）。起因是下游
+Playwright E2E 的回報：`ApiErrorResponse` 在 spec 裡**沒有 `required` 陣列**、`code` 是**無約束的
+string**，於是 `openapi-typescript` 產出的型別每個欄位都是 optional、`code` 是任意字串 —— 呼叫端只能另外
+手寫一份平行 interface。而**手寫副本正是 Phase 2 那次漂移（`timestamp`/`error`/`message`）能一路潛伏到
+下游 8 個測試檔同時變紅的原因**：文件說謊時，手抄的那份不會紅。兩點回報只採納第一點 —— `required` 補上，
+`code` 的 enum 明確否決，理由見下。
+
+- **RFC 9457 六個欄位標 `requiredMode = REQUIRED`**（`type`/`title`/`status`/`detail`/`instance`/`code`），
+  `errors` 維持 optional。這不是願望而是事實陳述：`problem(...)` 必填前三者、`complete(...)` 無條件寫入
+  `code`（`frameworkCode()` 有 `HTTP_<數字>` 退路「保證欄位永遠有值」）、`instance` 由框架填、`status`
+  是回應本身。`ApiErrorContractTest` 已對應用層／框架層／Security 三條路徑逐一釘住欄位集合。
+  `ValidationError.message` 同樣標 required，`field` 維持 optional（class-level 約束沒有對應欄位）。
+- **`code` 明確不列 enum**。下游建議 `@Schema(implementation = ErrorCode.class)`；技術上可行（springdoc
+  3.0.3 實測會產出 14 個常數名，`requiredMode` 也保留），但**產出的值域是錯的**：`code` 從 Phase 2 起
+  就有兩個來源（見 `ErrorCode` 類別註解：協定層錯誤的 code 由 HTTP 狀態名推導），只列 `ErrorCode` 等於
+  宣告一份「線路上會出現、文件卻說不允許」的 enum，對嚴格 validator 比沒有 enum 更糟。取聯集固然能修掉
+  這點，但那是 50+ 個值 —— **`enum` 的用途是給讀文件的人看**，五十幾個錯誤碼沒有人會逐項讀，收益是零，
+  成本卻是每新增一個 `ErrorCode` 就多一次假違約。**值域交給 `description`，`enum` 留給狀態類欄位**
+  （原則見 `docs/swagger-openapi-design-guide.md` 原則 9）。
+- **同時明確否決把欄位型別改成 `ErrorCode`**：`code` 真的會攜帶非 `ErrorCode` 的值，那個型別在事實上就是
+  錯的 —— 不只是下游擔心的「反序列化遇到未知值會炸」（那與 `RestClientErrorHandler` 刻意容錯的
+  `valueOf` fallback 相衝）。
+
+**驗證方式**：dump `/v3/api-docs` 確認 `ApiErrorResponse.required` 六個欄位到齊；CI gate 全綠。
+> ⚠️ 用 `./gradlew generateOpenApiDocs` 驗證前先確認 8787 沒有殘留 app 行程 —— plugin 抓到舊 app
+> 不會報錯，只會靜默寫出舊 spec，本 Phase 就因此一度得出「springdoc 靜默忽略 `implementation`」的
+> 錯誤結論。改用 `@SpringBootTest` + MockMvc 打 `/v3/api-docs` 沒有這個風險。
+
 ---
 
 ## 8. 非目標

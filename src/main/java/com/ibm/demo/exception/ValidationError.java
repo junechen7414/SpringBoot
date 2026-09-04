@@ -28,7 +28,8 @@ public record ValidationError(
         @Schema(description = "未通過驗證的欄位名。class-level（跨欄位）約束沒有對應欄位，此時本欄位缺席",
                 example = "accountId") String field,
 
-        @Schema(description = "驗證失敗的原因", example = "must not be null") String message) {
+        @Schema(description = "驗證失敗的原因", example = "must not be null",
+                requiredMode = Schema.RequiredMode.REQUIRED) String message) {
 
     /**
      * 壓成一行人類可讀字串，供 {@code detail} 使用。
