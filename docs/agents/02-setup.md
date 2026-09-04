@@ -3,7 +3,7 @@
 ### 前置需求
 
 - **Java 25** (建議使用 Eclipse Temurin) — 唯一權威來源是 `build.gradle` 的 toolchain 宣告，此處只是副本
-- **Podman** 或 Docker (用於容器管理)
+- **Podman** 或 Docker (用於容器管理) — Windows 上若使用 podman **6.x**，WSL 必須 **≥ 2.7.5**（`wsl --version` 確認），否則容器網路整組不通；原因與升級步驟見 `筆記.md`「容器執行環境：Windows + Podman + WSL2」
 - **Gradle 9.6.1** (專案已包含 Gradle Wrapper，無需自行安裝)
 
 ### JDK 版本管理
