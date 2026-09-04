@@ -137,7 +137,9 @@ services:
       # datasource 與 dashboard 由佈建檔自動建立，不必手動在 UI 點。
       # 唯讀掛載：容器不該改到 repo 內容；要改設定就改檔案再重啟 grafana。
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      # 掛在 /etc 而非 /var/lib/grafana 底下：巢狀掛進具名 volume 會讓 podman 漏掉 volume
+      # 根目錄的 chown，grafana（UID 472）就無法建立 grafana.db。見 docs/monitoring-usage-guide.md §7.2。
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
     networks:
       - monitor-net
     restart: unless-stopped

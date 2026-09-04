@@ -1,6 +1,6 @@
 # Grafana dashboard provider 佈建
 #
-# 告訴 Grafana：去 /var/lib/grafana/dashboards 掃 JSON 檔並載入成 dashboard。
+# 告訴 Grafana：去 /etc/grafana/dashboards 掃 JSON 檔並載入成 dashboard。
 # 那個目錄由 docker-compose.yml 以唯讀方式掛載自 repo 的 ./grafana/dashboards。
 apiVersion: 1
 
@@ -17,6 +17,6 @@ providers:
     # 想讓改動進 git 要用 Dashboard settings → JSON Model 複製出來貼回檔案）
     allowUiUpdates: true
     options:
-      path: /var/lib/grafana/dashboards
+      path: /etc/grafana/dashboards
       # 讓子目錄名成為 Grafana 的 folder 名稱
       foldersFromFilesStructure: false

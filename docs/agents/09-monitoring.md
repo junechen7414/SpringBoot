@@ -77,8 +77,8 @@ datasource 與 dashboard **不手動在 UI 建**，一律進 git。手動建的�
 | 檔案 | 掛載到容器 | 內容 |
 |---|---|---|
 | `grafana/provisioning/datasources/prometheus.yml` | `/etc/grafana/provisioning/datasources`（`:ro`） | Prometheus datasource，`uid: prometheus`（**寫死**，dashboard JSON 以此 uid 引用）、`url: http://prometheus:9090` |
-| `grafana/provisioning/dashboards/default.yml` | `/etc/grafana/provisioning/dashboards`（`:ro`） | dashboard provider，指向 `/var/lib/grafana/dashboards`，`updateIntervalSeconds: 10` |
-| `grafana/dashboards/app-overview.json` | `/var/lib/grafana/dashboards`（`:ro`） | 四個黃金訊號的入門 dashboard（7 panel）。每個 panel 的 `description` 寫該句 PromQL 的推導理由 —— 這份 dashboard 兼作教材，新增 panel 時請維持此慣例 |
+| `grafana/provisioning/dashboards/default.yml` | `/etc/grafana/provisioning/dashboards`（`:ro`） | dashboard provider，指向 `/etc/grafana/dashboards`，`updateIntervalSeconds: 10` |
+| `grafana/dashboards/app-overview.json` | `/etc/grafana/dashboards`（`:ro`） | 四個黃金訊號的入門 dashboard（7 panel）。每個 panel 的 `description` 寫該句 PromQL 的推導理由 —— 這份 dashboard 兼作教材，新增 panel 時請維持此慣例 |
 
 改動後的生效方式**不同**：
 

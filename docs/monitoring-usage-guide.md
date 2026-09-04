@@ -344,7 +344,7 @@ Grafana 的 datasource 與 dashboard **不在 UI 上手動建**，一律用佈�
 
 ```yaml
 - ./grafana/provisioning:/etc/grafana/provisioning:ro   # 映像的預設路徑
-- ./grafana/dashboards:/var/lib/grafana/dashboards:ro   # 我們自己挑的路徑
+- ./grafana/dashboards:/etc/grafana/dashboards:ro       # 我們自己挑的路徑
 ```
 
 **`/etc/grafana/provisioning` 是被規定的。** 官方映像用環境變數把它設成絕對路徑（`grafana` 容器內實測）：
@@ -374,25 +374,35 @@ Grafana 對每個子目錄跑**不同的** provisioner，這些名字寫在程�
 
 檔案內容的 key 也是固定的：datasource 檔頂層必須是 `datasources:`、provider 檔必須是 `providers:`，兩者都要 `apiVersion: 1`。
 
-**`/var/lib/grafana/dashboards` 則完全不是預設，是我們挑的。** `/var/lib/grafana` 是 `GF_PATHS_DATA`（`grafana.db` 住的地方），底下那層 `dashboards/` 沒有任何官方地位，唯一決定它的就是 `default.yml` 裡這行：
+**`/etc/grafana/dashboards` 則完全不是預設，是我們挑的。** 它跟 `/etc/grafana/provisioning` 只是同層的鄰居，本身沒有任何官方地位，唯一決定它的就是 `default.yml` 裡這行：
 
 ```yaml
 options:
-  path: /var/lib/grafana/dashboards    # 改成 /anything/you/like 都會動（compose 掛載跟著改）
+  path: /etc/grafana/dashboards    # 改成 /anything/you/like 都會動（compose 掛載跟著改）
 ```
 
-從容器裡也看得出這層是外來的 —— 只有它的 owner 是主機 uid：
+**為什麼不放在 `GF_PATHS_DATA`（`/var/lib/grafana`）底下？** 早期版本確實掛在 `/var/lib/grafana/dashboards`，形成「bind mount 疊在具名 volume 裡」的巢狀結構。這在 podman/docker 都合法，但實測會踩到坑：podman 為了建出那個掛載點，會先在空 volume 裡以 root 身分造出 `dashboards/`，結果**漏掉 volume 根目錄的 chown** —— `/var/lib/grafana` 停在 `0:0`，而 grafana 以 UID 472 執行，初始化時 `grafana.db` 就建不出來：
 
 ```
-drwxrwxrwx  1 1000    1000  dashboards      ← 掛載進來的
--rw-r-----  1 grafana root  grafana.db      ← 其餘都屬於 grafana 使用者
+Error: ✗ failed to connect to database: failed to create SQLite database file
+       "/var/lib/grafana/grafana.db": open ...: permission denied
 ```
+
+實測 volume 內容 —— copy-up 進來的 `plugins` 保住了 472，volume 根目錄卻是 root：
+
+```
+drwxr-xr-x  4 0    0    .            ← 根目錄：root 擁有，472 不可寫
+drwxr-xr-t  2 0    0    dashboards   ← podman 為巢狀掛載建的掛載點
+drwxrwxrwx  2 472  0    plugins      ← 從映像 copy-up，保留 UID 472
+```
+
+改掛到 `/etc/grafana/dashboards` 後具名 volume 回歸真正的空目錄，podman 的 chown 正常生效；`/var/lib/grafana` 底下只剩 grafana 自己的資料。
 
 **為什麼不乾脆把 JSON 塞進 `/etc/grafana/provisioning/dashboards/` 跟 `default.yml` 放一起？** 技術上可以（把 `options.path` 指到同一層即可，很多範例這麼做）。這裡刻意分開，因為那個目錄的語意是「給 Grafana 掃 provider 設定」，把 dashboard JSON 混進去會讓同一個目錄躺著兩種語意不同的檔案。
 
-還有一個看起來像限制、其實不是的東西：`defaults.ini` 有 `permitted_provisioning_paths = devenv/dev-dashboards|conf/provisioning`。那個管的是新版 Git Sync / local repository 功能，**不管** dashboard file provider 的 `options.path` —— 實證就是我們的 `/var/lib/grafana/dashboards` 不在清單裡卻正常載入。
+還有一個看起來像限制、其實不是的東西：`defaults.ini` 有 `permitted_provisioning_paths = devenv/dev-dashboards|conf/provisioning`。那個管的是新版 Git Sync / local repository 功能，**不管** dashboard file provider 的 `options.path` —— 實證就是我們的 `/etc/grafana/dashboards` 不在清單裡卻正常載入。
 
-**巢狀掛載**：`grafana-data:/var/lib/grafana` 與 `./grafana/dashboards:/var/lib/grafana/dashboards:ro` 是一個掛在另一個裡面。這在 podman/docker 都合法，runtime 按路徑深度排序，較深的蓋在較淺的上面。所以 `grafana.db`（UI 上的改動、註解、偏好設定）仍留在具名 volume，只有 `dashboards/` 那一層被 repo 的唯讀內容覆蓋。**compose 裡兩行的先後順序不影響結果。**
+**不再有巢狀掛載**：`grafana-data:/var/lib/grafana` 與 `./grafana/dashboards:/etc/grafana/dashboards:ro` 現在是兩棵不相交的路徑。具名 volume 只裝 grafana 自己的可變資料（`grafana.db`：UI 上的改動、註解、偏好設定），repo 的唯讀內容在 `/etc` 底下 —— 不再依賴 runtime 對巢狀掛載的深度排序行為。
 
 ### 7.3 這三個檔案是手寫的，但性質分兩類
 
