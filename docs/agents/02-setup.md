@@ -4,6 +4,7 @@
 
 - **Java 25** (建議使用 Eclipse Temurin) — 唯一權威來源是 `build.gradle` 的 toolchain 宣告，此處只是副本
 - **Podman** 或 Docker (用於容器管理) — Windows 上若使用 podman **6.x**，WSL 必須 **≥ 2.7.5**（`wsl --version` 確認），否則容器網路整組不通；原因與升級步驟見 `筆記.md`「容器執行環境：Windows + Podman + WSL2」
+  - ⚠️ **podman machine 必須維持 rootless**（`podman machine init` 的預設值；**不要**加 `--rootful`）。rootful 時 published port 只是 nftables DNAT 規則，WSL 內沒有真實 listening socket，而 WSL2 的 localhost 轉發要偵測到 listening socket 才會在 Windows 端建立 relay —— 結果宿主機 `localhost` 的**每一個** port 全部拒絕連線，容器卻仍顯示 `healthy`，極易誤判成應用的問題。檢查與修法見 `10-troubleshooting.md`。
 - **Gradle 9.6.1** (專案已包含 Gradle Wrapper，無需自行安裝)
 
 ### JDK 版本管理
