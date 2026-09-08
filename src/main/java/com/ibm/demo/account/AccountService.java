@@ -143,7 +143,7 @@ public class AccountService {
     private GetAccountDetailResponse mapAccountToDetailResponse(Account account) {
         return GetAccountDetailResponse.builder()
                 .name(account.getName())
-                .status(account.getStatus())
+                .status(AccountStatus.fromCode(account.getStatus()))
                 .build();
     }
 
@@ -151,7 +151,7 @@ public class AccountService {
         return new GetAccountListResponse(
                 account.getId(),
                 account.getName(),
-                account.getStatus());
+                AccountStatus.fromCode(account.getStatus()));
     }
 
     /**
@@ -181,12 +181,13 @@ public class AccountService {
      * 如果狀態從啟用變為停用，會檢查帳戶是否仍有關聯訂單。
      * 
      * @param account   要更新的帳戶實體
-     * @param newStatus 新的狀態碼
+     * @param newStatus 新的狀態
      */
-    private void updateAccountStatus(Account account, String newStatus) {
-        if (!account.getStatus().equals(newStatus) && AccountStatus.INACTIVE.getCode().equals(newStatus)) {
+    private void updateAccountStatus(Account account, AccountStatus newStatus) {
+        boolean statusChanged = !newStatus.getCode().equals(account.getStatus());
+        if (statusChanged && newStatus == AccountStatus.INACTIVE) {
             checkAccountHasNoOrdersOrThrow(account.getId());
         }
-        account.setStatus(newStatus);
+        account.setStatus(newStatus.getCode());
     }
 }

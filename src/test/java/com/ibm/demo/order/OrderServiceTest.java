@@ -55,8 +55,6 @@ class OrderServiceTest {
         private OrderService orderService;
 
         // 測試常數
-        private final Integer STATUS_CREATED = OrderStatus.CREATED.getCode();
-        private final Integer STATUS_CANCELLED = OrderStatus.CANCELLED.getCode();
         private final Integer ACTIVE_ACCOUNT_ID = 1;
         private final Integer SELLABLE_PRODUCT_ID = 1;
         private final Integer EXISTING_ORDER_ID = 101;
@@ -239,11 +237,11 @@ class OrderServiceTest {
                 void updateOrder_Success() {
                         // Arrange
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        STATUS_CREATED,
+                                        OrderStatus.CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
-                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED, List.of()));
+                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, OrderStatus.CREATED, List.of()));
 
                         // Act
                         orderService.updateOrder(EXISTING_ORDER_ID, request);
@@ -258,11 +256,11 @@ class OrderServiceTest {
                 void updateOrder_WhenTransactionFails_ShouldCompensateAndThrow() {
                         // Arrange
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        STATUS_CREATED,
+                                        OrderStatus.CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
-                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED, List.of()));
+                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, OrderStatus.CREATED, List.of()));
 
                         // 模擬交易服務拋出異常
                         doThrow(new RuntimeException("DB update failed"))
@@ -292,7 +290,7 @@ class OrderServiceTest {
                 void updateOrder_WhenOrderNotFound_ShouldThrowException(String scenario, Integer nonExistentId) {
                         // Arrange：NotFound 由 loadOrderView（交易內載入）拋出
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        STATUS_CREATED,
+                                        OrderStatus.CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)));
 
                         when(orderTransactionalService.loadOrderView(nonExistentId))
@@ -314,11 +312,11 @@ class OrderServiceTest {
                 @DisplayName("更新時若包含庫存不足的商品，應拋出 ProductStockNotEnoughException")
                 void updateOrder_WhenInsufficientStock_ShouldThrowException() {
                         // Arrange
-                        UpdateOrderRequest request = new UpdateOrderRequest(STATUS_CREATED,
+                        UpdateOrderRequest request = new UpdateOrderRequest(OrderStatus.CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
-                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, STATUS_CREATED, List.of()));
+                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, OrderStatus.CREATED, List.of()));
 
                         // 關鍵：模擬 adjustStock 拋出庫存不足異常
                         doThrow(new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH, "庫存不足"))
@@ -340,7 +338,7 @@ class OrderServiceTest {
                 void updateOrder_WhenDuplicateProduct_ShouldThrowException() {
                         // Arrange：同一 productId 兩筆、數量不同 —— 以 productId 判重應在查 DB 前攔下
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        STATUS_CREATED,
+                                        OrderStatus.CREATED,
                                         List.of(
                                                         new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2),
                                                         new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
@@ -411,7 +409,7 @@ class OrderServiceTest {
                 void deleteOrder_WhenStatusNotPending_ShouldThrowOrderStatusInvalidException() {
                         // Arrange：狀態驗證已收斂至 prepareOrderDeletion
                         when(orderTransactionalService.prepareOrderDeletion(EXISTING_ORDER_ID))
-                                        .thenThrow(new BusinessException(ErrorCode.ORDER_STATUS_INVALID, "訂單狀態不允許刪除，目前狀態: " + STATUS_CANCELLED));
+                                        .thenThrow(new BusinessException(ErrorCode.ORDER_STATUS_INVALID, "訂單狀態不允許刪除，目前狀態: " + OrderStatus.CANCELLED.getCode()));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.deleteOrder(EXISTING_ORDER_ID))

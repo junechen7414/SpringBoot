@@ -2,6 +2,8 @@ package com.ibm.demo.product.DTO;
 
 import java.math.BigDecimal;
 
+import com.ibm.demo.enums.ProductStatus;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
@@ -25,9 +27,8 @@ public record UpdateProductRequest(
         BigDecimal price,
 
         @NotNull(message = "Sale Status is required")
-        @Digits(integer = 4, fraction = 0)
         @Schema(description = "銷售狀態 (1001=可銷售, 1002=不可銷售)", example = "1001", requiredMode = Schema.RequiredMode.REQUIRED)
-        Integer saleStatus,
+        ProductStatus saleStatus,
 
         @NotNull(message = "Stock Qty is required")
         @Digits(integer = 10, fraction = 0)

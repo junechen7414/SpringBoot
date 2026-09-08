@@ -98,7 +98,7 @@ class OrderCreateCascadeIntegrationTest extends BaseIntegrationTest {
 
         OrderView view = orderTransactionalService.loadOrderView(orderId);
         assertThat(view.accountId()).isEqualTo(accountId);
-        assertThat(view.status()).isEqualTo(OrderStatus.CREATED.getCode());
+        assertThat(view.status()).isEqualTo(OrderStatus.CREATED);
         assertThat(view.items()).hasSize(1);
         assertThat(view.items().get(0).productId()).isEqualTo(productId);
         assertThat(view.items().get(0).quantity()).isEqualTo(4);
