@@ -4,6 +4,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.List;
 
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.exception.SystemException;
@@ -126,7 +128,27 @@ public class ContractProbeController {
         return new ProbeResponse(String.valueOf(page));
     }
 
+    /**
+     * 欄位宣告成 enum 時，值域檢查由 Jackson 在反序列化當下完成（InvalidFormatException），
+     * <b>早於</b> Bean Validation —— 因此走的是 {@code handleHttpMessageNotReadable} 而不是
+     * {@code handleMethodArgumentNotValid}。與 {@code /validate}、{@code /param-validate} 成組存在：
+     * 三種機制擋下的「值不合法」必須回出同一種形狀。
+     *
+     * <p>刻意同時放平鋪欄位與集合欄位，好讓「錯誤路徑帶不帶得出索引」變成可斷言的事實。
+     */
+    @PostMapping("/enum-validate")
+    public ProbeResponse enumValidate(@Valid @RequestBody ProbeEnumRequest request) {
+        return new ProbeResponse(String.valueOf(request.status()));
+    }
+
     public record ProbeResponse(String value) {
+    }
+
+    /** enum 值域探針的請求體。{@link ProductStatus} 的 wire format 是數字（見其 {@code @JsonValue}）。 */
+    public record ProbeEnumRequest(ProductStatus status, List<ProbeEnumItem> items) {
+    }
+
+    public record ProbeEnumItem(ProductStatus status) {
     }
 
     /**

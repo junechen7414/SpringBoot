@@ -436,8 +436,9 @@ public record GetAccountDetailResponse(
         @Schema(description = "帳戶名稱", example = "Bobby")
         String name,
 
-        @Schema(description = "啟用狀態", example = "Y", allowableValues = {"Y", "N"})
-        String status) {
+        // 值域用 enum 型別表達，不手抄 allowableValues —— 見「改善 4」
+        @Schema(description = "啟用狀態 (Y=啟用, N=停用)", example = "Y")
+        AccountStatus status) {
 }
 ```
 
@@ -482,19 +483,41 @@ public ResponseEntity<GetAccountDetailResponse> getAccountDetail(
 
 ---
 
-### 改善 4：Enum 值在 Schema 中明確標示
+### 改善 4：Enum 值在 Schema 中明確標示（已實作，做法與本節原本的建議不同）
 
-**方案 A：使用 `allowableValues`**
+本節原先提的兩個方案 —— `allowableValues = {"Y", "N"}` 與把值域寫進 `description` —— 都是**手抄**：
+文件裡的清單與程式碼裡真正接受的值是兩份資料，改了一邊另一邊不會跟著動，也不會有測試變紅。
+
+實際採用的做法是**把 DTO 欄位宣告成 enum 型別**，並在 enum 的 code 欄位掛 `@JsonValue`
+讓 wire format 維持既有的數字／單字元字串：
+
 ```java
-@Schema(description = "啟用狀態", example = "Y", allowableValues = {"Y", "N"})
-String status
+public enum ProductStatus {
+    AVAILABLE(1001, "可銷售"),
+    UNAVAILABLE(1002, "不可銷售");
+
+    @JsonValue
+    private final int code;
+    private final String description;
+}
 ```
 
-**方案 B：使用 description 說明**
 ```java
-@Schema(description = "訂單狀態 (1001=訂單建立, 1003=訂單取消)", example = "1001")
-Integer orderStatus
+@Schema(description = "銷售狀態 (1001=可銷售, 1002=不可銷售)", example = "1001", requiredMode = Schema.RequiredMode.REQUIRED)
+ProductStatus saleStatus
 ```
+
+一次換來三件事，且都不需要手抄：
+
+- springdoc 自動為 enum 欄位產出 `enum: [1001, 1002]`，值域永遠等於程式碼真正接受的值
+- 值域外的值由 Jackson 在反序列化當下擋下（早於 Bean Validation），不再寫進 DB
+- 編譯期型別安全，service 端拿到的是 `ProductStatus` 而不是任意 `Integer`
+
+`description` 裡的中文對照仍然保留 —— OpenAPI 的 `enum` 只列得出值，列不出「1001 是什麼意思」。
+
+> Jackson 的錯誤（`InvalidFormatException`）由 `GlobalExceptionHandler.handleHttpMessageNotReadable`
+> 轉譯成與 `@Valid` 同形的 `VALIDATION_FAILED`，呼叫端看不出值域是用 enum 還是 `@Pattern` 表達的。
+> 契約由 `ApiErrorContractTest` 釘住。
 
 ---
 
