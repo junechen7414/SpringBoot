@@ -135,7 +135,7 @@ public class ProductService {
         // 3. 更新商品屬性
         existingProduct.setName(updateProductRequestDto.name());
         existingProduct.setPrice(updateProductRequestDto.price());
-        existingProduct.setSaleStatus(updateProductRequestDto.saleStatus());
+        existingProduct.setSaleStatus(updateProductRequestDto.saleStatus().getCode());
         existingProduct.setAvailable(updateProductRequestDto.available());
         // 4. 儲存商品資料
         productRepository.save(existingProduct);
@@ -280,7 +280,7 @@ public class ProductService {
                 .id(product.getId())
                 .name(product.getName())
                 .price(product.getPrice())
-                .saleStatus(product.getSaleStatus())
+                .saleStatus(ProductStatus.fromCode(product.getSaleStatus()))
                 .available(product.getAvailable())
                 .build();
     }
@@ -296,7 +296,7 @@ public class ProductService {
                 product.getId(),
                 product.getName(),
                 product.getPrice(),
-                product.getSaleStatus(),
+                ProductStatus.fromCode(product.getSaleStatus()),
                 product.getAvailable());
     }
 

@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
@@ -30,6 +31,7 @@ import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.exc.InvalidFormatException;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.exception.SystemException;
@@ -42,7 +44,7 @@ import com.ibm.demo.exception.ValidationError;
  * 那批例外（405、415、malformed JSON…）它已經處理好，回 RFC 9457 的 {@code application/problem+json}
  * （{@link ProblemDetail}）。我們只補三件事：
  * <ol>
- *   <li>覆寫兩個驗證相關的 {@code handleXxx} —— 父類別預設的 detail 沒說哪個欄位錯了；</li>
+ *   <li>覆寫三個驗證相關的 {@code handleXxx} —— 父類別預設的 detail 沒說哪個欄位錯了；</li>
  *   <li>為自己的例外（{@link BusinessException}、resilience4j、Security…）加 {@code @ExceptionHandler}；</li>
  *   <li>覆寫 {@link #handleExceptionInternal} 做「所有例外的共同處理」—— 補 {@code code}／{@code type}、記 log。</li>
  * </ol>
@@ -217,7 +219,63 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * 驗證失敗的共用回應：兩條驗證路徑（request body / 方法參數）在此合流，格式因此不可能分岔。
+     * request body 讀不進來。父類別對它一律回一句籠統的 {@code "Failed to read request"}，
+     * 而其中有一類**其實是欄位驗證失敗**：DTO 的欄位宣告成 enum（如 {@code ProductStatus}）時，
+     * 值域檢查由 Jackson 在反序列化當下完成 —— 早於 Bean Validation，所以不會走
+     * {@link #handleMethodArgumentNotValid}，呼叫端得不到「是哪個欄位的值不合法」。
+     *
+     * <p>因此只把 enum 值域這一種成因轉譯過來、交給 {@link #validationFailed} 合流，讓它與
+     * {@code @Pattern}／{@code @Digits} 擋下的請求回出同一個形狀（{@code VALIDATION_FAILED} + 具名
+     * {@code errors}）—— 對呼叫端來說「值不在允許範圍」就是同一件事，不該因為我們用 enum 還是
+     * regex 表達值域而分岔。其餘成因（JSON 語法壞掉、型別完全不符）仍交給父類別，因為那些
+     * 不是「某個欄位填錯」，指不出欄位。
+     *
+     * <p><b>刻意不把允許值列進 {@code errors[].message}</b>：那份清單能拿到的是 Java 常數名
+     * （{@code AVAILABLE}），而 wire format 上是 {@code 1001}（見 {@code @JsonValue}），寫進去只會
+     * 誤導。值域屬於契約，該由 OpenAPI 文件承載 —— springdoc 會自動為 enum 欄位產出 {@code enum}。
+     */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+
+        if (ex.getCause() instanceof InvalidFormatException cause && cause.getTargetType().isEnum()) {
+            return validationFailed(ex,
+                    List.of(new ValidationError(fieldPathOf(cause), "must be one of the allowed values")),
+                    headers, request);
+        }
+        return super.handleHttpMessageNotReadable(ex, headers, status, request);
+    }
+
+    /**
+     * 把 Jackson 的反序列化路徑組成與 Bean Validation 同形的欄位路徑（{@code items[0].status}），
+     * 讓呼叫端不必分辨這個錯誤是哪一層擋下的。
+     *
+     * <p>組不出路徑時回 {@code null}：{@link ValidationError} 的約定會讓它降級為表單層級錯誤，
+     * 而不是塞一個空字串讓呼叫端誤以為欄位名叫 {@code ""}。
+     */
+    private static @Nullable String fieldPathOf(InvalidFormatException cause) {
+        StringBuilder path = new StringBuilder();
+        // path 的每一節不是具名屬性就是集合索引（兩者互斥），分別對應 "a.b" 與 "a[0]"。
+        for (var ref : cause.getPath()) {
+            String propertyName = ref.getPropertyName();
+            if (propertyName != null) {
+                if (!path.isEmpty()) {
+                    path.append('.');
+                }
+                path.append(propertyName);
+            } else if (ref.getIndex() >= 0) {
+                path.append('[').append(ref.getIndex()).append(']');
+            }
+        }
+        return path.isEmpty() ? null : path.toString();
+    }
+
+    /**
+     * 驗證失敗的共用回應：三條驗證路徑（request body 欄位、方法參數、enum 值域）在此合流，
+     * 格式因此不可能分岔。
      *
      * <p>{@code detail} 與 {@code errors} 都由同一個 list 產出：前者給人看（也是本專案跨 domain 呼叫時
      * {@code RestClientErrorHandler} 唯一取用的欄位，因此不能只寫「有 3 個欄位錯誤」這種沒資訊量的話），

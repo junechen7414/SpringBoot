@@ -281,6 +281,50 @@ class ApiErrorContractTest {
                     .andExpect(jsonPath("$.errors[0].message").value("must be positive"))
                     .andExpect(jsonPath("$.detail").value("參數驗證失敗: page must be positive"));
         }
+
+        @Test
+        @DisplayName("enum 欄位收到值域外的值：Jackson 擋下，仍回出同一種 VALIDATION_FAILED")
+        void enumValueOutOfRange() throws Exception {
+            mockMvc.perform(post("/contract-probe/enum-validate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"status\": 9999}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.status").value(400))
+                    // 與另兩條驗證路徑同一個 code/title —— 呼叫端不必知道值域是用 enum、@Pattern
+                    // 還是 @Digits 表達的
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.title").value("參數驗證失敗"))
+                    .andExpect(jsonPath("$.type").value("urn:problem:validation-failed"))
+                    .andExpect(jsonPath("$.errors.length()").value(1))
+                    .andExpect(jsonPath("$.errors[0].field").value("status"))
+                    .andExpect(jsonPath("$.errors[0].message").value("must be one of the allowed values"))
+                    // 允許值刻意不寫進訊息：那份清單拿得到的是 Java 常數名，與線路上的 1001 不符，
+                    // 寫進去只會誤導。值域由 OpenAPI 承載。
+                    .andExpect(content().string(not(containsString("AVAILABLE"))));
+        }
+
+        @Test
+        @DisplayName("巢狀集合裡的 enum 欄位：field 帶得出索引，與 Bean Validation 的路徑同形")
+        void enumValueOutOfRangeInNestedList() throws Exception {
+            mockMvc.perform(post("/contract-probe/enum-validate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"items\": [{\"status\": 1001}, {\"status\": 9999}]}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    // 指得出是第幾筆，呼叫端才能把訊息掛回對應的輸入
+                    .andExpect(jsonPath("$.errors[0].field").value("items[1].status"));
+        }
+
+        @Test
+        @DisplayName("enum 欄位的合法值仍是既有的數字：型別改 enum 沒有動到呼叫端契約")
+        void enumWireFormatIsUnchanged() throws Exception {
+            mockMvc.perform(post("/contract-probe/enum-validate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"status\": 1001}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.value").value("AVAILABLE"));
+        }
     }
 
     @Nested

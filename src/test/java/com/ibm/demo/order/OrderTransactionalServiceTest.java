@@ -129,7 +129,7 @@ public class OrderTransactionalServiceTest {
         // Assert
         assertThat(view.orderId()).isEqualTo(7);
         assertThat(view.accountId()).isEqualTo(3);
-        assertThat(view.status()).isEqualTo(OrderStatus.CREATED.getCode());
+        assertThat(view.status()).isEqualTo(OrderStatus.CREATED);
         assertThat(view.items()).containsExactly(new OrderItemRequest(20, 4));
     }
 

@@ -154,10 +154,10 @@ public class AccountServiceTest {
             assertThat(result.content()).hasSize(2);
             assertThat(result.content().get(0).id()).isEqualTo(1);
             assertThat(result.content().get(0).name()).isEqualTo("User1");
-            assertThat(result.content().get(0).status()).isEqualTo(STATUS_ACTIVE);
+            assertThat(result.content().get(0).status()).isEqualTo(AccountStatus.ACTIVE);
             assertThat(result.content().get(1).id()).isEqualTo(2);
             assertThat(result.content().get(1).name()).isEqualTo("User2");
-            assertThat(result.content().get(1).status()).isEqualTo(STATUS_INACTIVE);
+            assertThat(result.content().get(1).status()).isEqualTo(AccountStatus.INACTIVE);
             assertThat(result.page()).isEqualTo(0);
             assertThat(result.size()).isEqualTo(20);
             assertThat(result.totalElements()).isEqualTo(2);
@@ -178,7 +178,7 @@ public class AccountServiceTest {
             // Assert
             assertThat(response)
                     .hasFieldOrPropertyWithValue("name", DEFAULT_NAME)
-                    .hasFieldOrPropertyWithValue("status", STATUS_ACTIVE);
+                    .hasFieldOrPropertyWithValue("status", AccountStatus.ACTIVE);
 
             verify(accountRepository).findById(ACTIVE_ACCOUNT_ID);
         }
@@ -221,7 +221,7 @@ public class AccountServiceTest {
             Account inactiveAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_INACTIVE);
             UpdateAccountRequest request = UpdateAccountRequest.builder()
                     .name("Updated Name")
-                    .status(STATUS_ACTIVE)
+                    .status(AccountStatus.ACTIVE)
                     .build();
 
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(inactiveAccount));
@@ -247,7 +247,7 @@ public class AccountServiceTest {
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
             UpdateAccountRequest request = UpdateAccountRequest.builder()
                     .name("New Name")
-                    .status(STATUS_ACTIVE)
+                    .status(AccountStatus.ACTIVE)
                     .build();
 
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
@@ -270,7 +270,7 @@ public class AccountServiceTest {
         void updateAccount_WhenNotFound_ShouldThrowException() {
             Integer id = 999;
             UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .name("Any Name").status(STATUS_ACTIVE).build();
+                    .name("Any Name").status(AccountStatus.ACTIVE).build();
 
             when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
@@ -291,7 +291,7 @@ public class AccountServiceTest {
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
 
             UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .status(STATUS_INACTIVE)
+                    .status(AccountStatus.INACTIVE)
                     .build();
 
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));

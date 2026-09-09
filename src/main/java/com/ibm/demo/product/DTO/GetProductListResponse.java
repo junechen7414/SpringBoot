@@ -2,6 +2,8 @@ package com.ibm.demo.product.DTO;
 
 import java.math.BigDecimal;
 
+import com.ibm.demo.enums.ProductStatus;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "商品列表回應")
@@ -16,7 +18,7 @@ public record GetProductListResponse(
         BigDecimal price,
 
         @Schema(description = "銷售狀態 (1001=可銷售, 1002=不可銷售)", example = "1001")
-        Integer saleStatus,
+        ProductStatus saleStatus,
 
         @Schema(description = "可用庫存數量", example = "100")
         Integer available) {

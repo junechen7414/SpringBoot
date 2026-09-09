@@ -261,7 +261,7 @@ class ProductServiceTest {
                         assertThat(response)
                                         .hasFieldOrPropertyWithValue("name", name)
                                         .hasFieldOrPropertyWithValue("price", price)
-                                        .hasFieldOrPropertyWithValue("saleStatus", STATUS_SELLABLE)
+                                        .hasFieldOrPropertyWithValue("saleStatus", ProductStatus.AVAILABLE)
                                         .hasFieldOrPropertyWithValue("available", available);
 
                         verify(productRepository).findById(id);
@@ -313,7 +313,7 @@ class ProductServiceTest {
                         UpdateProductRequest request = UpdateProductRequest.builder()
                                         .name(newName)
                                         .price(newPrice)
-                                        .saleStatus(ProductStatus.AVAILABLE.getCode())
+                                        .saleStatus(ProductStatus.AVAILABLE)
                                         .available(newAvailable)
                                         .build();
 
@@ -342,7 +342,7 @@ class ProductServiceTest {
                         UpdateProductRequest request = UpdateProductRequest.builder()
                                         .name("Same Name")
                                         .price(new BigDecimal("25.00"))
-                                        .saleStatus(ProductStatus.AVAILABLE.getCode())
+                                        .saleStatus(ProductStatus.AVAILABLE)
                                         .available(150)
                                         .build();
 

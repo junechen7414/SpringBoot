@@ -98,7 +98,7 @@ public class OrderTransactionalService {
                                                                 .productId(item.productId())
                                                                 .quantity(item.quantity())
                                                                 .build()));
-                order.setStatus(request.orderStatus());
+                order.setStatus(request.orderStatus().getCode());
                 orderInfoRepository.save(order);
                 
                 log.info("訂單更新成功，訂單ID: {}, 新狀態: {}", 
@@ -135,7 +135,8 @@ public class OrderTransactionalService {
                                                 .quantity(detail.getQuantity())
                                                 .build())
                                 .collect(Collectors.toList());
-                return new OrderView(order.getId(), order.getAccountId(), order.getStatus(), items);
+                return new OrderView(order.getId(), order.getAccountId(),
+                                OrderStatus.fromCode(order.getStatus()), items);
         }
 
         /**
