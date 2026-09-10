@@ -27,7 +27,6 @@ import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.product.DTO.internal.StockChangeRequest;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.util.PageResponse;
-import com.ibm.demo.util.ServiceValidator;
 
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -60,9 +59,6 @@ public class OrderService {
         @Bulkhead(name = "order-write")
         @RateLimiter(name = "order-write")
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
-                ServiceValidator.validateNotNull(createOrderRequest, "Create order request");
-                ServiceValidator.validateNotNull(createOrderRequest.accountId(), "Account ID");
-                ServiceValidator.validateNotEmpty(createOrderRequest.items(), "Order details");
                 // 驗證帳戶具下單資格（資格規則由帳戶領域負責）
                 Integer accountId = createOrderRequest.accountId();
                 accountClient.assertCanPlaceOrder(accountId);
@@ -108,7 +104,6 @@ public class OrderService {
          * @return 包含訂單列表資訊的分頁回應
          */
         public PageResponse<GetOrderListResponse> getOrderListByAccountId(Integer accountId, Pageable pageable) {
-                ServiceValidator.validateNotNull(accountId, "Account ID");
                 // 1. 交易內載入訂單並萃取為純快照（明細於 session 內載入，避免交易外碰 lazy）
                 Page<OrderView> orderViews = orderTransactionalService.loadOrderViews(accountId, pageable);
 
@@ -176,10 +171,6 @@ public class OrderService {
         @Bulkhead(name = "order-write")
         @RateLimiter(name = "order-write")
         public void updateOrder(Integer orderId, UpdateOrderRequest request) {
-                ServiceValidator.validateNotNull(orderId, "Order ID");
-                ServiceValidator.validateNotNull(request, "Update order request");
-                ServiceValidator.validateNotNull(request.orderStatus(), "Update order status");
-                ServiceValidator.validateNotEmpty(request.items(), "Update order items");
                 // 1. 先驗證請求本身（同一商品只能一筆），失敗即擋下，不必查 DB 或動庫存
                 Set<OrderItemRequest> uniqueItems = validateAndConvertToUniqueItems(
                                 request.items(),
@@ -232,7 +223,6 @@ public class OrderService {
         @Bulkhead(name = "order-write")
         @RateLimiter(name = "order-write")
         public void deleteOrder(Integer orderId) {
-                ServiceValidator.validateNotNull(orderId, "Order ID");
 
                 // 1. 交易內載入並驗證狀態，把後續所需資料萃取為純 DTO（避免 lazy 洩漏到交易外、不依賴 OSIV）
                 OrderDeletionPlan plan = orderTransactionalService.prepareOrderDeletion(orderId);
@@ -340,7 +330,6 @@ public class OrderService {
          * @return 若帳戶有關聯訂單則返回 true，否則返回 false
          */
         public boolean isActiveAccountInOrder(Integer accountId) {
-                ServiceValidator.validateNotNull(accountId, "Account ID");
                 return !orderInfoRepository.findByAccountId(accountId).isEmpty();
         }
 

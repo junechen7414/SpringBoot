@@ -15,7 +15,6 @@ import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
 import com.ibm.demo.exception.ErrorCode;
-import com.ibm.demo.util.ServiceValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,7 +26,6 @@ public class TestDataService {
 
     @Transactional
     public void createOrderPrecondition(Integer count) {
-        ServiceValidator.validateNotNull(count, "Count");
         if (count <= 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Count must be positive");
         }

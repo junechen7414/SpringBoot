@@ -14,7 +14,7 @@ Repository (資料存取)                      └─▶ 自呼叫繞回本應�
     ↓
 Entity (資料模型)
 
-Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, ServiceValidator 等)
+Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, CreatedResponse 等)
 Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode, ValidationError;
            ApiErrorResponse 僅為 OpenAPI schema 宣告,執行期實際寫出的是 Spring ProblemDetail)
 ```
