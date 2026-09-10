@@ -15,7 +15,6 @@ import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.util.DBAssertion;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.util.PageResponse;
-import com.ibm.demo.util.ServiceValidator;
 
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -46,7 +45,6 @@ public class AccountService {
     @Bulkhead(name = "account-write")
     @RateLimiter(name = "account-write")
     public Integer createAccount(CreateAccountRequest account_DTO) {
-        ServiceValidator.validateNotNull(account_DTO, "Create account request");
 
         Account newAccount = Account.builder()
                 .name(account_DTO.name())
@@ -109,7 +107,6 @@ public class AccountService {
     @Bulkhead(name = "account-write-with-validation")
     @RateLimiter(name = "account-write-with-validation")
     public void updateAccount(Integer id, UpdateAccountRequest updateAccountRequestDto) {
-        ServiceValidator.validateNotNull(updateAccountRequestDto, "Update account request");
         // 1. 取得帳戶實體並驗證帳戶是否存在否則拋出例外
         Account existingAccount = findAccountByIdOrThrow(id);
 
@@ -158,7 +155,6 @@ public class AccountService {
      * Finds an account by its ID or throws AccountNotFoundException if not found.
      */
     private Account findAccountByIdOrThrow(Integer accountId) {
-        ServiceValidator.validateNotNull(accountId, "Account ID");
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                         "Account not found with id: " + accountId));
@@ -169,7 +165,6 @@ public class AccountService {
      * BusinessException (ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED) if orders exist.
      */
     private void checkAccountHasNoOrdersOrThrow(Integer accountId) {
-        ServiceValidator.validateNotNull(accountId, "Account ID");
         if (orderClient.getOrderExistence(accountId).hasActiveOrder()) {
             throw new BusinessException(ErrorCode.ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED,
                     "Account with id: " + accountId + " has associated orders and cannot be set to deactivate.");

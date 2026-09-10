@@ -22,7 +22,6 @@ import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.util.DBAssertion;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.util.PageResponse;
-import com.ibm.demo.util.ServiceValidator;
 
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -50,7 +49,6 @@ public class ProductService {
     @Bulkhead(name = "product-write")
     @RateLimiter(name = "product-write")
     public Integer createProduct(CreateProductRequest product_DTO) {
-        ServiceValidator.validateNotNull(product_DTO, "Create product request");
         // 1. 驗證商品名稱是否已存在
         String requestProductName = product_DTO.name();
         checkProductExistsByNameOrThrow(requestProductName);
@@ -96,10 +94,9 @@ public class ProductService {
 
     /**
      * 根據一組 ID 獲取多個商品的詳細資訊。
-     * 1. 驗證商品 ID 集合是否有效。
-     * 2. 查詢所有指定的商品是否存在。
-     * 3. 驗證所有查詢到的商品是否可銷售。
-     * 4. 將商品實體轉換為詳細資訊 DTO。
+     * 1. 查詢所有指定的商品是否存在。
+     * 2. 驗證所有查詢到的商品是否可銷售。
+     * 3. 將商品實體轉換為詳細資訊 DTO。
      *
      * @param ids 商品 ID 集合
      * @return 以商品 ID 為鍵，商品詳細資訊 DTO 為值的 Map
@@ -107,9 +104,9 @@ public class ProductService {
     @Bulkhead(name = "product-read")
     @RateLimiter(name = "product-read")
     public Map<Integer, GetProductDetailResponse> getProductDetails(Set<Integer> ids) {
-        // 使用多個ID查詢多個商品實體，若有對應不上的ID會忽略 continue，若傳入null會拋出例外
+        // 對應不上的 ID 會被忽略（不拋例外）；ids 本身為必填 @RequestParam，缺少時端點即回 400。
         // 注：@SQLRestriction 已保證只查詢未刪除且可銷售的商品
-        List<Product> products = findProductsByIds(ids);
+        List<Product> products = productRepository.findAllById(ids);
         // 將商品映射到以商品ID為key的DTO Map
         return mapProductsToDetailResponses(products);
     }
@@ -124,7 +121,6 @@ public class ProductService {
     @Bulkhead(name = "product-write")
     @RateLimiter(name = "product-write")
     public void updateProduct(Integer id, UpdateProductRequest updateProductRequestDto) {
-        ServiceValidator.validateNotNull(updateProductRequestDto, "Update product request");
         // 1. 取得商品實體並驗證商品是否存在否則拋出例外
         Product existingProduct = findProductByIdOrThrow(id);
         // 2. 若商品名稱有變更，驗證新名稱是否已存在
@@ -190,7 +186,6 @@ public class ProductService {
     @Bulkhead(name = "product-inventory")
     @RateLimiter(name = "product-inventory")
     public void adjustStock(AdjustStockRequest request) {
-        ServiceValidator.validateNotNull(request, "Adjust stock request");
         applyStockDelta(request.from(), request.to());
     }
 
@@ -202,9 +197,8 @@ public class ProductService {
      * @param updatedItems  調整後的預留項目集合
      */
     private void applyStockDelta(Set<OrderItemRequest> originalItems, Set<OrderItemRequest> updatedItems) {
-        // 0. 驗證輸入的訂單商品明細集合是否為空，且updatedItems中productId要存在，否則拋出ResourceNotFound
-        ServiceValidator.validateNotNull(originalItems, "Original order items");
-        ServiceValidator.validateNotNull(updatedItems, "Updated order items");
+        // 0. 檢查 updatedItems 的 productId 都存在（且可銷售），否則拋出 RESOURCE_NOT_FOUND。
+        // 兩個集合的非 null 由 request DTO 的 @NotNull/@NotEmpty 在端點保證，此處不重複檢核。
 
         Set<Integer> updatedProductIds = updatedItems.stream()
                 .map(OrderItemRequest::productId)
@@ -301,18 +295,6 @@ public class ProductService {
     }
 
     /**
-     * 根據一組 ID 查詢多個商品實體。
-     *
-     * @param productIds 商品 ID 集合
-     * @return 包含查詢到的商品實體的列表
-     */
-    private List<Product> findProductsByIds(Set<Integer> productIds) {
-        ServiceValidator.validateNotNull(productIds, "Product IDs");
-        List<Product> products = productRepository.findAllById(productIds);
-        return products;
-    }
-
-    /**
      * 將 Product 實體列表映射到以商品 ID 為鍵的 GetProductDetailResponse DTO Map。
      *
      * @param products 商品實體列表
@@ -325,7 +307,6 @@ public class ProductService {
 
     // 根據商品名稱檢查商品是否已存在
     private void checkProductExistsByNameOrThrow(String productName) {
-        ServiceValidator.validateNotNull(productName, "Product name");
         if (productRepository.existsByName(productName)) {
             throw new BusinessException(ErrorCode.PRODUCT_ALREADY_EXIST, productName + " already exists");
         }
@@ -338,7 +319,6 @@ public class ProductService {
      * @return 找到的商品實體
      */
     private Product findProductByIdOrThrow(Integer productId) {
-        ServiceValidator.validateNotNull(productId, "Product ID");
         Product result = productRepository.findById(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                         "Product not found with id: " + productId));
