@@ -36,6 +36,7 @@
 - **Branch 命名**：使用 `feature/ fix/ hotfix/ refactor/ config/ docs/ test/ chore/` 前綴（小寫、以 `-` 分隔），從最新的 `main` 分出，保持短命。
 - **Commit 格式**：遵循 Conventional Commits — `type(scope): subject`（祈使句、小寫、結尾不加句點）。
 - **禁止 AI 協作者署名**：commit message **不得**包含 `Co-Authored-By: Claude`（或任何指向 claude/anthropic 的 co-author）、`noreply@anthropic.com`、`🤖 Generated with Claude Code` 這類 AI 署名行。PR body 亦同。`.githooks/commit-msg` 會擋下含這些署名的 commit，作為第二道防線。
+- **合併 PR 一律用 rebase**：上下游兩個 repo 都只開 rebase merge（線性歷史 + 保留 commit 粒度）。用 GitHub MCP 時明寫 `merge_method: "rebase"`，並帶上 `expectedHeadSha`。
 - **新增 PR label 時**：使用 GitHub MCP 的 `issue_write`（method `update`）帶入 PR 編號 — `create_pull_request`/`update_pull_request` 沒有 labels 欄位。
 
 ---

@@ -118,7 +118,26 @@ issue_write(
 
 ---
 
-## Step 5：合併後清理分支
+## Step 5：合併 PR（rebase）
+
+CI 綠了才合併，**方式一律 rebase**（線性歷史 + 保留 commit 粒度；理由見 `docs/agents/03-git-workflow.md`）。
+
+用 GitHub MCP：
+
+```
+merge_pull_request(
+  pullNumber: <PR 號>,
+  merge_method: "rebase",
+  expectedHeadSha: "<分支 HEAD 全長 SHA，git rev-parse <branch> 取得>"
+)
+```
+
+- `merge_method` 一定明寫，不要依賴 repo 預設。
+- `expectedHeadSha` 建議帶上：檢查完 PR 到實際合併之間若有人再推 commit，會直接失敗而不是靜默合併掉沒看過的內容。
+
+---
+
+## Step 6：合併後清理分支
 
 PR 合併到 `main` 後：
 

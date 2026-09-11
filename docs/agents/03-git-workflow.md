@@ -308,6 +308,23 @@ PR 在 GitHub API 中本質上也是 issue，但各工具加 label 的方式不�
 
 - **GitHub 網頁**：PR 頁面右側 Labels 區塊手動勾選。
 
+### 合併方式：一律用 rebase
+
+**上下游兩個 repo（`SpringBoot`、`Playwright-TS`）統一用 rebase merge**，GitHub 設定只開「Allow rebase merging」（Settings → General → Pull Requests）。
+
+理由：主幹開發的 `main` 本該是一串小 commit 的線性流，而 merge commit 的 subject（`Merge pull request #75 from …`）除了 PR 編號以外零資訊量，是唯一打斷這個線性的東西。squash 雖然也線性，但會把 PR 內多個各自有意義、各自可 revert 的 commit 壓成一顆（例如 PR #74 的兩個 commit）。rebase 三者兼得：線性、保留粒度、subject 就是 Conventional Commits 本文。
+
+代價只有一個 —— rebase 會改寫 commit SHA，落地在 `main` 的物件與你推上去的分支不同。分支合併後即刪，實務上無感。
+
+用 GitHub MCP 合併時明確指定方式：
+
+```
+merge_pull_request(pullNumber: <PR 號>, merge_method: "rebase", expectedHeadSha: "<分支 HEAD 全長 SHA>")
+```
+
+> `merge_method` 不指定會走 repo 預設，別依賴它 —— 明寫出來，換 repo 時才不會靜默用錯。
+> `expectedHeadSha` 非必填但建議帶：從你檢查完 PR 到實際合併之間若有人再推 commit，帶了它會直接失敗，而不是靜默合併掉你沒看過的內容。
+
 合併 PR 後，依 [Git 分支清理指南](./04-git-branch-cleanup.md) 清理分支。
 
 ## main 紅了怎麼辦
