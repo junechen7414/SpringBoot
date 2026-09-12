@@ -102,8 +102,9 @@ docker compose up -d
 此命令會啟動：
 - **Spring Boot App** (http://localhost:8787)
 - **Oracle Database** (localhost:1521)
-- **Grafana Alloy** (收集指標)
+- **Grafana Alloy** (收集指標與 trace，應用唯一的匯出目標)
 - **Prometheus** (http://localhost:9090)
+- **Tempo** (http://localhost:3200，trace 儲存與查詢；OTLP 的 4317/4318 刻意不對宿主發佈)
 - **Grafana** (http://localhost:3000)
 
 #### 2. 僅啟動資料庫 (用於 IDE 內執行應用)
