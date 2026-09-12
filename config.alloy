@@ -11,9 +11,34 @@ otelcol.receiver.otlp "default" {
   }
   output {
     metrics = [otelcol.exporter.prometheus.default.input]
+    traces  = [otelcol.processor.batch.traces.input]
   }
 }
 // 將 Grafana Alloy 收集的數據發送到 Prometheus 中，使用 Prometheus 的遠程寫入功能，將數據發送到 Prometheus 的接收器中。
 otelcol.exporter.prometheus "default" {
   forward_to = [prometheus.remote_write.local.receiver]
+}
+
+// ---- Traces：app --OTLP--> 這裡 --OTLP/gRPC--> Tempo ----
+// 與指標共用上面同一個 4318 receiver，只是分流到不同的 output。
+otelcol.processor.batch "traces" {
+  // span 的產生是突發性的（一個請求可能一次噴十幾個），逐筆送會讓 Tempo 收到大量
+  // 小 request。指標那條路沒有這個問題（Micrometer 自己按 step 批次推），所以只有
+  // traces 需要 batch processor。
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    // Tempo 的 OTLP gRPC 埠。otelcol.exporter.otlp 只講 gRPC，要走 HTTP 得改用
+    // otelcol.exporter.otlphttp（本專案不需要）。
+    endpoint = "tempo:4317"
+    tls {
+      // 同一個 compose 網路內的明文連線，沒有憑證可驗。不設這段會因為找不到
+      // CA 而在啟動後持續 export 失敗。
+      insecure = true
+    }
+  }
 }

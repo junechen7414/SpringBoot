@@ -108,6 +108,11 @@ services:
     networks:
       - backend-net
       - monitor-net
+    depends_on:
+      # 沒這條 Alloy 會比 Tempo 早起，啟動後幾秒內持續噴 trace export 失敗。
+      # 只需 service_started：Tempo 沒有 healthcheck，而 Alloy 的 exporter 本來就會重試。
+      tempo:
+        condition: service_started
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -121,8 +126,32 @@ services:
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.enable-remote-write-receiver' # Enable remote write receiver
+      # exemplar（指標點上掛的 trace id）預設**不會被儲存**，remote write 收下後就丟掉。
+      # 少了這個旗標的症狀很難察覺：Alloy 有轉、Grafana 的 datasource 也設好了，
+      # 但 /api/v1/query_exemplars 永遠回空陣列，UI 上就是沒有可點的小菱形。
+      - '--enable-feature=exemplar-storage'
     ports:
       - "9090:9090"
+    networks:
+      - monitor-net
+    restart: unless-stopped
+
+  # Grafana Tempo（trace 儲存與查詢後端）
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    # Tempo 的入口參數只認 -config.file，沒有這個旗標它會找不到設定而用內建預設值
+    # （沒有 OTLP receiver）→ Alloy 一直連不上，但 Tempo 自己看起來是健康的。
+    command: -config.file=/etc/tempo/tempo.yaml
+    volumes:
+      - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
+      # WAL 與 block 都寫在這個具名 volume 底下（見 tempo.yaml 的 storage.trace）。
+      - tempo-data:/var/tempo
+    ports:
+      # 只發佈查詢埠，供宿主用 curl localhost:3200/api/echo 做連通性檢查。
+      # OTLP 的 4317/4318 刻意不發佈：span 一律經由 Alloy 進來，維持「應用只認得
+      # Alloy 一個出口」的原則，也避免與宿主上 Alloy 已占用的 4318 撞埠。
+      - "3200:3200"
     networks:
       - monitor-net
     restart: unless-stopped
@@ -159,5 +188,6 @@ volumes:
   # Named volumes: ensure data (dashboards, metrics) persists after container restarts
   alloy-data:
   prometheus-data:
+  tempo-data:
   grafana-data:
   oracle-data:

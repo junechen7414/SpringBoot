@@ -40,6 +40,32 @@ management:
         # 注意不要動 aggregation-temporality（預設 cumulative）—— rate() 依賴單調
         # 遞增的累積計數，改成 delta 會讓所有 rate() 查詢失效。
         base-time-unit: seconds
+  tracing:
+    sampling:
+      # 全採樣。預設是 0.1，在單機 demo 上會變成「打了 API 卻查不到 trace」的常態，
+      # 很容易被誤判成鏈路沒接通。正式環境請往下調 —— trace 量與儲存成本成正比。
+      probability: 1.0
+    export:
+      otlp:
+        # 本機沒起監控堆疊時設成 false，免得 batch span processor 每 5 秒噴一次連線失敗。
+        # 與上面的 OTLP_METRICS_ENABLED 用途相同但彼此獨立：指標與 trace 是兩條鏈，
+        # 關掉一條不影響另一條。這個開關由 @ConditionalOnEnabledTracingExport 消化。
+        enabled: ${OTLP_TRACING_ENABLED:true}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          # 與指標同一個 Alloy、同一個 4318 埠，只有 path 不同（/v1/traces）。
+          #
+          # 兩件容易踩的事：
+          # 1. 屬性名不對稱 —— 指標是 management.otlp.metrics.export.url，
+          #    trace 是 management.opentelemetry.tracing.export.otlp.endpoint。
+          # 2. Boot 3.x 的 management.otlp.tracing.endpoint 在 Boot 4 是
+          #    deprecation level=error，寫舊名不是「靜默失效」而是直接啟動失敗。
+          #
+          # 沒設這個值時 exporter bean 根本不會建立（@ConditionalOnProperty），
+          # 所以其他 profile 不需要另外關 tracing —— 不給 endpoint 就等於沒開。
+          endpoint: http://${ALLOY_HOST:localhost}:4318/v1/traces
   metrics:
     tags:
       application: ${spring.application.name}

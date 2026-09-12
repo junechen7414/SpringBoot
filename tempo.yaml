@@ -1,0 +1,62 @@
+# Grafana Tempo — 單體（monolithic，target: all）模式，只跑在本機 demo 用。
+#
+# 資料流：app --OTLP/HTTP--> Alloy --OTLP/gRPC--> Tempo --(local 磁碟)
+# app 不直接連 Tempo，與指標同一個原則：應用只認得 Alloy 一個出口。
+#
+# ⚠️ 這份設定是寫給 **Tempo 3.x** 的（`docker-compose.yml` 用 `:latest`）。
+# Tempo 3.0 換掉了內部架構，網路上大多數 Tempo 2.x 範例會直接啟動失敗：
+#   ingester  → live_store（+ block_builder）
+#   compactor → backend_scheduler / backend_worker
+# 沿用舊名的後果不是「被忽略」而是
+#   `failed parsing config: field ingester not found in type app.Config`
+# → 容器起不來並反覆重啟。所以升級 Tempo 大版本時這個檔案要一起看。
+# 想確認某個欄位在當前版本叫什麼，最快的方式是問跑起來的 Tempo 自己：
+#   curl localhost:3200/status/config
+
+# Grafana 的 TraceQL 編輯器與 metrics summary 需要走 HTTP streaming，
+# 少了這個查詢會退回較慢的輪詢路徑並在 UI 顯示串流不可用。
+stream_over_http_enabled: true
+
+server:
+  # Grafana datasource 與 /api/echo 健康探測都打這個埠。
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        # gRPC 給 Alloy 用（otelcol.exporter.otlp 只講 gRPC）。
+        grpc:
+          endpoint: 0.0.0.0:4317
+        # HTTP 保留給臨時手動灌 span 除錯用；沒有對宿主發佈這個埠，
+        # 宿主的 4318 是 Alloy 在用，兩者不衝突。
+        http:
+          endpoint: 0.0.0.0:4318
+    # 預設還會啟用 Jaeger 的 receiver（14268/14250），但只綁 localhost 且沒發佈，
+    # 對外沒有影響，所以不特別關掉。
+
+backend_scheduler:
+  provider:
+    compaction:
+      compaction:
+        # 本機 demo 不需要長期保存，一天足夠且不會讓磁碟無限長大（預設 336h = 14 天）。
+        # 巢狀兩層 compaction 不是筆誤，這是 3.x 的實際結構。
+        block_retention: 24h
+
+storage:
+  trace:
+    # local 後端：單體模式專用，不需要 S3／GCS。生產環境請換物件儲存。
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+# 刻意沒設的：
+# - live_store.max_block_duration —— 3.x 預設就是 30s（2.x 的 ingester 預設是 30m，
+#   當年得手動縮短才能「打完 API 幾分鐘內查得到」；現在不必）。
+# - ingest.kafka —— 那是 Tempo 3.x 分散式部署用的，單體模式不需要外部 Kafka。
+#
+# 注意 trace 查詢有個不對稱：**用 trace ID 直接查是立即可見的，Search／tag 值要等
+# block 切出去才有**。剛送完 span 就用 Search 查不到，很容易誤判成鏈路沒接通 ——
+# 先用 trace ID 驗一次。排錯順序見 docs/monitoring-usage-guide.md §9.4。

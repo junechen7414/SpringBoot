@@ -14,7 +14,7 @@
 | | 回答什麼問題 | 取樣 | 儲存成本 | 本專案 |
 |---|---|---|---|---|
 | **Metrics（指標）** | 「有多少 / 多快 / 多滿」 | 100% 流量 | **最便宜** — 只存聚合後的數字，不存個別請求 | ✅ 已有（本文件主題） |
-| **Traces（追蹤）** | 「**這一筆**請求的時間花在哪一段」 | 通常抽樣（1%～10%） | 中等 — 每筆請求存一棵 span 樹 | ❌ 尚未（見 §9） |
+| **Traces（追蹤）** | 「**這一筆**請求的時間花在哪一段」 | 通常抽樣（1%～10%） | 中等 — 每筆請求存一棵 span 樹 | ✅ 已有（見 §9） |
 | **Logs（日誌）** | 「發生了什麼**離散事件**」 | 100% | **最貴** — 每筆一整行字串，無法聚合 | ✅ 已有（`log.info` 業務事件） |
 
 **關鍵在「metrics 存的是聚合值」**。一萬個請求進來，`http.server.requests` 這個指標不會存一萬筆紀錄，它只維護幾個累加的數字（總次數、總耗時、各個耗時區間的落點數）。所以 metrics 可以 100% 覆蓋還很便宜——代價是你**永遠問不出「是哪一筆請求慢」**，只能問「慢的那 1% 有多慢」。要追到個別請求就得靠 traces。
@@ -38,6 +38,8 @@ Spring Boot App          Grafana Alloy              Prometheus            Grafan
        OTLP/HTTP :4318         :9090/api/v1/write      :9090               :3000
 ```
 
+這張圖只畫**指標**那條鏈。追蹤共用第一段（同一個 4318 端點），但在 Alloy 之後轉向 Tempo —— 見 §9。
+
 四段各自的責任與「壞掉時的症狀」：
 
 | Hop | 誰對誰做什麼 | 壞掉的症狀 |
@@ -51,7 +53,7 @@ Spring Boot App          Grafana Alloy              Prometheus            Grafan
 
 多數 Prometheus 教材的模型是：Prometheus 定時去每個 app 的 `/actuator/prometheus` **抓**（scrape）。本專案**不是**這樣：
 
-- `build.gradle` 只引入 `micrometer-registry-otlp`，**沒有** `micrometer-registry-prometheus`。沒有那個 registry，`/actuator/prometheus` 端點就不會存在（實際打會回 **404**）。這是刻意的，不是漏掉。
+- `build.gradle` 的 `spring-boot-starter-opentelemetry` 帶進來的是 `micrometer-registry-otlp`，**沒有** `micrometer-registry-prometheus`。沒有那個 registry，`/actuator/prometheus` 端點就不會存在（實際打會回 **404**）。這是刻意的，不是漏掉。
 - 因此 `prometheus.yml` 的 `scrape_configs` 是**空的**，Prometheus 在這條鏈裡是**被推**的一方。
 
 **踩過的坑**：讓 Prometheus 能「接收」remote_write，靠的是 `docker-compose.yml` 裡的 CLI flag `--web.enable-remote-write-receiver`，**不是**設定檔裡的 `remote_write:` 區塊。那個區塊語意剛好相反——它是叫 Prometheus 把自己的資料推**出去**給別的後端。舊版 `prometheus.yml` 曾經把自己的位址填進去（等於推給自己），註解還寫成「開啟接收功能」，兩者都是錯的。
@@ -74,7 +76,7 @@ Spring Boot App          Grafana Alloy              Prometheus            Grafan
 | 不需要 service discovery | Prometheus 不必知道 app 在哪，反過來由 app 知道 collector 在哪（就是 `ALLOY_HOST`）。對**短命 workload** 是生死級差別 —— 活 20 秒的 batch job / CI 容器，10 秒 scrape 間隔可能整段錯過 |
 | 網路方向對了 | push 是 outbound。scrape 要求監控端能主動連進**每一個** app 實例；跨 NAT、跨網段、跨雲、只開出不開進的防火牆環境下，那是行政問題不是技術問題 |
 | 中間多一層可插拔的處理點 | relabel、砍高基數 label、補 resource attribute、同時 fan-out 到多個後端 —— 全在 Alloy 做，**app 一行都不用改**。換後端不動應用程式，這是 collector 模式最實際的價值 |
-| 三根柱子共用一條線 | OTLP 同一個協定送 metrics/traces/logs，resource attributes 一致。日後接 tracing（§9）時 trace 與 metric 的 label 對得上 |
+| 三根柱子共用一條線 | OTLP 同一個協定送 metrics/traces/logs，resource attributes 一致。tracing（§9）走的就是同一個 4318 端點，trace 與 metric 的 label 對得上 |
 | app 不必裸露指標端點 | 也就沒有「要不要讓 Prometheus 過 Basic Auth」這個問題 |
 
 **push 付出了什麼**（這些是真痛，不是為了對稱而列）
@@ -95,7 +97,7 @@ Spring Boot App          Grafana Alloy              Prometheus            Grafan
 
 還有第三條路，很多團隊實際落在這裡：**讓 collector 自己去 scrape，再 remote_write 出去**（Alloy 的 `prometheus.scrape` 元件）—— 對 app 是 pull（保住 `up`、保住 `curl` 除錯），對後端是 push（保住集中處理與網路方向）。想清楚的話這通常是最好的組合。
 
-本專案選 push 的理由是簡單（compose 內一條線、不用 service discovery）加上教學價值（OTLP 是現在的通用語）。**具體少掉的就是 `up`** —— 所以之後要加告警的話（§9），第一條規則不會是「錯誤率 > 5%」，而是「資料不見了」。
+本專案選 push 的理由是簡單（compose 內一條線、不用 service discovery）加上教學價值（OTLP 是現在的通用語）。**具體少掉的就是 `up`** —— 所以之後要加告警的話（§10），第一條規則不會是「錯誤率 > 5%」，而是「資料不見了」。
 
 ---
 
@@ -112,7 +114,9 @@ podman compose up -d
 podman compose ps          # 等 oracle-db 變成 healthy（首次啟動可能要 2～3 分鐘）
 ```
 
-起來的五個容器：`spring-boot-app`(8787)、`oracle-db`(1521)、`grafana-alloy`(4318)、`prometheus`(9090)、`grafana`(3000)。
+起來的六個容器：`spring-boot-app`(8787)、`oracle-db`(1521)、`grafana-alloy`(4318)、`prometheus`(9090)、`tempo`(3200)、`grafana`(3000)。
+
+`tempo` 只對宿主發佈查詢埠 3200；OTLP 的 4317/4318 刻意不發佈 —— span 一律經由 Alloy 進來。
 
 ### 步驟 2：產生流量（沒有流量就沒有圖）
 
@@ -453,13 +457,125 @@ drwxrwxrwx  2 472  0    plugins      ← 從映像 copy-up，保留 UID 472
 
 ---
 
-## 9. 這批刻意沒做的（延後項目）
+## 9. 追蹤（traces）：從「慢的 1%」跳到「就是這一筆」
+
+§1 說過 metrics 存的是聚合值，所以它永遠回答不了「是哪一筆請求慢」。這一節就是那個缺口的
+補法。**兩條鏈完全獨立**（見 [`docs/agents/09-monitoring.md`](./agents/09-monitoring.md)），
+只共用 app → Alloy 這一段：
+
+```
+Spring Boot App              Grafana Alloy                  Tempo              Grafana
+(micrometer-tracing-otel) -> (receiver 4318 分流 traces) -> (trace 儲存)  <-  (TraceQL 查詢)
+     span 產生即送              batch 後 OTLP/gRPC :4317        :3200            :3000
+```
+
+### 9.1 三十秒確認鏈路活著
+
+```powershell
+# Tempo 自己活著嗎？（回 "echo" 就是活的。這是 Tempo 的健康端點）
+Invoke-RestMethod 'http://localhost:3200/api/echo'
+
+# 打幾個請求產生 span（同 §3 步驟 2 的流量指令即可）
+
+# Tempo 收到了嗎？列出它看得到的 service 名稱，應該有 demo
+(Invoke-RestMethod 'http://localhost:3200/api/search/tag/service.name/values').tagValues
+```
+
+**dev profile 是全採樣**（`management.tracing.sampling.probability: 1.0`），所以打一個請求就該有
+一筆 trace。預設值是 **0.1**，若哪天改回預設，「打了十次才查到一筆」是正常的，不是壞掉。
+
+### 9.2 在 Grafana 裡找 trace
+
+開 <http://localhost:3000> → 左側 **Explore** → 左上 datasource 選 **Tempo**。三種入口：
+
+| 入口 | 怎麼用 | 什麼時候用 |
+|---|---|---|
+| **Search** | Service Name 選 `demo`，可再加 span 名稱／耗時下限 | 「最近有哪些慢請求」 |
+| **TraceQL** | 貼查詢式，例如 `{ duration > 200ms }`、`{ span.http.response.status_code = 500 }` | 已經知道要找什麼特徵 |
+| **TraceID** | 直接貼一個 trace id | 從 log 或 exemplar 拿到 id 之後 |
+
+點開一筆 trace 會看到 span 樹：最外層是 `http.server.requests` 那個 server span，往下是
+`*Client` 的跨模組呼叫、JDBC 查詢各自一段。**這就是原本 `LoggingAspect` 想做卻做不到的
+方法級追蹤**（§1 那段的正解）。
+
+### 9.3 兩條「從指標／log 跳到 trace」的路
+
+- **從 log 跳**：追蹤上了 classpath 之後，每行 log 會多出 `[demo,traceId,spanId]`（Boot 預設的
+  correlation pattern，本專案沒有自訂 `logging.pattern.*`）。看到一行可疑的 log，把中間那段
+  traceId 貼進 Explore 的 **TraceID** 就能看整條鏈。沒有 trace context 的訊息（啟動、shutdown
+  hook）那格是空白 —— 正常。
+- **從指標跳（exemplars）**：延遲圖的資料點上會有可點擊的小菱形，一點就跳到當時那筆 trace ——
+  「這根長條是哪個請求造成的」不必再用時間去猜。這條路要**三個地方同時成立**，而缺任何一個都
+  不會報錯，症狀一律是「沒有小菱形」：
+  1. 應用產生 exemplar —— `OtlpExemplarsAutoConfiguration` 在有 `Tracer` bean 時自動生效，
+     這一項確實是免費的。
+  2. Prometheus 存下 exemplar —— `docker-compose.yml` 裡 prometheus 的
+     `--enable-feature=exemplar-storage`。**預設是關的**，remote write 收下後直接丟掉。
+  3. Grafana 知道要跳去哪 —— `grafana/provisioning/datasources/prometheus.yml` 的
+     `exemplarTraceIdDestinations`（`name: trace_id`、`datasourceUid: tempo`）。
+
+  想確認 exemplar 真的存進去了（繞過 UI）：
+
+  ```powershell
+  $s = (Get-Date).ToUniversalTime().AddMinutes(-10).ToString('yyyy-MM-ddTHH:mm:ssZ')
+  $e = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+  Invoke-RestMethod "http://localhost:9090/api/v1/query_exemplars?query=http_server_requests_seconds_bucket&start=$s&end=$e"
+  ```
+
+  回傳的 `labels` 應該看得到 `trace_id` 與 `span_id`。空陣列＝第 2 項沒開。
+
+### 9.4 查不到 trace 的排錯順序
+
+```
+Tempo 裡找不到剛打的請求
+│
+├─1. 等一下再查。block 大約每 30 秒切一次（Tempo 3.x 的 live_store 預設值）。
+│     切出去之前，**Search 與 tag 值查不到，但用 trace id 直接查得到**。
+│     這個不對稱最容易被誤判成「鏈路沒接通」——先用 TraceID 入口驗一次。
+│
+├─2. app 有送嗎？
+│     podman compose logs app | Select-String -Pattern 'otlp|4318|span|trace'
+│     · 沒設 management.opentelemetry.tracing.export.otlp.endpoint → exporter bean
+│       根本不存在（@ConditionalOnProperty），完全不會連線也不會報錯
+│     · 寫成 Boot 3.x 的舊屬性名（management.otlp.tracing.endpoint）→ 這個不是靜默
+│       失效，而是**啟動直接失敗**（Boot 4 把舊名標成 deprecation level=error）
+│     · OTLP_TRACING_ENABLED=false → 刻意關掉的
+│
+├─3. Alloy 有轉出去嗎？
+│     podman compose logs alloy | Select-String -Pattern 'tempo|traces|refused'
+│     · 「connection refused tempo:4317」→ Tempo 沒起來或設定檔沒吃到（見第 4 步）
+│     · config.alloy 的 4318 receiver 的 output 少了 traces 那一行 → 收到了但沒轉出去
+│
+├─4. Tempo 的設定檔吃進去了嗎？
+│     podman compose logs tempo | Select-String -Pattern 'failed parsing config|Tempo started'
+│     · 「field ingester not found in type app.Config」→ 設定檔是 Tempo 2.x 的寫法，
+│       而 :latest 已經是 3.x（架構換了：ingester → live_store、compactor →
+│       backend_scheduler）。容器會反覆重啟，/api/echo 當然也連不上
+│     · command 少了 -config.file=/etc/tempo/tempo.yaml → Tempo 用內建預設值啟動，
+│       OTLP receiver 只綁 127.0.0.1（容器內），Alloy 連不進來，但 Tempo 自己完全
+│       健康、/api/echo 照樣回 echo。所以第 1 步的 echo 通過**不能**證明 receiver 對外開著
+│
+└─5. tempo log 每 15 秒噴一次 error 是壞了嗎？
+      backendworker「error calling scheduler ... no jobs found」是**正常的**：
+      3.x 的 backend_worker 主動向 scheduler 要壓實工作，沒工作就回 NotFound。
+      量少的 demo 環境會一直這樣，與 trace 查不到無關。
+```
+
+### 9.5 刻意沒開的兩個 Tempo 功能
+
+`grafana/provisioning/datasources/tempo.yml` 沒有設 `tracesToMetrics` 與 `serviceMap`。它們依賴
+span metrics 與 service graph 指標，得在 Alloy 加 `otelcol.connector.spanmetrics` /
+`servicegraph` 才會產生。本專案沒產生那些指標，設了只會在 UI 得到空面板。
+
+---
+
+## 10. 這批刻意沒做的（延後項目）
 
 | 項目 | 為什麼延後 | 補上之後能做到什麼 |
 |---|---|---|
-| **Tracing**（Micrometer Tracing + Tempo） | 需新增依賴與 compose 服務，範圍比「看得見」大 | 從 p99 尖峰**直接跳到那一筆**慢請求，看它在 `*Client` 跨模組呼叫的哪一段卡住。這才是原本 `LoggingAspect` 想做卻做不到的方法級追蹤的正解 |
 | **`@Timed` 業務層指標** | `http.server.requests` 與 `resilience4j.*` 已覆蓋大部分需求；等真的有「想知道扣庫存那段花多久」的需求再加 | 用業務語彙命名的指標（如 `order.create`）。需先開 `management.observations.annotations.enabled`（Spring Boot 預設 `false`） |
-| **結構化日誌 + Loki** | 要先把 `accountId`/`orderId` 放進 MDC 而非訊息字串 | 用欄位查日誌，並與 trace id 關聯 |
+| **span metrics / service graph** | 要在 Alloy 加 `otelcol.connector.spanmetrics` / `servicegraph`；這兩個會把 span 量轉成指標量，成本結構要先想清楚 | Grafana 的 Service Graph（服務依賴圖）與 RED 指標自動產生；`tempo.yml` datasource 的 `tracesToMetrics` / `serviceMap` 才有意義（§9.5） |
+| **結構化日誌 + Loki** | 要先把 `accountId`/`orderId` 放進 MDC 而非訊息字串 | 用欄位查日誌。trace id 已經在每行 log 裡了（§9.3），接上 Loki 之後就能從 log 直接跳 trace，不必手動複製 id |
 | **告警規則** | 有 dashboard 才知道正常長什麼樣，才定得出閾值 | 錯誤率 > 5% 持續 5 分鐘就通知，不必盯著螢幕。**第一條規則不該是錯誤率，而是「資料不見了」** —— push 模式沒有 `up`，理由見 §2.1 |
 
 ---
@@ -468,5 +584,5 @@ drwxrwxrwx  2 472  0    plugins      ← 從映像 copy-up，保留 UID 472
 
 - [`docs/agents/09-monitoring.md`](./agents/09-monitoring.md) — 鏈路與端點的架構描述、HEALTHCHECK 運作機制
 - [`docs/resilience4j-configuration-guide.md`](./resilience4j-configuration-guide.md) — 飽和度 panel 背後的 bulkhead / 斷路器 / 限流設定
-- `config.alloy`、`prometheus.yml`、`docker-compose.yml` — 管線本體
+- `config.alloy`、`prometheus.yml`、`tempo.yaml`、`docker-compose.yml` — 管線本體
 - `grafana/` — datasource 與 dashboard 佈建檔
