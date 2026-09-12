@@ -58,3 +58,8 @@ out/
 ### Local docs ###
 # 個人講義草稿，暫不進版控。
 docs/handout/
+
+### JVM crash dumps ###
+# 記憶體不足時 JVM 會在 repo 根目錄丟這兩種檔（Windows 上跑整合測試最常見），純診斷用。
+hs_err_pid*.log
+replay_pid*.log
