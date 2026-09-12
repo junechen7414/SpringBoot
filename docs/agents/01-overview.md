@@ -11,7 +11,7 @@
 - **容錯處理**: Resilience4j (Bulkhead, Circuit Breaker, Rate Limiter)
 - **HTTP 客戶端**: RestClient（取代 WebClient）；`@ImportHttpServices` 註冊 `@HttpExchange` interface 的 runtime proxy bean，`RestClientHttpServiceGroupConfigurer` 統一設定傳輸
 - **API 文件**: SpringDoc OpenAPI 3
-- **監控系統**: Grafana Alloy + Prometheus + Grafana
+- **監控系統**: Grafana Alloy + Prometheus（指標）+ Tempo（追蹤）+ Grafana
 - **測試框架**: JUnit 5, Mockito, Testcontainers
 - **容器化**: Docker (多階段建置) / Podman
 - **CI/CD**: GitHub Actions
@@ -25,7 +25,7 @@
 5. **併發控制**: Resilience4j Bulkhead 取代自定義 Semaphore，實現 fail-fast 資源保護
 6. **統一分頁**: 所有列表查詢使用 `PageResponse<T>` 封裝分頁回應，移除非分頁列表端點
 7. **環境隔離**: 透過 Spring Profiles 管理多環境配置 (dev, integration-test, e2e, openapi)
-8. **監控鏈路**: App (OTLP) → Alloy → Prometheus → Grafana
+8. **監控鏈路**: 兩條，只共用 App → Alloy 這一段 —— 指標 App (OTLP) → Alloy → Prometheus → Grafana；追蹤 App (OTLP) → Alloy → Tempo → Grafana
 
 ### 業務領域
 
