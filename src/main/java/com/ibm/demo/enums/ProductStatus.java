@@ -17,8 +17,8 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum ProductStatus {
-    AVAILABLE(1001, "可銷售"),
-    UNAVAILABLE(1002, "不可銷售");
+    AVAILABLE(Codes.AVAILABLE, "可銷售"),
+    UNAVAILABLE(Codes.UNAVAILABLE, "不可銷售");
 
     @JsonValue
     private final int code;
@@ -38,5 +38,15 @@ public enum ProductStatus {
             }
         }
         throw new SystemException("DB 存有無法識別的商品銷售狀態").with("saleStatus", code);
+    }
+
+    /** 與上方列舉常數一對一的編譯期常數，用途與限制見 {@link OrderStatus.Codes}。 */
+    public static final class Codes {
+        private Codes() {
+            throw new UnsupportedOperationException("This is a constant holder and cannot be instantiated");
+        }
+
+        public static final int AVAILABLE = 1001;
+        public static final int UNAVAILABLE = 1002;
     }
 }

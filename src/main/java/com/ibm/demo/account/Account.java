@@ -30,7 +30,9 @@ import lombok.Setter;
 @Entity
 @Builder
 @EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
-@SQLRestriction("STATUS = 'Y' AND DELETED = false") // 只選擇啟用狀態且未被刪除的資料
+// 只選擇啟用狀態且未被刪除的資料。狀態值由 AccountStatus 串接而來，不硬編字面值 ——
+// @SQLRestriction 是生 SQL 用的字串，編譯器與型別系統都不會檢查，改了 enum 而漏改這裡不會有任何錯誤。
+@SQLRestriction("STATUS = '" + AccountStatus.Codes.ACTIVE + "' AND DELETED = false")
 @Table(name = "ACCOUNT") // 指定對應的資料表名稱
 public class Account {
 

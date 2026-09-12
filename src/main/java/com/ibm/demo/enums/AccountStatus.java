@@ -15,8 +15,8 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum AccountStatus {
-    ACTIVE("Y", "啟用"),
-    INACTIVE("N", "停用");
+    ACTIVE(Codes.ACTIVE, "啟用"),
+    INACTIVE(Codes.INACTIVE, "停用");
 
     @JsonValue
     private final String code;
@@ -33,5 +33,15 @@ public enum AccountStatus {
             }
         }
         throw new SystemException("DB 存有無法識別的帳戶狀態").with("status", code);
+    }
+
+    /** 與上方列舉常數一對一的編譯期常數，用途與限制見 {@link OrderStatus.Codes}。 */
+    public static final class Codes {
+        private Codes() {
+            throw new UnsupportedOperationException("This is a constant holder and cannot be instantiated");
+        }
+
+        public static final String ACTIVE = "Y";
+        public static final String INACTIVE = "N";
     }
 }

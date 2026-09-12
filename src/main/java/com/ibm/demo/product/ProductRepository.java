@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.util.SoftDeleteRepository;
 
 public interface ProductRepository extends JpaRepository<Product, Integer>, SoftDeleteRepository<Integer> {
@@ -36,13 +37,12 @@ public interface ProductRepository extends JpaRepository<Product, Integer>, Soft
 
     @Override
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("""
-            UPDATE Product p SET p.softDeleteMetadata.deleted = true,
-            p.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP,
-            p.saleStatus = 1002,
-            p.version = p.version + 1
-            WHERE p.id = :id AND p.version = :version
-            """)
+    // 寫入的狀態值由 ProductStatus 串接而來，理由見 AccountRepository 上的同款註解。
+    @Query("UPDATE Product p SET p.softDeleteMetadata.deleted = true, "
+            + "p.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP, "
+            + "p.saleStatus = " + ProductStatus.Codes.UNAVAILABLE + ", "
+            + "p.version = p.version + 1 "
+            + "WHERE p.id = :id AND p.version = :version")
     // 確保 @Param 名稱與 Query 中的 :名稱 一致
     int softDeleteById(@Param("id") Integer id, @Param("version") Integer version);
 

@@ -153,7 +153,15 @@ public class OrderTransactionalService {
                                 () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                                                 "Order not found with ID: " + orderId));
 
-                if (order.getStatus() != OrderStatus.CREATED.getCode()) {
+                // 先轉列舉再比對，不拿 Integer 去跟 int 比：後者除了會 unboxing，更關鍵的是
+                // DB 存了無法識別的狀態時會被「不等於 CREATED」悄悄吸收成 400，而那其實是資料
+                // 完整性問題 —— fromCode 會把它照實抬成 SystemException(500)。
+                //
+                // 這段對走 repository 的呼叫端目前不可達：OrderInfo 的 @SQLRestriction 已限定
+                // STATUS = CREATED，非 CREATED 的訂單在上面 findById 就先撞 RESOURCE_NOT_FOUND
+                // （由 SqlStatusIntegrationTest 釘住）。仍保留，因為它防的正是那條裸 SQL
+                // 條件被放寬的那天 —— 屆時這裡就是唯一擋住「刪除已取消訂單」的地方。
+                if (OrderStatus.fromCode(order.getStatus()) != OrderStatus.CREATED) {
                         throw new BusinessException(ErrorCode.ORDER_STATUS_INVALID,
                                         "訂單狀態不允許刪除，目前狀態: " + order.getStatus());
                 }

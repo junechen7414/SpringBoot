@@ -32,7 +32,8 @@ import lombok.Setter;
 @Entity
 @Builder
 @EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
-@SQLRestriction("DELETED = false AND SALE_STATUS = 1001") // 只選擇未刪除且上架的商品
+// 只選擇未刪除且上架的商品。狀態值由 ProductStatus 串接而來，理由見 Account 上的同款註解。
+@SQLRestriction("DELETED = false AND SALE_STATUS = " + ProductStatus.Codes.AVAILABLE)
 @Table(name = "PRODUCT")
 public class Product {
     @Id

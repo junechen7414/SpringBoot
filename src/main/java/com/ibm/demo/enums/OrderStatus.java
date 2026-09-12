@@ -18,8 +18,8 @@ import lombok.Getter;
 @AllArgsConstructor
 @Getter
 public enum OrderStatus {
-    CREATED(1001, "訂單建立"),
-    CANCELLED(1003, "訂單取消");
+    CREATED(Codes.CREATED, "訂單建立"),
+    CANCELLED(Codes.CANCELLED, "訂單取消");
 
     @JsonValue
     private final int code;
@@ -36,5 +36,23 @@ public enum OrderStatus {
             }
         }
         throw new SystemException("DB 存有無法識別的訂單狀態").with("status", code);
+    }
+
+    /**
+     * 與上方列舉常數一對一的編譯期常數。存在的唯一理由是 {@code @SQLRestriction} 之類的
+     * annotation 只吃編譯期字串常數，無法呼叫 {@code CREATED.getCode()} —— 有了它，
+     * entity 上的過濾條件才能由此串接而來，而不是各自硬編一份數字。
+     *
+     * <p>不能把常數直接宣告在本列舉的欄位區：列舉常數必須寫在 body 最前面，其建構子引數
+     * 若引用後面才宣告的 {@code static final} 欄位，編譯器會擋在 {@code illegal forward
+     * reference}。宣告成 nested class 就沒有這個限制。
+     */
+    public static final class Codes {
+        private Codes() {
+            throw new UnsupportedOperationException("This is a constant holder and cannot be instantiated");
+        }
+
+        public static final int CREATED = 1001;
+        public static final int CANCELLED = 1003;
     }
 }
