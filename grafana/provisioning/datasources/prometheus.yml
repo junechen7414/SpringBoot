@@ -22,3 +22,16 @@ datasources:
       # 與 application-dev.yml 的 management.otlp.metrics.export.step 對齊，
       # Grafana 才知道資料點的最小間隔，$__rate_interval 也才算得準。
       timeInterval: 10s
+      # 讓指標圖上的 exemplar 小菱形可以直接點進 Tempo 的那條 trace。
+      # 這條鏈要三個地方同時成立，缺一個都是「沒有小菱形」而不會報錯：
+      #   1. 應用要產生 exemplar —— OtlpExemplarsAutoConfiguration 在有 Tracer bean
+      #      時自動生效（見 docs/agents/09-monitoring.md）
+      #   2. Prometheus 要存 exemplar —— docker-compose.yml 的
+      #      --enable-feature=exemplar-storage
+      #   3. 這裡要告訴 Grafana「trace id 在哪個 label、要跳去哪個 datasource」
+      # name 是 exemplar 上的 label 名，由 Alloy 的 otelcol.exporter.prometheus
+      # 從 OTel exemplar 轉出來，固定叫 trace_id（不是 traceID／traceId）。
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          # 對應 tempo.yml 裡寫死的 uid。
+          datasourceUid: tempo

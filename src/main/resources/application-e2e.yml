@@ -59,6 +59,11 @@ management:
         # 與 dev 一致：Prometheus 生態一律以秒為單位，預設的 milliseconds 會讓指標名
         # 帶 _milliseconds 後綴且值為毫秒。目前匯出關閉時不影響，但先寫對免得日後重踩。
         base-time-unit: seconds
+  # 這裡刻意沒有 tracing 設定：OTLP span exporter 是 @ConditionalOnProperty 綁在
+  # management.opentelemetry.tracing.export.otlp.endpoint 上，不給 endpoint 就不會
+  # 建立 exporter bean，也就完全不會嘗試連線。不像指標那條路需要顯式 enabled: false。
+  # 下游 compose 目前沒有 alloy，維持不設即可；日後若補上，照 application-dev.yml
+  # 的樣子加 management.opentelemetry.tracing.export.otlp.endpoint 就會開始送 trace。
   metrics:
     tags:
       application: ${spring.application.name}

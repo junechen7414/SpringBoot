@@ -1,0 +1,21 @@
+# Grafana datasource 佈建 —— Tempo（traces）
+#
+# 與 prometheus.yml 同一套規則：佈建檔進 git 才可重現，手動在 UI 建的東西存在
+# grafana-data volume，volume 一砍就沒了。
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    # uid 固定寫死，理由同 prometheus.yml：dashboard JSON 與 exemplar 連結都靠 uid
+    # 指向 datasource，隨機 uid 會讓那些引用失效。
+    uid: tempo
+    access: proxy
+    # grafana 與 tempo 同在 monitor-net，用 compose 的 service 名互連。
+    # 3200 是 Tempo 的查詢埠（tempo.yaml 的 server.http_listen_port），
+    # 不是 OTLP 的 4317/4318 —— 那兩個是給 Alloy 灌資料用的。
+    url: http://tempo:3200
+    editable: false
+    # 刻意不設 tracesToMetrics / serviceMap：那兩個功能依賴 span metrics 與 service
+    # graph 指標，需要在 Alloy 加 otelcol.connector.spanmetrics / servicegraph 產生。
+    # 本專案沒有產生那些指標，設了只會在 UI 上得到空面板。
