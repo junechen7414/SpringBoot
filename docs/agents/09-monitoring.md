@@ -15,6 +15,53 @@ app 只認得 Alloy 一個出口 —— Prometheus 與 Tempo 的 receiver 埠都
 
 > 操作面（怎麼起堆疊、怎麼看圖、PromQL 怎麼寫、圖是空的怎麼查）見 **[`docs/monitoring-usage-guide.md`](../monitoring-usage-guide.md)**。本文件只描述鏈路結構與端點契約。
 
+### 監控的三層切分
+
+規劃監控時第一件要分清楚的事：這個 repo 裡的監控**不是一坨**，是三層，而且三層的**壽命完全不同**。
+判斷「某個監控改動該不該做」時先問它屬於哪一層。
+
+| 層 | 內容 | 誰擁有 | 壽命 |
+|---|---|---|---|
+| **應用匯出層** | `application-dev.yml` 的 `management.*`、`spring-boot-starter-opentelemetry` 那組 artifact | **本 repo** | **唯一能活到正式環境的部分。** 換環境只換一個 OTLP endpoint，應用碼與設定結構不動 |
+| **本機拋棄式堆疊** | `docker-compose.yml` 的 Alloy + Prometheus + Tempo + Grafana，加上 `config.alloy`、`prometheus.yml`、`tempo.yaml`、`grafana/provisioning/**` | **本 repo** | **定位是教材，不是正式環境。** 用 `:latest` 標籤、Grafana 匿名 Admin、Tempo 保留期 24h、沒有告警與 Alertmanager —— 這些都是刻意的，不要照抄進正式環境 |
+| **正式環境堆疊** | 託管服務（Grafana Cloud 等）或平台團隊提供的後端 | **不在本 repo** | 應用只認得一個 OTLP endpoint，後端換誰都與應用無關 |
+
+這個切分同時解釋了兩件事：
+
+- **為什麼中間那層可以整套換掉而不影響應用**：應用只知道 `${ALLOY_HOST}:4318` 這一個出口
+  （名字把實作洩進了部署契約，`OTLP_HOST` 的更名待議）。
+- **為什麼中間那層值得手刻**：把 Alloy / Prometheus / Tempo / Grafana 分開跑，每一跳都能單獨
+  curl。本專案三次靜默失敗（指標斷線 54 天、Tempo 3.x 設定不相容、exemplar 三環鏈）都是在
+  跳點分離的情況下才查得出來。
+
+#### 另一條真正 out-of-box 的路（已評估，刻意不採用）
+
+Boot 4 有一條零設定的路：Testcontainers 的 `LgtmStackContainer`（單一映像
+`grafana/otel-lgtm`，內含 Loki + Grafana + Tempo + Mimir + OTel collector）＋
+`@ServiceConnection`，三個 endpoint 由 Boot 自動注入，不需要 compose 檔。它走 **Docker API
+socket**，podman 供得起 —— 本 repo 的 Oracle 整合測試容器就是活證據。
+
+不採用的理由不是技術不可行，而是它把 collector 到後端那幾跳藏進同一個容器，
+失去上面那個「每一跳都看得見」的教學價值。完整可貼上的做法、`bootTestRun` 開發期啟動器、
+以及三個會踩到的坑（回傳型別不可寫 `GenericContainer`、上游 javadoc 埠號筆誤、容器 bean
+優於 `@Testcontainers` extension）見
+[`docs/monitoring-usage-guide.md` §11](../monitoring-usage-guide.md#11-另一條路lgtm-單一容器零設定本專案沒採用)。
+
+#### `spring-boot-docker-compose` 已評估並排除
+
+這個 starter 看起來最貼近現況（repo 裡本來就有 `docker-compose.yml`），但**不能用**，三條理由都是硬的：
+
+1. **它外呼 `docker` 執行檔**，不走 Docker API socket。官方文件的前提寫得很明白：
+   「You need to have the `docker` and `docker compose` (or `docker-compose`) CLI applications
+   on your path.」文件從頭到尾沒有提 podman、`DOCKER_HOST`、或可設定的 binary 路徑。
+2. **開發機上沒有這個執行檔**：`command -v docker` 找不到；唯一叫 `docker-compose` 的東西是
+   WindowsApps 的 App Execution Alias 空殼，不是可用的 compose。
+3. 就算裝得起來也**違反 `.claude/rules/project-rules.md` 的「容器一律使用 `podman`」**。
+
+> **這個不對稱值得記住**：`spring-boot-docker-compose` 外呼 CLI，Testcontainers 走 Docker API
+> socket。podman 提供後者、不提供前者 —— 所以同一台機器上 Testcontainers 那條路通、
+> Docker Compose 那條路不通。這不是設定問題，是兩者的接線方式不同。
+
 ### 關鍵端點
 
 - **健康檢查**: `/actuator/health`（亦為映像內建 `HEALTHCHECK` 的探測目標，下游 E2E repo 依賴此健康狀態判斷就緒；契約細節見 [02-setup.md](./02-setup.md#映像內建-healthcheck重要契約)）
