@@ -34,6 +34,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.ibm.demo.account.AccountController;
 import com.ibm.demo.account.AccountService;
+import com.ibm.demo.orchestration.AccountLifecycleController;
+import com.ibm.demo.orchestration.AccountLifecycleService;
 import com.ibm.demo.order.OrderController;
 import com.ibm.demo.order.OrderService;
 import com.ibm.demo.product.ProductController;
@@ -68,9 +70,14 @@ class ApiSuccessContractTest {
      * 契約測試的 context 由 {@link ContractTestApplication} 決定（只有探針），這裡把真正的 controller
      * 明確 {@code @Import} 進來 —— 不開 component scan，因此不會連帶拉進 JPA、{@code RestClientConfig}
      * 等與 wire format 無關的東西。
+     *
+     * <p>{@code /account} 的端點分屬兩個 controller：讀取與建立在 {@link AccountController}，
+     * 而依賴 order 領域的 {@code PUT}／{@code DELETE} 在 {@link AccountLifecycleController}。
+     * 對外路徑不變，但少 import 一個就會讓那兩條 204 案例變成 404。
      */
     @TestConfiguration
-    @Import({ AccountController.class, ProductController.class, OrderController.class })
+    @Import({ AccountController.class, AccountLifecycleController.class, ProductController.class,
+            OrderController.class })
     static class RealControllers {
     }
 
@@ -79,6 +86,9 @@ class ApiSuccessContractTest {
 
     @MockitoBean
     private AccountService accountService;
+
+    @MockitoBean
+    private AccountLifecycleService accountLifecycleService;
 
     @MockitoBean
     private ProductService productService;

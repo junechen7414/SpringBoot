@@ -226,5 +226,9 @@ resilience4j:
         # permitted-number-of-calls-in-half-open-state: 3
       AccountService:
         base-config: default
+      # 保護 orchestration 層對 order 的 outbound 呼叫。與 AccountService 分開統計，
+      # 才不會讓 order 端的故障率污染 account 自身 DB 操作的斷路器判斷。
+      AccountLifecycleService:
+        base-config: default
       ProductService:
         base-config: default
