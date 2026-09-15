@@ -8,7 +8,7 @@
 >
 > ```bash
 > git push origin --delete <branch-name>
-> git diff --stat main <branch-name>   # 應為空，確認內容已進 main
+> git cherry -v main <branch-name>     # 每行都該是 "-"，代表內容已進 main
 > git branch -D <branch-name>          # rebase merge 重寫過 SHA，-d 會拒絕
 > ```
 >
