@@ -14,6 +14,9 @@ Repository (資料存取)                      └─▶ 自呼叫繞回本應�
     ↓
 Entity (資料模型)
 
+Orchestration (跨領域協調: AccountLifecycleController / AccountLifecycleService)
+    └─▶ 只在「不變量橫跨兩個互為依賴的 domain」時出現;呼叫 domain Service + 對向 *Client,自己不碰 Repository
+
 Util (跨層工具類別: AuditMetadata, SoftDeleteMetadata, PageResponse, CreatedResponse 等)
 Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode, ValidationError;
            ApiErrorResponse 僅為 OpenAPI schema 宣告,執行期實際寫出的是 Spring ProblemDetail)
@@ -44,6 +47,17 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 - 業務失敗拋出 `BusinessException` 並帶入對應的 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`）
 - 系統／整合失敗（下游壞了、非業務原因）拋出 `SystemException`，排查用資訊以 `.with(key, value)` 掛在 context 上，**不要**串進 message —— 500 的 message 不回給呼叫端
 - **不要在 Service 記錄例外**：log 一律由 `GlobalExceptionHandler` 統一記錄，**等級由最終 HTTP status 決定**而非例外型別（500 → ERROR 帶 stack trace，其餘 → WARN 一行）
+
+### Orchestration 層（跨領域協調）
+
+`com.ibm.demo.orchestration` —— 放**橫跨多個 domain、且直接實作會造成循環依賴的不變量**。目前只有帳戶生命週期一條：`AccountLifecycleController`（承接 `PUT /account/{id}`、`DELETE /account/{id}`）+ `AccountLifecycleService`。
+
+- **為什麼存在**：「帳戶還有有效訂單就不能停用／刪除」這條規則同時需要 account 與 order。order 本來就要問 account「這個帳戶能不能下單」（`AccountClient` → `/account/{id}/order-eligibility`），若 account 再回頭注入 `OrderClient`，兩個 domain 就互為依賴 —— 任何一邊都無法單獨理解與測試，將來要拆成獨立服務時也拆不開。把規則上提到中立的第三方後，依賴圖成為 `orchestration → {account, order}` 加上 `order → account`，是有向無環的。
+- **判準（新增跨域規則時照這條走）**：某條不變量會讓 domain A 依賴 domain B，而 **B 已經依賴 A** → 放 `orchestration`，**不要**放進 domain service。單向依賴（如 order → account）不需要 orchestration，Service 直接注入對向 `*Client` 即可。
+- **它做什麼、不做什麼**：只做編排 —— 呼叫 domain Service 與對向 `*Client`，自己**不碰 Repository、不碰 Entity**。domain service（如 `AccountService.updateAccount`）維持純 account 的行為，不知道 order 存在（兩個方法的 Javadoc 標明守門已上提，直接呼叫不會有訂單檢查）。
+- **刻意不加 `@Transactional`**：方法內含 HTTP 呼叫，開交易會讓 DB 連線被整段 HTTP 往返佔住。交易邊界留在 domain service。
+- **刻意不加 `@Bulkhead`／`@RateLimiter`**：下游 `AccountService` 已掛 `account-write-with-validation`，外層再掛**同一個 instance** 會讓有效併發數腰斬（外層佔一格、內層再佔一格）。只掛 `@CircuitBreaker(name = "AccountLifecycleService")`。
+- **對外契約不變**：controller 沿用 `@RequestMapping("/account")` 與 `@Tag(name = "Account")`，路徑與 OpenAPI 分組跟搬移前一致，呼叫端與 `swagger.json` 看不出差別。代價是 `contract/ApiSuccessContractTest` 的 `@Import` 必須同時列入 `AccountController` 與 `AccountLifecycleController` —— 少一個，那兩條 204 案例就會變成 404。
 
 ### Repository 層
 

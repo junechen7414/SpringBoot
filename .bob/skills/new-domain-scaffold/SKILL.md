@@ -53,6 +53,7 @@ src/main/java/com/ibm/demo/{domain}/
 - [ ] 寫入方法加 `@Transactional`
 - [ ] 失敗情境：拋出 `BusinessException` 並帶入對應 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`），**不要直接回傳 error response**
 - [ ] 需要呼叫其他 domain？→ 注入對應 `*Client`（`AccountClient`、`ProductClient`、`OrderClient`），**不要直接注入其他 domain 的 Service**
+- [ ] 該規則會讓兩個 domain **互相依賴**（對方已經依賴你）？→ 別注入 `*Client`，把不變量上提到 `com.ibm.demo.orchestration`（範例：`AccountLifecycleService`；判準見 `docs/agents/06-architecture.md`「Orchestration 層」）
 - [ ] 需要 Resilience4j？→ 在方法上加 `@Bulkhead`、`@CircuitBreaker`、`@RateLimiter`（name 需與 `application.yml` 中的 key 對應）
 
 ### 4. Controller
