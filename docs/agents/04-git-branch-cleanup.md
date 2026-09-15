@@ -4,6 +4,16 @@
 
 > **定位**：本專案採[主幹開發](./03-git-workflow.md)，多數改動直接在 `main` 上進行，**分支是例外**（僅高風險改動才開）。因此分支清理的需求遠低於以往；但只要你開過分支、合併後留下 `[gone]` 殘餘，本指南依然適用。
 
+> ⚠️ **本 repo 未啟用 `delete_branch_on_merge`**：PR 合併後遠端分支**不會**自動刪除，因此本地分支也不會變成 `[gone]` —— 下面 `show-gone` / `prune-local` 這條主線在本 repo **走不到**。實際流程是自己先刪遠端、再刪本地：
+>
+> ```bash
+> git push origin --delete <branch-name>
+> git diff --stat main <branch-name>   # 應為空，確認內容已進 main
+> git branch -D <branch-name>          # rebase merge 重寫過 SHA，-d 會拒絕
+> ```
+>
+> 若哪天在 repo Settings 打開了該選項，本指南的主線才會生效。詳見 `high-risk-pr-workflow` skill Step 6。
+
 ## 📋 目錄
 
 - [概述](#概述)
@@ -31,6 +41,8 @@
 - ❌ 本地分支仍然存在
 - 💾 佔用磁碟空間
 - 🔍 造成 `git branch` 輸出混亂
+
+**在本 repo**，`[gone]` 只會在你手動 `git push origin --delete` 之後才出現 —— 合併本身不會刪遠端分支。
 
 ### 清理策略
 
@@ -81,6 +93,8 @@ git config --global alias.prune-local "!git fetch --prune; git branch -vv | Sele
 # Alias 3: 清理已合併分支
 git config --global alias.cleanup "!git branch --merged main | Select-String -NotMatch '\\*|main|master' | ForEach-Object { `$_.Line.Trim() } | ForEach-Object { git branch -d `$_ }"
 ```
+
+> ⚠️ **兩種語法的 alias 不能混用**：alias 寫在全域的 `~/.gitconfig`，裝了 PowerShell 版之後在 Git Bash 執行 `git show-gone` 會失敗（`Select-String` 不存在），反之亦然。用 `git config --global --get-regexp alias` 查目前裝的是哪一版；需要跨 shell 工作時，改用[進階用法](#進階用法)的手動指令，那些兩邊都能跑。
 
 ### 步驟 3: 驗證設定
 
@@ -303,5 +317,5 @@ git config --global --unset alias.cleanup
 
 完整的 alias 定義保存在專案根目錄的 `.gitconfig-aliases` 檔案中，供參考使用。
 
-**最後更新**: 2026-05-28
+**最後更新**: 2026-09-15
 **維護者**: Bobby

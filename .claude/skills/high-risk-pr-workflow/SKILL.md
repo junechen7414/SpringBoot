@@ -146,12 +146,17 @@ PR 合併到 `main` 後：
 git checkout main
 git pull origin main
 
-# 刪除遠端分支（若 GitHub 設定未自動刪除）
+# 刪除遠端分支（本 repo 未開 delete_branch_on_merge，這步必做）
 git push origin --delete <branch-name>
 
-# 刪除本地分支
-git branch -d <branch-name>
+# 刪除本地分支（先確認內容已完整進 main，輸出應為空）
+git diff --stat main <branch-name>
+git branch -D <branch-name>
 ```
+
+> **為什麼是 `-D` 而不是 `-d`**：rebase merge 會重寫 commit SHA，本地分支的 commit 不會是 `main` 的祖先，`git branch -d` **必定**報 `not fully merged`。先用 `git diff --stat main <branch-name>` 確認內容與 `main` 完全相同（輸出為空）再強刪，就不會漏東西 —— 不要在沒比對前直接 `-D`。
+
+> **遠端分支不會自動消失**：本 repo 未啟用 `delete_branch_on_merge`，合併後遠端分支仍在，本地分支也**不會**變成 `[gone]`。所以 `04-git-branch-cleanup.md` 的 `git prune-local` 在這裡沒東西可清，必須自己先刪遠端。
 
 詳細清理步驟見 `docs/agents/04-git-branch-cleanup.md`。
 
