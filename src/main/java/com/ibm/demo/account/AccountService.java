@@ -11,7 +11,6 @@ import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessException;
-import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.util.DBAssertion;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.util.PageResponse;
@@ -28,14 +27,6 @@ import lombok.extern.slf4j.Slf4j;
 @CircuitBreaker(name = "AccountService")
 public class AccountService {
     private final AccountRepository accountRepository;
-    private final OrderClient orderClient;
-
-    /**
-     * 注入Repository和Client，已用lombok註解RequiredArgsConstructor定義建構子。
-     * 
-     * @param accountRepository
-     * @param orderClient
-     */
 
     /**
      * @param account_DTO
@@ -101,6 +92,12 @@ public class AccountService {
     }
 
     /**
+     * 更新帳戶名稱與狀態。
+     *
+     * <p><b>不含</b>「停用前須無有效訂單」的檢查 —— 那條不變量橫跨 order 領域，已上提至
+     * {@code orchestration.AccountLifecycleService}（見該處說明：account 不該反向依賴 order）。
+     * 外部流量一律經由該層進入，直接呼叫本方法不會有訂單檢查。
+     *
      * @param updateAccountRequestDto
      */
     @Transactional
@@ -113,15 +110,20 @@ public class AccountService {
         // 2. 更新帳戶名稱
         existingAccount.setName(updateAccountRequestDto.name());
 
-        // 3. 更新帳戶狀態 (包含業務邏輯檢查)
-        updateAccountStatus(existingAccount, updateAccountRequestDto.status());
+        // 3. 更新帳戶狀態
+        existingAccount.setStatus(updateAccountRequestDto.status().getCode());
 
-        // 5. 儲存帳戶實體
+        // 4. 儲存帳戶實體
         accountRepository.save(existingAccount);
         log.info("帳戶更新成功，帳戶ID: {}, 狀態: {}", id, existingAccount.getStatus());
     }
 
     /**
+     * 軟刪除帳戶。
+     *
+     * <p>同 {@link #updateAccount}：<b>不含</b>「須無有效訂單」的檢查，該守門在
+     * {@code orchestration.AccountLifecycleService}。
+     *
      * @param accountId
      */
     @Transactional
@@ -129,7 +131,6 @@ public class AccountService {
     @RateLimiter(name = "account-write-with-validation")
     public void deleteAccount(Integer accountId) {
         Account existingAccount = findAccountByIdOrThrow(accountId);
-        checkAccountHasNoOrdersOrThrow(accountId);
         int updated = accountRepository.softDeleteById(accountId, existingAccount.getVersion());
         DBAssertion.assertUpdated(updated, Account.class, accountId);
         log.info("帳戶軟刪除成功，帳戶ID: {}", accountId);
@@ -158,31 +159,5 @@ public class AccountService {
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                         "Account not found with id: " + accountId));
-    }
-
-    /**
-     * Checks if an account has associated orders via OrderClient. Throws
-     * BusinessException (ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED) if orders exist.
-     */
-    private void checkAccountHasNoOrdersOrThrow(Integer accountId) {
-        if (orderClient.getOrderExistence(accountId).hasActiveOrder()) {
-            throw new BusinessException(ErrorCode.ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED,
-                    "Account with id: " + accountId + " has associated orders and cannot be set to deactivate.");
-        }
-    }
-
-    /**
-     * 更新帳戶狀態，並在需要時執行業務邏輯檢查。
-     * 如果狀態從啟用變為停用，會檢查帳戶是否仍有關聯訂單。
-     * 
-     * @param account   要更新的帳戶實體
-     * @param newStatus 新的狀態
-     */
-    private void updateAccountStatus(Account account, AccountStatus newStatus) {
-        boolean statusChanged = !newStatus.getCode().equals(account.getStatus());
-        if (statusChanged && newStatus == AccountStatus.INACTIVE) {
-            checkAccountHasNoOrdersOrThrow(account.getId());
-        }
-        account.setStatus(newStatus.getCode());
     }
 }

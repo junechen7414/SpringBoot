@@ -5,11 +5,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
-import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.exception.ApiErrorResponse;
 import com.ibm.demo.util.CreatedResponse;
 import com.ibm.demo.util.PageResponse;
@@ -37,6 +34,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Tag(name = "Account", description = "帳戶管理 API")
 public class AccountController {
+        // PUT /account/{id} 與 DELETE /account/{id} 不在這裡 —— 它們的行為依賴 order 領域，
+        // 故落在 orchestration.AccountLifecycleController（對外路徑與契約不變）。
+
         private final AccountService accountService;
 
         // Create Account
@@ -87,34 +87,4 @@ public class AccountController {
                 accountService.assertCanPlaceOrder(id);
                 return ResponseEntity.noContent().build();
         }
-
-        // Update Account
-        @Operation(summary = "更新帳戶", description = "更新現有帳戶資訊。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若欲將狀態從啟用 'Y' 變更為停用 'N'，會先檢查該帳戶是否仍有關聯訂單，若有則拋出 BusinessException（ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED）。")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "204", description = "更新成功"),
-                        @ApiResponse(responseCode = "400", description = "參數驗證失敗或帳戶仍有關聯訂單", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
-                        @ApiResponse(responseCode = "404", description = "帳戶不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
-        })
-        @PutMapping("/{id}")
-        public ResponseEntity<Void> updateAccount(
-                        @Parameter(description = "帳戶 ID", example = "1", required = true) @PathVariable Integer id,
-                        @Valid @RequestBody UpdateAccountRequest updateAccountRequest) {
-                accountService.updateAccount(id, updateAccountRequest);
-                return ResponseEntity.noContent().build();
-        }
-
-        // Delete Account
-        @Operation(summary = "刪除帳戶", description = "執行帳戶軟刪除。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若該帳戶仍有關聯訂單，則拋出 BusinessException（ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED）。")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "204", description = "刪除成功"),
-                        @ApiResponse(responseCode = "400", description = "帳戶仍有關聯訂單，無法刪除", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
-                        @ApiResponse(responseCode = "404", description = "帳戶不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
-        })
-        @DeleteMapping("/{id}")
-        public ResponseEntity<Void> deleteAccount(
-                        @Parameter(description = "帳戶 ID", example = "1", required = true) @PathVariable Integer id) {
-                accountService.deleteAccount(id);
-                return ResponseEntity.noContent().build();
-        }
-
 }

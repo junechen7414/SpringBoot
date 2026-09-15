@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -33,9 +32,7 @@ import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.util.PageResponse;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessException;
-import com.ibm.demo.order.OrderClient;
 import com.ibm.demo.exception.ErrorCode;
-import com.ibm.demo.order.DTO.internal.OrderExistenceResponse;
 
 @Tag("UnitTest")
 @ExtendWith(MockitoExtension.class)
@@ -43,9 +40,6 @@ public class AccountServiceTest {
 
     @Mock
     private AccountRepository accountRepository;
-
-    @Mock
-    private OrderClient orderClient;
 
     // 顯性建立被測物件 (SUT)
     private AccountService accountService;
@@ -58,8 +52,10 @@ public class AccountServiceTest {
 
     @BeforeEach
     void setUp() {
-        // 手動注入 Mock 依賴，結構清晰且易於維護
-        accountService = new AccountService(accountRepository, orderClient);
+        // 手動注入 Mock 依賴，結構清晰且易於維護。
+        // 停用／刪除帳戶前的跨域訂單守門已移至 orchestration.AccountLifecycleService，
+        // 由 AccountLifecycleServiceTest 覆蓋，本測試只驗 account 自身行為。
+        accountService = new AccountService(accountRepository);
     }
 
     @Nested
@@ -204,9 +200,6 @@ public class AccountServiceTest {
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                     .hasMessageContaining("not found")
                     .hasMessageContaining(String.valueOf(id));
-
-            // Verify
-            verifyNoInteractions(orderClient); // 確保未發起跨服務調用
         }
     }
 
@@ -235,9 +228,6 @@ public class AccountServiceTest {
             assertThat(captor.getValue())
                     .hasFieldOrPropertyWithValue("name", "Updated Name")
                     .hasFieldOrPropertyWithValue("status", STATUS_ACTIVE);
-
-            // 重要驗證：確保沒有呼叫 orderClient（因為是啟用帳戶）
-            verifyNoInteractions(orderClient);
         }
 
         @Test
@@ -257,7 +247,6 @@ public class AccountServiceTest {
 
             // Assert
             verify(accountRepository).save(any(Account.class));
-            verifyNoInteractions(orderClient);
         }
     }
 
@@ -281,31 +270,8 @@ public class AccountServiceTest {
                     .hasMessageContaining(String.valueOf(id));
 
             verify(accountRepository, never()).save(any());
-            verifyNoInteractions(orderClient);
         }
 
-        @Test
-        @DisplayName("帳戶改為停效(N)時，若仍有關聯訂單應拋出異常")
-        void updateAccount_WhenStatusChangeToInactiveAndHasOrder_ShouldThrowException() {
-            // Arrange
-            Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
-
-            UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .status(AccountStatus.INACTIVE)
-                    .build();
-
-            when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
-            when(orderClient.getOrderExistence(ACTIVE_ACCOUNT_ID))
-                    .thenReturn(new OrderExistenceResponse(true));
-
-            // Act & Assert
-            assertThatThrownBy(() -> accountService.updateAccount(ACTIVE_ACCOUNT_ID,request))
-                    .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED)
-                    .hasMessageContaining("associated orders");
-
-            verify(accountRepository, never()).save(any());
-        }
     }
 
     @Nested
@@ -319,8 +285,6 @@ public class AccountServiceTest {
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
             activeAccount.setVersion(1);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
-            when(orderClient.getOrderExistence(ACTIVE_ACCOUNT_ID))
-                    .thenReturn(new OrderExistenceResponse(false));
             // 模擬版本不符更新失敗
             when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1)).thenReturn(0);
 
@@ -338,8 +302,6 @@ public class AccountServiceTest {
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
             activeAccount.setVersion(1);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
-            when(orderClient.getOrderExistence(ACTIVE_ACCOUNT_ID))
-                    .thenReturn(new OrderExistenceResponse(false));
             when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1)).thenReturn(1);
 
             // Act
@@ -371,10 +333,6 @@ public class AccountServiceTest {
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND)
                     .hasMessageContaining("not found")
                     .hasMessageContaining(String.valueOf(id));
-
-            // Verify: 驗證副作用
-            verifyNoInteractions(orderClient);
-
             // 實務建議：明確驗證 delete 動作未執行，增加測試嚴謹度
             verify(accountRepository, never()).delete(any());
         }
@@ -391,26 +349,8 @@ public class AccountServiceTest {
             assertThatThrownBy(() -> accountService.deleteAccount(id))
                     .isInstanceOf(BusinessException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESOURCE_NOT_FOUND);
-
-            verify(orderClient, never()).getOrderExistence(any());
         }
 
-        @Test
-        @DisplayName("刪除時若仍有關聯訂單，應拋出異常")
-        void deleteAccount_WhenHasOrder_ShouldThrowException() {
-            Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
-
-            when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
-            when(orderClient.getOrderExistence(ACTIVE_ACCOUNT_ID))
-                    .thenReturn(new OrderExistenceResponse(true));
-
-            assertThatThrownBy(() -> accountService.deleteAccount(ACTIVE_ACCOUNT_ID))
-                    .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED)
-                    .hasMessageContaining("associated orders");
-
-            verify(accountRepository, never()).delete(any());
-        }
     }
 
     // --- Helper Methods ---
