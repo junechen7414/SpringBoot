@@ -16,7 +16,7 @@ Build / run（從 repo 根目錄執行）：
 ./gradlew build                       # compile + test + assemble
 ./gradlew bootRun                     # run app (needs Oracle DB reachable)
 ./gradlew generateOpenApiDocs         # -> build/docs/swagger.json（見 openapi-doc-gen skill）
-podman compose up -d                  # app + Oracle + Alloy + Prometheus + Grafana
+podman compose up -d                  # app + Oracle + Alloy + Prometheus + Tempo + Grafana
 podman compose up oracle-db -d        # DB only, then run DemoApplication.java from IDE
 ```
 
@@ -47,7 +47,7 @@ Inbound 請求流程：`呼叫方 → Controller → Service → Repository → 
 - **錯誤處理**：業務失敗拋 `BusinessException` 並帶入對應的 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`）；系統／整合失敗拋 `SystemException`（排查資訊用 `.with(k, v)` 掛 context，不要串進 message）。`GlobalExceptionHandler` 是唯一組裝錯誤回應與記錄例外的地方，對外一律回 **RFC 9457 `application/problem+json`**（`type` / `title` / `status` / `detail` / `instance`，外加 extension `code`；驗證失敗另帶 `errors` 陣列）。`code` 是呼叫端唯一該用來分流的欄位，值為 `ErrorCode` 的常數名 —— 但框架自己攔下的協定層錯誤（405、415…）例外，那些的 `code` 由 HTTP 狀態名推導（`METHOD_NOT_ALLOWED`…）。`exception/ApiErrorResponse` 只是給 springdoc 看的 schema 宣告，**不參與執行期序列化**；RFC 9457 六個欄位標 `required`，但 `code` **刻意不列 enum**（值域 50+ 個，列出來沒人會看，見該處註解）。handler 繼承 `ResponseEntityExceptionHandler`（框架自己拋的那批例外它已處理好），我們只覆寫兩個驗證 `handleXxx`、為自訂例外加 `@ExceptionHandler`，並覆寫 `handleExceptionInternal(...)` 做共同處理 —— 補 `code`／`type`、記唯一那行 log，**等級由最終 HTTP status 決定**（500 → ERROR 帶 stack trace，其餘 → WARN）。自訂 handler 也把 body 交給它，不自己 `new ResponseEntity`。
 - **成功回應**：走 HTTP 原生語意、**不加信封**。建立資源 → `201` + `Location` + `{"id": n}`（用 `util/CreatedResponse.at(id)`）；成功但沒有內容可回（更新／刪除／內部庫存變動）→ `204`；有內容才 `200` + 具名 DTO 或 `PageResponse<T>`，**不回裸純量**。這三條由 `src/test/java/com/ibm/demo/contract/ApiSuccessContractTest.java` 釘住。
 - **Resilience4j**：`config/Resilience4jConfig.java`，service 方法上用 `@Bulkhead`、`@CircuitBreaker`、`@RateLimiter`。
-- **可觀測性**：OTLP push → Grafana Alloy → Prometheus → Grafana。**無** `/actuator/prometheus` scrape endpoint。
+- **可觀測性**：指標與追蹤是**兩條獨立的鏈**，只共用 app 到 Alloy 那一段（同一個 OTLP/HTTP 4318 端點）——指標 `→ Alloy → Prometheus → Grafana`、追蹤 `→ Alloy → Tempo → Grafana`。**無** `/actuator/prometheus` scrape endpoint。規劃監控改動前先讀 `docs/agents/09-monitoring.md` 的「監控的三層切分」。
 - **Security**：stateless HTTP Basic，`anyRequest().authenticated()`；放行 actuator health、springdoc。`*Client` 自呼叫透過 loopback 繞回，`RestClientConfig` 掛 `internal` 帳號憑證。使用者是兩個 **in-memory 機器帳號**，密碼以 `{noop}` 逐字比對（不雜湊，理由見 `SecurityConfig` 註解）；**目前沒有方法級 authZ**（`roles` 保留但無規則使用）。正式環境應改為只當 OAuth2 Resource Server、authN/authZ 外包給 IdP — 見 `docs/security-external-idp-migration.md`。
 - **DB migrations**：Flyway，`src/main/resources/db/migration`（Oracle）；H2 用於測試與 OpenAPI 產生。
 
