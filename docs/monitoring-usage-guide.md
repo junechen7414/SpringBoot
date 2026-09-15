@@ -580,6 +580,144 @@ span metrics 與 service graph 指標，得在 Alloy 加 `otelcol.connector.span
 
 ---
 
+## 11. 另一條路：LGTM 單一容器（零設定，本專案沒採用）
+
+前面十節都在講**手刻**的四容器堆疊。Boot 4 其實還有一條真正 out-of-box 的路，
+只用一個容器、不需要 compose 檔、也不需要改任何 endpoint 設定。這節把它記完整，
+因為它是「想在五分鐘內看到儀表板」時的正確選擇 —— 只是不適合當本專案的教材（理由見 §11.5）。
+
+### 11.1 這是什麼
+
+`grafana/otel-lgtm` 是 Grafana 官方的**單一映像**，裡面塞了 **L**oki（logs）、
+**G**rafana（UI）、**T**empo（traces）、**M**imir/Prometheus（metrics），前面再擺一個
+OpenTelemetry Collector 當統一入口。名字就是這四個字母。
+
+它跟本專案手刻堆疊的關係是**同構的**：手刻版的 Alloy 在這裡是 collector，
+Prometheus/Tempo/Grafana 各自對應。差別只在**跳點藏起來了** —— 對「快速看圖」是優點，
+對「學會每一跳可能怎麼壞」是缺點。
+
+Testcontainers 提供 `LgtmStackContainer` 包裝它，Boot 提供三個
+`ConnectionDetailsFactory` 自動把三條匯出的 endpoint 注進應用。也就是說
+`management.otlp.metrics.export.url` 與
+`management.opentelemetry.tracing.export.otlp.endpoint`（§2 那兩個名字不對稱的屬性）
+**都不用寫**，容器起來後由 Boot 填。
+
+### 11.2 完整做法（三段，可直接貼）
+
+**一、依賴**。`build.gradle`：
+
+```gradle
+testImplementation "org.testcontainers:testcontainers-grafana:2.0.5"
+```
+
+版號刻意與 repo 已釘的 `testcontainers-oracle-free:2.0.5` 對齊（同一條 2.x 線）。
+`spring-boot-testcontainers` 已經在依賴裡，不用再加。
+
+**二、容器宣告**。放 `src/test/java/com/ibm/demo/LgtmContainerConfiguration.java`：
+
+```java
+package com.ibm.demo;
+
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
+import org.testcontainers.grafana.LgtmStackContainer;
+
+@TestConfiguration(proxyBeanMethods = false)
+class LgtmContainerConfiguration {
+
+    // 回傳型別必須寫成 LgtmStackContainer，不能寫 GenericContainer（見 §11.4）。
+    @Bean
+    @ServiceConnection
+    LgtmStackContainer lgtmContainer() {
+        return new LgtmStackContainer("grafana/otel-lgtm:latest");
+    }
+}
+```
+
+`@ServiceConnection` 這裡**不需要** `name` 屬性。三個 factory 是以**型別**
+`LgtmStackContainer` 比對的（另一種比對方式是映像名 `otel/opentelemetry-collector-contrib`）。
+
+**三、開發期啟動器**。放 `src/test/java/com/ibm/demo/TestDemoApplication.java`：
+
+```java
+package com.ibm.demo;
+
+import org.springframework.boot.SpringApplication;
+
+public class TestDemoApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.from(DemoApplication::main)
+                .with(LgtmContainerConfiguration.class)
+                .run(args);
+    }
+}
+```
+
+執行：
+
+```bash
+./gradlew bootTestRun
+```
+
+### 11.3 `bootTestRun` 與 `bootRun` 的差別（這是「開發期啟動器」的重點）
+
+| | `bootRun` | `bootTestRun` |
+|---|---|---|
+| 誰準備環境 | **你**。要先 `podman compose up -d`、備好 `.env`、確認 1521/4318 沒被占 | **它**。容器由 `SpringApplication.from(...).with(...)` 一起帶起來 |
+| classpath | 只有 `main` | `main` + `test`（所以啟動器類別可以放 `src/test`，不會進 fat jar） |
+| endpoint 從哪來 | 你寫在 `application-dev.yml` / 環境變數（`ALLOY_HOST`、`ORACLE_DB_HOST`） | `@ServiceConnection` 從容器實際映射到的隨機埠注入 |
+| 容器生命週期 | 你自己 `podman compose down` | 應用結束就丟。搭配 `@RestartScope` 可讓容器活過 devtools 重啟 |
+
+一句話：`bootRun` 是「你備環境、我跑應用」；`bootTestRun` 是「環境和應用我一起跑」。
+它不是測試指令 —— 是**開發時用一個指令把整套依賴帶起來**，跑完就乾淨消失。
+
+### 11.4 三個會踩到的點
+
+**一、`@Bean` 方法的回傳型別不能寫成 `GenericContainer`。** Boot 為了避免 eager
+初始化容器，是用 `@Bean` 方法的**宣告回傳型別**做比對，不是實際物件的型別。寫成
+`GenericContainer<?>` 會編譯得過、容器也會起來，但**沒有任何 endpoint 被注入** ——
+症狀就是應用照舊往 `localhost:4318` 推，而那裡沒有東西在聽。這是本專案 §6.1
+那種「什麼都沒推、也沒有錯誤訊息」的同一族失敗。
+
+**二、上游 javadoc 的埠號寫反了。** `LgtmStackContainer` 的 javadoc 寫
+「OTel Http: 4317 / OTel Grpc: 4318」，但常數是 `OTLP_GRPC_PORT = 4317`、
+`OTLP_HTTP_PORT = 4318`（與 OTel 的通用慣例一致，也與本專案 Alloy 的 4318 HTTP
+receiver 一致）。**常數才是對的**，別照 javadoc 接線。要拿 URL 就用
+`getOtlpHttpUrl()` / `getOtlpGrpcUrl()`，不要自己組 `host:port`。
+
+其餘可用的方法：`getGrafanaHttpUrl()`（3000，開瀏覽器看圖用）、`getTempoUrl()`（3200）、
+`getPrometheusHttpUrl()`（9090）、`getLokiUrl()`（3100）。容器就緒的判斷是等 log 出現
+「The OpenTelemetry collector and the Grafana LGTM stack are up and running」。
+
+**三、用容器 bean，不要用 `@Testcontainers` extension。** JUnit extension 在**測試類別**
+結束後停容器，但 Spring TestContext Framework 會把 `ApplicationContext` 快取到那之後 ——
+後續測試類別重用同一個 context，卻連向已經死掉的 listener。本 repo 的
+`src/test/java/com/ibm/demo/BaseIntegrationTest.java` 早就為同一個坑手刻了
+`static { oracle.start(); }` 的 singleton（該處註解記著當時的 ORA-12541），
+新增任何容器請照那個形狀走，或用上面 `@Bean` 的寫法。
+
+### 11.5 為什麼本專案沒有採用
+
+不是因為它不好用，而是**兩者定位不同**：
+
+- 手刻堆疊的價值在**每一跳都看得見**。本專案三次靜默失敗的發現 —— 指標斷線 54 天
+  （§6.1）、Tempo 3.x 設定不相容（`09-monitoring.md`）、exemplar 三環鏈缺一環就沒有小菱形
+  （§9.3）—— 都只在跳點分離、可以逐段 curl 的情況下學得到。otel-lgtm 把 collector
+  到後端那幾跳包進同一個容器，出問題時沒有可以插探針的地方。
+- LGTM 適合的場合是「我只想確認我的 span 長什麼樣」、「示範一次就丟」。若哪天有這種需求，
+  照 §11.2 三段貼上即可，**不必**動 `docker-compose.yml`，兩套可以並存
+  （注意宿主 4318 已被 Alloy 佔用，所以別把 LGTM 的埠固定發佈）。
+
+### 11.6 順帶說明：為什麼不用 Boot 的 Docker Compose 支援
+
+`spring-boot-docker-compose` 看起來更貼近本專案現況（已經有 `docker-compose.yml` 了），
+但它**外呼 `docker` 執行檔**，不走 Docker API socket，而本專案是 podman-only。
+完整理由見 [`docs/agents/09-monitoring.md` 的「監控的三層切分」](./agents/09-monitoring.md#監控的三層切分)。
+
+---
+
 ## 相關文件
 
 - [`docs/agents/09-monitoring.md`](./agents/09-monitoring.md) — 鏈路與端點的架構描述、HEALTHCHECK 運作機制
