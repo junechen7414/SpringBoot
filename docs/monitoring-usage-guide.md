@@ -221,6 +221,8 @@ histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket[5
 
 「黃金訊號」是 Google SRE 提出的最小監控集：**只有四個指標值得先看**。
 
+> 這張表說的是「**該量什麼**」。至於某個 panel **值不值得留**、它回答的是誰在什麼時刻的問題，見 [`monitoring-needs-first.md`](./monitoring-needs-first.md)（例如下表的 JVM Heap 在那裡被判定為首選換掉）。
+
 | 訊號 | 問題 | 對應 panel |
 |---|---|---|
 | **Latency（延遲）** | 慢嗎？ | 回應延遲 p50 / p95 / p99 |
@@ -720,6 +722,7 @@ receiver 一致）。**常數才是對的**，別照 javadoc 接線。要拿 URL
 
 ## 相關文件
 
+- [`docs/monitoring-needs-first.md`](./monitoring-needs-first.md) — 從需求反推監控：七個時刻、現有 panel 的去留審查、兩個缺口
 - [`docs/agents/09-monitoring.md`](./agents/09-monitoring.md) — 鏈路與端點的架構描述、HEALTHCHECK 運作機制
 - [`docs/resilience4j-configuration-guide.md`](./resilience4j-configuration-guide.md) — 飽和度 panel 背後的 bulkhead / 斷路器 / 限流設定
 - `config.alloy`、`prometheus.yml`、`tempo.yaml`、`docker-compose.yml` — 管線本體
