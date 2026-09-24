@@ -1,4 +1,4 @@
-﻿---
+---
 name: new-domain-scaffold
 description: >
   在本專案新增一個完整 domain（如 account/product/order）的建立清單。

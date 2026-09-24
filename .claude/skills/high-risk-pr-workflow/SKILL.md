@@ -1,4 +1,4 @@
-﻿---
+---
 name: high-risk-pr-workflow
 description: >
   高風險變更時的完整 branch + PR 流程，涵蓋建分支、跑測試、開 PR、

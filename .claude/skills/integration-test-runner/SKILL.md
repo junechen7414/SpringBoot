@@ -1,4 +1,4 @@
-﻿---
+---
 name: integration-test-runner
 description: >
   Windows + podman 環境下執行整合測試的完整流程。

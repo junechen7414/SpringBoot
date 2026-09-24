@@ -1,4 +1,4 @@
-﻿---
+---
 name: openapi-doc-gen
 description: >
   產生 OpenAPI 文件（swagger.json）的完整流程。需要切換到 openapi profile、
