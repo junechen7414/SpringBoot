@@ -277,7 +277,7 @@ Grafana panel 空白
       http.server.requests 開啟。沒開的話 histogram_quantile() 一定回空值。
 ```
 
-**最常見的三個原因**（都不在程式碼裡）：`percentiles-histogram` 沒開（p99 永遠空）、`base-time-unit` 沒設成 seconds（指標名帶 `_milliseconds`、查名字全部對不上）、以及下面這個 —— **少一個依賴，整條鏈路靜默不推送**。
+**最常見的三個原因**（都不在 Java 程式碼裡，前兩個在 `application-dev.yml`，第三個在 `build.gradle`）：`percentiles-histogram` 沒開（p99 永遠空）、`base-time-unit` 沒設成 seconds（指標名帶 `_milliseconds`、查名字全部對不上）、以及下面這個 —— **少一個依賴，整條鏈路靜默不推送**。
 
 ### 6.1 最惡毒的一種：什麼都沒推，而且沒有任何錯誤訊息
 
