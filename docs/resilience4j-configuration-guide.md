@@ -1726,8 +1726,8 @@ logging:
 
 #### 檢查指標
 ```bash
-# Prometheus 指標
-curl http://localhost:8080/actuator/prometheus | grep resilience4j
+# Actuator 指標（本專案走 OTLP push，沒有 /actuator/prometheus；時間序列改到 Prometheus 查）
+curl -u api:local-api-secret http://localhost:8787/actuator/metrics/resilience4j.bulkhead.available.concurrent.calls
 ```
 
 ---
