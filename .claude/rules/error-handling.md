@@ -6,7 +6,7 @@ paths:
 
 # 錯誤處理：GlobalExceptionHandler 內部細節
 
-總則（拋哪種例外、RFC 9457、以 `code` 分流）見 `CLAUDE.md`「錯誤處理」。以下是修改 handler／例外型別時才需要的細節。
+總則（拋哪種例外、RFC 9457、以 `code` 分流）見 `docs/agents/06-architecture.md`「Service 層」。以下是修改 handler／例外型別時才需要的細節。
 
 - `code` 值為 `ErrorCode` 的常數名 —— 但框架自己攔下的協定層錯誤（405、415…）例外，那些的 `code` 由 HTTP 狀態名推導（`METHOD_NOT_ALLOWED`…）。驗證失敗另帶 `errors` 陣列。
 - `exception/ApiErrorResponse` 只是給 springdoc 看的 schema 宣告，**不參與執行期序列化**；RFC 9457 六個欄位標 `required`，但 `code` **刻意不列 enum**（值域 50+ 個，列出來沒人會看，見該處註解）。

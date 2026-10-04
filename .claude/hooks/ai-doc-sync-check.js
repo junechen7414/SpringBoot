@@ -12,8 +12,8 @@
 // 命中即視為「同步相關」的路徑樣式（以 / 正規化後比對）
 const PATTERNS = [
   /(^|\/)docs\/agents\//,            // 文件真相源
-  /(^|\/)CLAUDE\.md$/,               // Claude 快速摘要
-  /(^|\/)AGENTS\.md$/,               // Claude agents 匯入入口
+  /(^|\/)CLAUDE\.md$/,               // 不該存在：有它 Claude Code 就不讀 AGENTS.md
+  /(^|\/)AGENTS\.md$/,               // 所有 agent 共用的指令入口
   /(^|\/)\.github\/instructions\//,  // Cline / Copilot 指令
   /(^|\/)\.claude\/skills\//,        // Claude skills
   /(^|\/)\.bob\/skills\//,           // Bob skills（鏡像）

@@ -84,7 +84,7 @@ USER app
 
 `docker/build-push-action` 有 `outputs.digest`（需先給該 step 一個 `id`），用它取代 `image-publish.yml:84` 的 `steps.meta.outputs.version`。順帶消掉「下游快照落後一版」那類時序不確定性（見 `docs/agents/09-monitoring.md`）。
 
-> ⚠️ 動到 CI workflow ＝ 高風險變更，依 `CLAUDE.md` 慣例走 branch + PR（`high-risk-pr-workflow` skill）。
+> ⚠️ 動到 CI workflow ＝ 高風險變更，依 `docs/agents/03-git-workflow.md` 慣例走 branch + PR（`high-risk-pr-workflow` skill）。
 
 ### 4. Secrets 改 configtree + file secret
 

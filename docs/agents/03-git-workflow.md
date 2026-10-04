@@ -66,7 +66,7 @@ git config core.hooksPath .githooks
 - **跨 domain 的重構**或大型功能（多 commit、難以一次驗證）。
 - 任何「測試抓不到、但壞了影響大」、想在合併前多跑一輪 image build 的改動。
 
-其餘日常改動，直接在 `main` 上做。
+其餘日常改動，直接在 `main` 上做。完整的 branch + PR 流程見 `high-risk-pr-workflow` skill。
 
 ## 分支命名規範
 

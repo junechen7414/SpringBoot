@@ -157,7 +157,7 @@ INTERNAL_PASSWORD=change_me_internal
 ./gradlew test --tests "*IntegrationTest"
 ```
 
-**注意**: 整合測試會自動啟動 Oracle 容器，首次執行需下載映像檔。
+**注意**: 整合測試會自動啟動 Oracle 容器，首次執行需下載映像檔。Windows + podman 有已知坑（記憶體競爭、找不到 provider、singleton 容器），執行前先看 `integration-test-runner` skill 與 `08-testing.md`。
 
 ### API 文件生成
 
@@ -165,7 +165,7 @@ INTERNAL_PASSWORD=change_me_internal
 ./gradlew generateOpenApiDocs
 ```
 
-產出檔案位於 `build/docs/swagger.json`，可匯入 Postman 或 Bruno 使用。
+產出檔案位於 `build/docs/swagger.json`，可匯入 Postman 或 Bruno 使用。完整流程見 `openapi-doc-gen` skill。
 
 ### 建置 Docker 映像檔
 
@@ -202,6 +202,10 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
 1. 環境變數 / 系統屬性
 2. `application-{profile}.yml`
 3. `application.yml`
+
+Profiles：`dev`、`integration-test`、`e2e`、`openapi`。
+- **沒有 `unit-test` profile**：單元測試是純 Mockito，不啟動 Spring context，所以不需要設定檔。
+- **`e2e` 的設定檔放在 main resources**：它必須打包進 fat jar，下游以 GHCR image 跑 `SPRING_PROFILES_ACTIVE=e2e` 時才會生效。
 
 #### 敏感資訊處理
 - 使用 `.env` 檔案管理本地開發密碼

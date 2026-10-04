@@ -8,13 +8,13 @@
 
 | 工具 | 指令 / 規則 | MCP | Skills | Agents / Modes | 其他 |
 |------|------------|-----|--------|----------------|------|
-| **Claude Code** | `CLAUDE.md`（手寫摘要）+ `AGENTS.md`（`@`-import `docs/agents/*`） | `.mcp.json` | `.claude/skills/` | `.claude/agents/*.md` | `.claude/settings.json`（hooks）、`.claude/settings.local.json`（`enabledMcpjsonServers` 控制啟用哪些 MCP） |
+| **Claude Code** | `AGENTS.md`（原生讀取，`@`-import `docs/agents/*`）+ `.claude/rules/*` | `.mcp.json` | `.claude/skills/` | `.claude/agents/*.md` | `.claude/settings.json`（hooks）、`.claude/settings.local.json`（`enabledMcpjsonServers` 控制啟用哪些 MCP） |
 | **GitHub Copilot** | `.github/instructions/Global.instructions.md`（`@`-import `docs/agents/*`） | `.vscode/mcp.json`（含 `inputs` 區塊提示輸入金鑰） | — | — | — |
 | **Cline** | `.github/instructions/Global.instructions.md`（本專案無 `.clinerules`） | `.vscode/mcp.json` | — | — | — |
 | **Bob (IBM BOB)** | `AGENTS.md`（`@`-import `docs/agents/*`） | `.bob/mcp.json` | `.bob/skills/` | `.bob/custom_modes.yaml` | `.bob/settings.json`（`autoAccept` 等本機偏好） |
 | **agy CLI** | `AGENTS.md`（`@`-import `docs/agents/*`） | `.agents/mcp_config.json` | `.agents/skills/` | — | — |
 
-> **指令檔分工**：Claude Code、Bob、agy CLI 三者皆讀根目錄 `AGENTS.md`；Cline / Copilot 讀 `.github/instructions/Global.instructions.md`。兩份都以 `@`-import 拉入同一組 `docs/agents/*` 真相源，差別在 `Global.instructions.md` 檔頭另含語言 / podman / pnpm / shell 偏好區塊。`CLAUDE.md` 則是 Claude Code 額外讀的手寫摘要。
+> **指令檔分工**：Claude Code、Bob、agy CLI 三者皆讀根目錄 `AGENTS.md`；Cline / Copilot 讀 `.github/instructions/Global.instructions.md`。兩份都以 `@`-import 拉入同一組 `docs/agents/*` 真相源，差別在 `Global.instructions.md` 檔頭另含語言 / podman / pnpm / shell 偏好區塊。本專案**刻意不放 `CLAUDE.md`**，見下方「文件真相源」。
 
 ### 文件真相源（source of truth）
 
@@ -22,7 +22,9 @@
 - **下游（靠 `@`-import，不該重複貼內容）**：
   - `AGENTS.md` — `@./docs/agents/*`，Claude Code 讀。
   - `.github/instructions/Global.instructions.md` — `@../../docs/agents/*`，Cline / Copilot 讀；檔頭另有語言 / podman / pnpm / shell 偏好區塊。
-- **`CLAUDE.md`** — 手寫 fast-start 摘要，**非** import，最容易 drift。改動 `docs/agents/*` 的慣例時要回頭檢查它。
+- **不放 `CLAUDE.md` / `CLAUDE.local.md` / `.claude/CLAUDE.md`**：Claude Code（v2.1.277+）原生讀 `AGENTS.md`，但預設只在 repo 裡**沒有**這三個檔案時才讀。多放任何一個（包括個人的 `CLAUDE.local.md`），Claude Code 就只讀它、不再載入 `AGENTS.md` 與 `docs/agents/*`。
+  - Claude 專屬、只在改特定檔案時才需要的細節放 `.claude/rules/*`（不受上述規則影響，照常載入）；其餘慣例一律寫進 `docs/agents/*`。
+  - 個人非版控的指示改放 `~/.claude/CLAUDE.md`（使用者層級，不會擋住 `AGENTS.md`）。若一定要用 `CLAUDE.local.md`，須在使用者設定把 `agents-md@builtin` 的 `instructionFiles` 設成 `claude-md-and-agents-md`。
 
 兩份 `@`-import 清單（`AGENTS.md` 與 `Global.instructions.md`）須與 `docs/agents/*` 檔案清單保持一一對應，新增 / 刪除文件時兩邊 import 行都要同步增刪。
 

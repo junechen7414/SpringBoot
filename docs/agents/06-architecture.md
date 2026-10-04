@@ -47,6 +47,8 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 - 業務失敗拋出 `BusinessException` 並帶入對應的 `ErrorCode`（`new BusinessException(ErrorCode.X, "...")`）
 - 系統／整合失敗（下游壞了、非業務原因）拋出 `SystemException`，排查用資訊以 `.with(key, value)` 掛在 context 上，**不要**串進 message —— 500 的 message 不回給呼叫端
 - **不要在 Service 記錄例外**：log 一律由 `GlobalExceptionHandler` 統一記錄，**等級由最終 HTTP status 決定**而非例外型別（500 → ERROR 帶 stack trace，其餘 → WARN 一行）
+- 錯誤回應的總則：對外一律 RFC 9457 `application/problem+json`（`type` / `title` / `status` / `detail` / `instance`，外加 extension `code`），`code` 是呼叫端唯一該用來分流的欄位。handler 內部細節見 `.claude/rules/error-handling.md`
+- **`OrderService` 與 `OrderTransactionalService` 的拆分要保留**：order 建立橫跨 account + product，`OrderTransactionalService` 隔離 DB transaction 邊界，`OrderService` 負責編排（含 `*Client` 呼叫）。編輯 order 流程時不要把兩者合併，否則 HTTP 往返會被包進交易、佔住 DB 連線
 
 ### Orchestration 層（跨領域協調）
 
@@ -78,6 +80,8 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 ### Entity 層
 
 - 以 `@Embedded` 組合 `AuditMetadata` / `SoftDeleteMetadata` 獲得審計欄位與軟刪除支援；`@Version` 樂觀鎖欄位直接定義在 entity（JPA 不支援 `@Version` 在 `@Embeddable`）
+- 舊的 `BaseEntity` 繼承基底已移除：一律用組合，**不要**再引入 `@MappedSuperclass` 基底類別
+- 軟刪除的過濾由 entity 上的 `@SQLRestriction` 在 query 層自動套用（需要軟刪除的 repository 繼承 `util/SoftDeleteRepository`），**不要**在查詢裡手寫 `deleted = false`
 - 使用 `@Builder` 支援建構者模式（改用組合後不再需要 `@SuperBuilder`）
 - 關聯關係標註 `@ToString.Exclude` 避免循環引用
 
@@ -112,7 +116,7 @@ public class ProductService {
 
 ### 安全（Spring Security）
 
-- **設定位置**：`config/SecurityConfig.java`，提供 **stateless HTTP Basic** 的 `SecurityFilterChain`。
+- **設定位置**：`config/SecurityConfig.java`，提供 **stateless HTTP Basic** 的 `SecurityFilterChain`。修改安全設定或 `*Client` 傳輸時的細節見 `.claude/rules/security.md`。
 - **定位：這是佔位方案**，只夠服務對服務與教學用。正式環境應改為只當 OAuth2 Resource Server、把 authN/authZ 交給外部 IdP —— 遷移步驟見 **`docs/security-external-idp-migration.md`**。
 - **授權規則**：`anyRequest().authenticated()`；放行以下端點：
   - actuator：`/actuator/health/**`——給 Dockerfile HEALTHCHECK 的 `wget` 探針用（該探針也走此 filter chain，不放行會 401）。指標與追蹤都走 **OTLP push**，無需放行 scrape 端點。

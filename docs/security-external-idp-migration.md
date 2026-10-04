@@ -209,7 +209,7 @@ JwtAuthenticationConverter jwtAuthenticationConverter() {
 
   **不受影響的部分**：`tests/api/Network.spec.ts` 雖然測 401 情境，但它是 `page.route` 全 mock 打 `https://demo-api.local/endpoint`，且不在 `--project=springboot-api` 的 `testMatch` 內，與真實後端無關。`pnpm run api-spec:update` 讀的是 repo 內已 commit 的 `docs/swagger.json`（不是打線上 server），只要 API 形狀沒變就不必重跑。
 - **`.env.example` / `.env`**：`API_USERNAME` / `API_PASSWORD` / `INTERNAL_USERNAME` / `INTERNAL_PASSWORD` 換成 `IDP_ISSUER_URI`、`IDP_INTERNAL_CLIENT_SECRET`、`KEYCLOAK_ADMIN_*`。
-- **`docs/agents/06-architecture.md`、`docs/handout/06-config-security-ops.md`、`CLAUDE.md`** 要同步（見 `docs/agents/05-code-standards.md` 的同步要求）。
+- **`docs/agents/06-architecture.md`、`docs/handout/06-config-security-ops.md`** 要同步（見 `docs/agents/05-code-standards.md` 的同步要求）。
 
 ---
 

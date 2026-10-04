@@ -1,6 +1,8 @@
 # AGENTS.md
 
-本檔案為各種 agent 在此儲存庫工作時提供指引。
+本檔案為各種 agent（Claude Code、Bob、agy CLI）在此儲存庫工作時提供指引。
+
+> ⚠️ **不要新增 `CLAUDE.md`／`CLAUDE.local.md`／`.claude/CLAUDE.md`**：有任何一個，Claude Code 就只讀它、不再讀本檔。原因與替代做法見 `docs/agents/11-ai-tools-overview.md`「文件真相源」。
 
 <!-- 專案基礎 -->
 @./docs/agents/01-overview.md
