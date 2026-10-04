@@ -31,7 +31,7 @@
 | Server | 用途 | command | 所需環境變數 |
 |--------|------|---------|-------------|
 | `github` | GitHub 操作（PR / issue / label 等） | 見下方差異 | `GITHUB_PAT` 或 `GITHUB_PERSONAL_ACCESS_TOKEN` |
-| `browser-use` | 瀏覽器自動化 | `uvx --from browser-use[cli] browser-use --mcp` | 見下方差異 |
+| `playwright` | 瀏覽器自動化（extension 模式：接管已開啟的 Chrome / Edge，沿用既有登入狀態） | `npx @playwright/mcp@latest --extension`（Claude 見下方差異） | 無 |
 
 四份 MCP 設定檔須同步維護：`.mcp.json`（Claude，`type: http`/`stdio`）、`.bob/mcp.json`（同格式）、`.vscode/mcp.json`（`servers` + `inputs`）、`.agents/mcp_config.json`（額外帶 `disabled` / `autoApprove`）。
 
@@ -40,9 +40,10 @@
 - **`github`**
   - Claude / BOB / VS Code：遠端 HTTP endpoint `https://api.githubcopilot.com/mcp/`，金鑰 `GITHUB_PAT`（VS Code 以 `${env:GITHUB_PAT}` 讀環境變數，須將 `GITHUB_PAT` 設到 Windows User 層級，VS Code 才吃得到）。
   - agy CLI：本地 npm 套件 `npx -y @modelcontextprotocol/server-github`（stdio），金鑰變數名 `GITHUB_PERSONAL_ACCESS_TOKEN`。
-- **`browser-use`**
-  - Claude / BOB / VS Code：Anthropic API（`ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_MODEL`）。
-  - agy CLI：Gemini（`GEMINI_API_KEY`）。
+- **`playwright`**
+  - Claude：`cmd /c npx ...` —— Claude Code 在原生 Windows 無法直接 spawn `npx`（它是 `.cmd`），須以 `cmd /c` 包住。
+  - BOB / VS Code / agy：直接 `npx ...`。
+  - 使用前須在 Chrome / Edge 安裝 Playwright 擴充（Playwright MCP Bridge）；agent 首次連線時由擴充跳窗讓使用者選擇要交出控制的分頁。它以**使用者本人的登入身分**操作瀏覽器，建議用只登入必要網站的專用 profile（可加 `--profile-dir-name` 指定）。
 
 ### Skills 現況
 
@@ -67,4 +68,4 @@ AI 工具的**專案層級設定與 skills 已納入版控**，僅忽略暫存 /
 
 ### 環境變數
 
-金鑰一律透過環境變數 / `.env` 注入，**禁止寫死在設定檔**。引用語法：`${VAR}`（Claude / BOB / agy）；VS Code 支援 `${env:VAR}`（讀 OS 環境變數，須在 Windows User/Machine 層級設定，VS Code 從 GUI 啟動才吃得到）或 `${input:id}`（啟動時跳出輸入框、輸入一次後快取）。本專案 VS Code 的 `github` 用 `${env:GITHUB_PAT}`，`browser-use` 用 `${input:...}`。
+金鑰一律透過環境變數 / `.env` 注入，**禁止寫死在設定檔**。引用語法：`${VAR}`（Claude / BOB / agy）；VS Code 支援 `${env:VAR}`（讀 OS 環境變數，須在 Windows User/Machine 層級設定，VS Code 從 GUI 啟動才吃得到）或 `${input:id}`（啟動時跳出輸入框、輸入一次後快取）。本專案 VS Code 的 `github` 用 `${env:GITHUB_PAT}`。

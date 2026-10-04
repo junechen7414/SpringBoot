@@ -10,17 +10,12 @@
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PAT}"
       }
     },
-    "browser-use": {
-      "command": "uvx",
+    "playwright": {
+      "command": "npx",
       "args": [
-        "--from",
-        "browser-use[cli]",
-        "browser-use",
-        "--mcp"
-      ],
-      "env": {
-        "GEMINI_API_KEY": "${GEMINI_API_KEY}"
-      }
+        "@playwright/mcp@latest",
+        "--extension"
+      ]
     }
   }
 }
