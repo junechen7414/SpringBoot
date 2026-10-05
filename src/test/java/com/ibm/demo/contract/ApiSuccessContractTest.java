@@ -155,8 +155,7 @@ class ApiSuccessContractTest {
     static Stream<Arguments> noContentRequests() {
         String accountBody = "{\"name\":\"契約帳戶\",\"status\":\"Y\"}";
         String productBody = "{\"name\":\"契約商品\",\"price\":10.5,\"saleStatus\":1001,\"available\":3}";
-        String orderBody = "{\"orderStatus\":1001,\"items\":[{\"productId\":1,\"quantity\":2}]}";
-        String items = "{\"items\":[{\"productId\":1,\"quantity\":2}]}";
+                String items = "{\"items\":[{\"productId\":1,\"quantity\":2}]}";
 
         return Stream.of(
                 arguments("PUT /account/{id}", json(put("/account/1"), accountBody)),
@@ -168,7 +167,7 @@ class ApiSuccessContractTest {
                 arguments("POST /product/release", json(post("/product/release"), items)),
                 arguments("POST /product/adjust-stock", json(post("/product/adjust-stock"),
                         "{\"from\":[],\"to\":[{\"productId\":1,\"quantity\":2}]}")),
-                arguments("PUT /order/{orderId}", json(put("/order/1"), orderBody)),
+                arguments("PUT /order/{orderId}", json(put("/order/1"), items)),
                 arguments("DELETE /order/{orderId}", delete("/order/1")));
     }
 

@@ -80,7 +80,7 @@ public class OrderController {
         }
 
         // Update Order
-        @Operation(summary = "更新訂單內容", description = "更新訂單內容。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。接著檢查重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），並透過商品服務調整庫存（包含歸還舊品項庫存與扣除新品項庫存），最後更新訂單狀態與明細。")
+        @Operation(summary = "更新訂單內容", description = "更新訂單內容。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。接著檢查重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），並透過商品服務調整庫存（包含歸還舊品項庫存與扣除新品項庫存），最後更新訂單明細。訂單狀態不能經由此端點變更，取消訂單請用 DELETE。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "204", description = "更新成功"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
@@ -95,7 +95,7 @@ public class OrderController {
         }
 
         // Delete Order
-        @Operation(summary = "刪除訂單", description = "刪除訂單。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。執行時會對訂單主檔與明細進行軟刪除，並透過商品服務歸還商品庫存。")
+        @Operation(summary = "刪除訂單", description = "刪除訂單。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。執行時會軟刪除訂單主檔（明細保留不動），並透過商品服務歸還商品庫存。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "204", description = "刪除成功"),
                         @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))

@@ -233,11 +233,10 @@ class OrderServiceTest {
         class UpdateOrderSuccessTests {
 
                 @Test
-                @DisplayName("更新訂單狀態與商品明細，應成功儲存並同步庫存")
+                @DisplayName("更新訂單商品明細，應成功儲存並同步庫存")
                 void updateOrder_Success() {
                         // Arrange
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        OrderStatus.CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
@@ -256,7 +255,6 @@ class OrderServiceTest {
                 void updateOrder_WhenTransactionFails_ShouldCompensateAndThrow() {
                         // Arrange
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        OrderStatus.CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
@@ -290,7 +288,6 @@ class OrderServiceTest {
                 void updateOrder_WhenOrderNotFound_ShouldThrowException(String scenario, Integer nonExistentId) {
                         // Arrange：NotFound 由 loadOrderView（交易內載入）拋出
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        OrderStatus.CREATED,
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)));
 
                         when(orderTransactionalService.loadOrderView(nonExistentId))
@@ -312,7 +309,7 @@ class OrderServiceTest {
                 @DisplayName("更新時若包含庫存不足的商品，應拋出 ProductStockNotEnoughException")
                 void updateOrder_WhenInsufficientStock_ShouldThrowException() {
                         // Arrange
-                        UpdateOrderRequest request = new UpdateOrderRequest(OrderStatus.CREATED,
+                        UpdateOrderRequest request = new UpdateOrderRequest(
                                         List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
@@ -338,7 +335,6 @@ class OrderServiceTest {
                 void updateOrder_WhenDuplicateProduct_ShouldThrowException() {
                         // Arrange：同一 productId 兩筆、數量不同 —— 以 productId 判重應在查 DB 前攔下
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        OrderStatus.CREATED,
                                         List.of(
                                                         new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2),
                                                         new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
