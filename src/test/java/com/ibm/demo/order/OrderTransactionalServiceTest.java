@@ -31,14 +31,11 @@ public class OrderTransactionalServiceTest {
     @Mock
     private OrderInfoRepository orderInfoRepository;
 
-    @Mock
-    private OrderDetailRepository orderDetailRepository;
-
     private OrderTransactionalService orderTransactionalService;
 
     @BeforeEach
     void setUp() {
-        orderTransactionalService = new OrderTransactionalService(orderInfoRepository, orderDetailRepository);
+        orderTransactionalService = new OrderTransactionalService(orderInfoRepository);
     }
 
     @Test

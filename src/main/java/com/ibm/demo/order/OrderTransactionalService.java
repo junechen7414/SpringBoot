@@ -32,7 +32,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class OrderTransactionalService {
         private final OrderInfoRepository orderInfoRepository;
-        private final OrderDetailRepository orderDetailRepository;
 
         @Transactional
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
@@ -64,9 +63,8 @@ public class OrderTransactionalService {
 
         @Transactional
         public void updateOrder(Integer orderId, UpdateOrderRequest request) {
-                log.debug("開始更新訂單，訂單ID: {}, 新狀態: {}, 商品數量: {}",
+                log.debug("開始更新訂單，訂單ID: {}, 商品數量: {}",
                         orderId,
-                        request.orderStatus(),
                         request.items().size());
 
                 // 交易內自行載入(managed)：關閉 OSIV 後不可沿用外部傳入的 detached entity，否則
@@ -98,12 +96,9 @@ public class OrderTransactionalService {
                                                                 .productId(item.productId())
                                                                 .quantity(item.quantity())
                                                                 .build()));
-                order.setStatus(request.orderStatus().getCode());
                 orderInfoRepository.save(order);
-                
-                log.info("訂單更新成功，訂單ID: {}, 新狀態: {}", 
-                        orderId, 
-                        request.orderStatus());
+
+                log.info("訂單更新成功，訂單ID: {}", orderId);
         }
 
         /**
@@ -184,7 +179,8 @@ public class OrderTransactionalService {
                 int updated = orderInfoRepository.softDeleteById(orderId, version);
 
                 DBAssertion.assertUpdated(updated, OrderInfo.class, orderId);
-                orderDetailRepository.softDeleteByOrderId(orderId);
+                // 明細原封不動地保留：訂單這一列保留但查不到，明細跟著一起封存（ADR 0001），
+                // 被取消的訂單買了什麼仍查得回來。
 
                 log.info("訂單刪除成功，訂單ID: {}", orderId);
         }

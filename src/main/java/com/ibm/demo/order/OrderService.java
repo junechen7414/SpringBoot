@@ -48,7 +48,6 @@ public class OrderService {
          * 注入Repository和Client，已用lombok註解RequiredArgsConstructor定義建構子。
          * 
          * @param orderInfoRepository   訂單主檔資料庫存取介面
-         * @param orderDetailRepository 訂單明細資料庫存取介面
          * @param accountClient         帳戶服務的Client，用於驗證帳戶狀態
          * @param productClient         商品服務的Client，用於驗證商品庫存和獲取商品資訊
          */

@@ -1,12 +1,8 @@
 package com.ibm.demo.order;
 
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
-import org.hibernate.jdbc.Expectation;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.ibm.demo.util.AuditMetadata;
-import com.ibm.demo.util.SoftDeleteMetadata;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
@@ -36,15 +32,10 @@ import lombok.ToString;
 @Builder
 @EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
 @Table(name = "ORDER_PRODUCT_DETAIL")
-// orphanRemoval 觸發的實體 DELETE 改寫為軟刪 UPDATE，與 deleteOrder / soft-delete-everywhere 原則一致。
-// @Version entity 的標準 delete 參數會依序 (id, version) 綁到自訂 SQL，故 SQL 必須剛好兩個 ?：WHERE ID = ? AND VERSION = ?。
-// verify = RowCount：自訂 @SQLDelete 預設不檢查影響列數；若不指定，version 過期命中 0 列會「靜默不軟刪」。
-// 加上 RowCount 後，命中列數 != 1 → StaleStateException（保留樂觀鎖，符合 DBAssertion 精神）。
-// 同步遞增 VERSION、寫入 DELETED_AT，與 softDeleteByOrderId 語義相同。
-@SQLDelete(sql = "UPDATE ORDER_PRODUCT_DETAIL "
-        + "SET DELETED = true, DELETED_AT = CURRENT_TIMESTAMP, VERSION = VERSION + 1 "
-        + "WHERE ID = ? AND VERSION = ?", verify = Expectation.RowCount.class)
-@SQLRestriction("DELETED = false") // 只選擇未刪除的訂單明細
+// 不做軟刪除（見 docs/adr/0001-soft-delete-only-for-termination.md）：更新訂單時被移除的明細由
+// orphanRemoval 直接實體刪除。Hibernate 對 @Version entity 的預設刪除語句是 WHERE ID = ? AND VERSION = ?，
+// 命中 0 列即拋 StaleObjectStateException，所以逐筆樂觀鎖仍在。
+// 訂單被取消時明細原封不動地保留，跟著訂單一起封存（不會走到這裡）。
 public class OrderDetail {
 
     @Id
@@ -55,8 +46,7 @@ public class OrderDetail {
 
     // 關聯的擁有端（owning side）：ORDER_ID 這個外鍵欄位由本欄位決定。
     // 目前沒有任何地方從明細往上走訪 order；留著 @ManyToOne 是因為 OrderInfo 的
-    // @OneToMany(mappedBy) 與 orphanRemoval 都要求擁有端存在，OrderDetailRepository
-    // 的 JPQL（d.orderInfo.id）也依賴它。細節見 筆記.md「要不要做『雙向』關聯？」一節。
+    // @OneToMany(mappedBy) 與 orphanRemoval 都要求擁有端存在。細節見 筆記.md「要不要做『雙向』關聯？」一節。
     @ManyToOne(fetch = FetchType.LAZY) // 延遲載入
     // ORDER_ID 是「本表」ORDER_PRODUCT_DETAIL 的外鍵欄位；不指定 name 會被推導成 order_info_id
     // （屬性名 + 對方 PK 欄位，再過 CamelCaseToUnderscoresNamingStrategy），與 V1 migration 不符
@@ -77,19 +67,9 @@ public class OrderDetail {
     @Builder.Default
     private AuditMetadata auditMetadata = new AuditMetadata();
 
-    // 組合：軟刪除欄位
-    @Embedded
-    @Builder.Default
-    private SoftDeleteMetadata softDeleteMetadata = new SoftDeleteMetadata();
-
     // 樂觀鎖版本（@Version 不能在 @Embeddable 中使用，必須直接定義在實體類別）
     @Version
     @Column(name = "VERSION", columnDefinition = "NUMBER(10) DEFAULT 0", nullable = false)
     @Builder.Default
     private Integer version = 0;
-
-    public void restore() {
-        this.softDeleteMetadata.setDeleted(false);
-        this.softDeleteMetadata.setDeletedAt(null);
-    }
 }

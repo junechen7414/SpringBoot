@@ -88,9 +88,4 @@ public class OrderInfo {
         this.orderDetails.add(detail);
         detail.setOrderInfo(this);
     }
-
-    public void restore() {
-        this.softDeleteMetadata.setDeleted(false);
-        this.softDeleteMetadata.setDeletedAt(null);
-    }
 }

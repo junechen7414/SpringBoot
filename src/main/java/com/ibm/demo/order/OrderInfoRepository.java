@@ -15,9 +15,9 @@ import com.ibm.demo.util.SoftDeleteRepository;
 
 public interface OrderInfoRepository extends JpaRepository<OrderInfo, Integer>, SoftDeleteRepository<Integer> {
 
-    // 必須是 LEFT JOIN FETCH：inner join 會要求「至少一筆存活明細」才回傳訂單，而 OrderDetail 帶
-    // @SQLRestriction("DELETED = false")，該條件會併進 join 的 ON 子句。用 inner join 的話，明細全被
-    // 軟刪除（或被 updateOrder 清空）的訂單會查不到，對外誤報 404 ——「查無訂單」與「訂單沒有明細」是兩件事。
+    // 必須是 LEFT JOIN FETCH：inner join 會要求「至少一筆明細」才回傳訂單。訂單可能沒有任何明細
+    // （例如資料被手動清過，或日後放寬 updateOrder 的 @NotEmpty），用 inner join 的話這種訂單會查不到、
+    // 對外誤報 404 ——「查無訂單」與「訂單沒有明細」是兩件事。
     @Query("SELECT o FROM OrderInfo o LEFT JOIN FETCH o.orderDetails WHERE o.id = :id")
     Optional<OrderInfo> findByIdWithDetails(@Param("id") Integer id);
 
