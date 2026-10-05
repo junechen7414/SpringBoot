@@ -25,6 +25,20 @@
 <!-- 工具設定 -->
 @./docs/agents/11-ai-tools-overview.md
 
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local markdown under `.scratch/<feature>/` (tracked in git). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded as a `Status:` line. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
+
 ---
 
 **最後更新**: 2026-06-22
