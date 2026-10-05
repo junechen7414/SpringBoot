@@ -48,3 +48,5 @@ Status: ready-for-agent
 - 下游 E2E 如果在 `PUT /order` 的 body 裡帶了 `orderStatus`：Spring Boot 預設會忽略未知欄位（`FAIL_ON_UNKNOWN_PROPERTIES = false`），實作時要確認專案沒有改過這個設定。如果改過，這就是破壞性變更。
 
 ## Comments
+
+- 2026-10-05：實作於 PR #78（`refactor/order-line-hard-delete-and-unique`）。`./gradlew test` 全綠（含 `SqlStatusIntegrationTest`、新的 `OrderLineIntegrationTest`）；V2 在 Oracle（Testcontainers）與 H2（`openapi` profile）都套用成功；`swagger.json` 的 `UpdateOrderRequest` 只剩 `items`。專案沒有覆寫 `FAIL_ON_UNKNOWN_PROPERTIES`，帶舊欄位的呼叫端不會 400。`OrderDetailRepository` 移除 `softDeleteByOrderId` 後變空，已一併刪除。文件同步留給 issue 05。
