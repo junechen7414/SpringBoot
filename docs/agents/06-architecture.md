@@ -84,6 +84,7 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 - 軟刪除的過濾由 entity 上的 `@SQLRestriction` 在 query 層自動套用（需要軟刪除的 repository 繼承 `util/SoftDeleteRepository`），**不要**在查詢裡手寫 `deleted = false`
 - 使用 `@Builder` 支援建構者模式（改用組合後不再需要 `@SuperBuilder`）
 - 關聯關係標註 `@ToString.Exclude` 避免循環引用
+- 新增或變更欄位時，同時在 `src/main/resources/db/migration` 加 Flyway 腳本（DB migration 屬高風險改動，走 branch + PR）
 
 ### 分頁策略
 

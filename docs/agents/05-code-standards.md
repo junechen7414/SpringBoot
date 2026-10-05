@@ -1,47 +1,17 @@
-## 程式碼設計原則
+## 程式碼與文件慣例
 
-### 核心原則
+### 程式碼
 
-1. **可讀性優先**: 即使程式碼簡短或執行快速，若難以理解則不採用
-2. **現代化語法**: 優先使用 Java 25 新特性（如 Virtual Threads, Pattern Matching）
-3. **實務導向**: 理論正確但實務不適用的方案應避免
+- **可讀性優先於精簡或微幅效能**：較短或較快、但難以理解的寫法不採用。
+- **優先使用 Java 25 新特性**（Virtual Threads、pattern matching、records 等）。
 
-### 文檔管理
+### 文件放置與命名
 
-所有專案文檔必須放置於 `docs/` 目錄，命名遵循 kebab-case：
-- 指南類: `*-guide.md`
-- 計劃類: `*-plan.md`
-- 說明類: `*-explanation.md`
-- 流程圖: `*-workflow.md` 或 `*-diagram.md`
+專案文件一律放在 `docs/` 下，使用 kebab-case，依類型加後綴：`*-guide.md`、`*-plan.md`、`*-explanation.md`、`*-workflow.md` / `*-diagram.md`、`*-quick-*.md`。根目錄只放必要的設定檔。
 
-### Agent 文件維護規範
+### Agent 文件維護
 
-#### 文件同步更新原則
-
-1. **跨 Agent 文件同步**: 當對話過程中更新任何 Agent 相關文件時，必須確保所有類型的 Agent 文件都同步更新，包括：
-   - `AGENTS.md` (Cline、Bob、Gemini CLI 等通用 Agent)
-   - `.github/instructions/Global.instructions.md` (GitHub Copilot)
-   - 其他專案特定的 Agent 配置檔案
-
-2. **文件過時檢測**: 在對話開始前、進行中或結束後，若發現文件內容已經過時或不符合實際情況，應：
-   - 立即標記過時的內容
-   - 提出更新建議
-   - 在獲得確認後同步更新所有相關 Agent 文件
-   - 記錄更新日期與變更原因
-
-3. **一致性驗證**: 定期檢查各 Agent 文件間的規範是否一致，特別是：
-   - 語言偏好設定
-   - 工具使用規範（如 podman vs docker）
-   - 程式碼風格與架構原則
-   - Git 工作流程規範
-
-4. **更新觸發時機**:
-   - 專案架構或技術棧變更時
-   - 開發規範或最佳實踐更新時
-   - 發現文件與實際情況不符時
-   - 新增或移除開發工具時
-
-5. **驗證後的學習與修法入庫**: 當在工作中查出或驗證了某個「正確做法」或環境修法（例如本機 Testcontainers/podman 設定、特定踩坑的解法），應主動把它寫進 repo 內對應的文件（如 `08-testing.md`、`10-troubleshooting.md`），而非留在個人筆記、本機使用者路徑或對話中用完即忘。原則：
-   - **留在版控內**：讓知識可被團隊與未來 Agent session 取用，而非散落在個人環境
-   - **附上「為何」與「如何套用」**，而不只是結論
-   - 寫進最貼近的既有章節；若無合適章節，於 `10-troubleshooting.md` 新增
+- **跨工具同步**：改動 `docs/agents/*`、`AGENTS.md`、skills、MCP 設定或 agents 時，要讓其他 AI 工具的對應檔保持一致。對應表見 `11-ai-tools-overview.md`；可委派 `ai-doc-sync` subagent 做 dry-run 比對。
+- **入口檔只放常駐內容**：`AGENTS.md` 與 `.github/instructions/Global.instructions.md` 只 `@`-import 每個 session 都需要的文件；只在動到特定檔案時才需要的參考資料，改成「何時讀哪份文件」的一行 pointer。
+- **過時就修**：發現文件與實際情況不符時，立即提出並在確認後修正。
+- **驗證過的做法要寫進 repo**：查出或驗證了某個正確做法、環境修法或踩坑解法，就寫進最貼近的既有文件（例如 `08-testing.md`、`10-troubleshooting.md`），附上「為何」與「如何套用」。不要只留在個人筆記、本機路徑或對話裡。沒有合適的章節時，加到 `10-troubleshooting.md`。

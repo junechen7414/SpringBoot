@@ -56,7 +56,7 @@ socket**，podman 供得起 —— 本 repo 的 Oracle 整合測試容器就是�
    on your path.」文件從頭到尾沒有提 podman、`DOCKER_HOST`、或可設定的 binary 路徑。
 2. **開發機上沒有這個執行檔**：`command -v docker` 找不到；唯一叫 `docker-compose` 的東西是
    WindowsApps 的 App Execution Alias 空殼，不是可用的 compose。
-3. 就算裝得起來也**違反 `.claude/rules/project-rules.md` 的「容器一律使用 `podman`」**。
+3. 就算裝得起來也**違反 `01-overview.md` 的「容器一律使用 `podman`」**。
 
 > **這個不對稱值得記住**：`spring-boot-docker-compose` 外呼 CLI，Testcontainers 走 Docker API
 > socket。podman 提供後者、不提供前者 —— 所以同一台機器上 Testcontainers 那條路通、

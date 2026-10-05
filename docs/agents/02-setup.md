@@ -72,7 +72,7 @@
    [System.IO.File]::ReadAllBytes('build\classes\java\main\com\ibm\demo\DemoApplication.class')[6..7]
    ```
 
-6. 同步版本敘述：本檔前置需求、`01-overview.md`、`.claude/rules/project-rules.md`。
+6. 同步版本敘述：本檔前置需求、`01-overview.md`。
 
 #### 舊版 JDK 何時可以解除安裝
 

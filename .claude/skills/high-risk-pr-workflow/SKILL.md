@@ -44,6 +44,8 @@ git checkout -b <prefix>/<task-description>
 
 範例：`feature/add-payment-module`、`fix/order-creation-bug`
 
+**一律從最新 `main` 分出，不要把分支疊在另一條未合併的分支上。** 大功能拆成多個獨立 PR，等前一個合併後再從新的 `main` 分出下一個。
+
 ---
 
 ## Step 2：開發與提交
@@ -82,6 +84,8 @@ create_pull_request(
 
 > `create_pull_request` **沒有 labels 欄位**，需另外加（見 Step 4）。
 
+**PR 描述**寫變更目的與背景、主要改動、相關 issue（`Closes #123`）、破壞性變更（`BREAKING CHANGE`）。檔案清單、測試結果、程式細節 GitHub 會自己顯示，不用寫。
+
 ---
 
 ## Step 4：加 PR Labels
@@ -114,12 +118,14 @@ issue_write(
 | 建置/工具 | `chore` |
 
 > Label 必須已存在於 repo，MCP 無法新建 label。
+> 確認某個 PR 目前的 labels 用 `pull_request_read`；`issue_read` 的 `get_labels` 只吃純 issue，傳 PR 號會回 "Could not resolve to an Issue"。
+> 查 repo 現有 labels：`(Invoke-RestMethod -Uri "https://api.github.com/repos/junechen7414/SpringBoot/labels").name`
 
 ---
 
 ## Step 5：合併 PR（rebase）
 
-CI 綠了才合併，**方式一律 rebase**（線性歷史 + 保留 commit 粒度；理由見 `docs/agents/03-git-workflow.md`）。
+CI 綠了才合併，**方式一律 rebase**（線性歷史 + 保留 commit 粒度；理由見 `docs/agents/03-git-workflow.md`「PR 合併與分支清理」）。
 
 用 GitHub MCP：
 
@@ -157,9 +163,9 @@ git branch -D <branch-name>
 
 > **不要用 `git diff --stat main <branch-name>` 當判準**：只要合併期間有別人推了 `main`（多 session 並行時很常見），`main` 就含有分支沒有的內容，這個 diff 必然不為空，會誤報成「內容沒進去」。**反轉參數也沒用** —— `git diff A B` 與 `git diff B A` 列出的檔案集合完全相同，只有 `+`／`-` 方向相反。真要用 diff 就得把範圍限定在分支動過的檔案：`git diff --stat main <branch-name> -- $(git diff --name-only main...<branch-name>)`；PowerShell 沒有 `$(...)`，所以主線用 `git cherry`。
 
-> **遠端分支不會自動消失**：本 repo 未啟用 `delete_branch_on_merge`，合併後遠端分支仍在，本地分支也**不會**變成 `[gone]`。所以 `04-git-branch-cleanup.md` 的 `git prune-local` 在這裡沒東西可清，必須自己先刪遠端。
+> **遠端分支不會自動消失**：本 repo 未啟用 `delete_branch_on_merge`，合併後遠端分支仍在，本地分支也**不會**變成 `[gone]`。所以 `git prune-local` 這類以 `[gone]` 為準的 alias 在這裡沒東西可清，必須自己先刪遠端。
 
-詳細清理步驟見 `docs/agents/04-git-branch-cleanup.md`。
+通用 alias 與 FAQ 見 `docs/git-branch-cleanup-guide.md`。
 
 ---
 

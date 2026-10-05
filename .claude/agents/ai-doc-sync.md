@@ -22,19 +22,21 @@ MCP、agent/mode 設定保持一致，並偵測 drift（漂移）。
 ## 同步地圖（Sync Map）— 你的世界觀
 
 ### 軸線 1：文件（docs）— 已 git 追蹤
-- **唯一真相源 (source of truth)**：`docs/agents/01-overview.md` ~ `11-ai-tools-overview.md`。
-- 下游（都靠 `@`-import 真相源，原則上**不該**重複貼內容）：
-  - `AGENTS.md` — 用 `@./docs/agents/*` 匯入，Claude Code 原生讀取。
-  - `.github/instructions/Global.instructions.md` — 用 `@../../docs/agents/*` 匯入，Cline/Copilot 讀；檔頭另有「回應語言/podman/pnpm/shell」等偏好區塊。
-  - `AGENTS.md` 同時由 Claude Code、Bob、agy CLI 三者讀取；Cline / Copilot 讀 `Global.instructions.md`。
+- **唯一真相源 (source of truth)**：`docs/agents/*`，分三層：
+  - **常駐**：`01`、`03`、`05`、`06`、`08`，由兩個入口檔 `@`-import。
+  - **pointer-only**：`02`、`09`、`10`、`11`，不 import，只在入口檔的「何時讀哪份文件」清單列出觸發情境。
+  - **plugin 管理（未編號）**：`issue-tracker.md`、`triage-labels.md`、`domain.md`，由 mattpocock-skills 的 setup 產生，不 import；`AGENTS.md` 的 `## Agent skills` 區塊指向它們。
+- 下游（入口檔，**不該**重複貼內容）：
+  - `AGENTS.md` — 用 `@./docs/agents/*` 匯入；Claude Code、Bob、agy CLI 三者都讀。
+  - `.github/instructions/Global.instructions.md` — 用 `@../../docs/agents/*` 匯入；Cline / Copilot 讀。
 - **刻意沒有 `CLAUDE.md`**：Claude Code 原生讀 `AGENTS.md`，但只要 repo 裡出現 `CLAUDE.md`、
   `CLAUDE.local.md` 或 `.claude/CLAUDE.md`，它就改讀那份、不再載入 `AGENTS.md`。發現有人新增這些檔案時
   要列為 drift 回報，並建議把內容併入 `docs/agents/*`（或 Claude 專屬細節放 `.claude/rules/*`）。
 
 判斷規則：
-1. 若改動發生在 `docs/agents/*` → 確認 `AGENTS.md` 與 `Global.instructions.md` 的 `@`-import 清單仍完整對應（有新增/刪除檔案時要同步增刪 import 行）。
+1. 若改動發生在 `docs/agents/*` → 確認兩個入口檔的 `@`-import 清單與「何時讀哪份文件」pointer 清單逐行一致（有新增/刪除檔案或改變層級時要同步增刪）。
 2. 若 repo 出現 `CLAUDE.md`／`CLAUDE.local.md`／`.claude/CLAUDE.md` → 回報為 drift（見上）。
-3. `Global.instructions.md` 檔頭的偏好區塊（語言、podman、pnpm、shell 偵測）若被改，檢查是否與 `docs/agents` 衝突。
+3. `AGENTS.md` 的 `## Agent skills` 區塊**刻意不鏡像**到 `Global.instructions.md`（Copilot / Cline 沒有那些 skill），不算 drift。
 
 ### 軸線 2：Skills — 已 git 追蹤
 - `.claude/skills/<name>/` 與 `.bob/skills/<name>/` 應為**鏡像**（目前：caveman, find-skills,

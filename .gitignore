@@ -45,7 +45,7 @@ out/
 
 
 ### Claude Code ###
-# Project-level skills are tracked and synced (see docs/agents/11-mcp-tools.md).
+# Project-level skills are tracked and synced (see docs/agents/11-ai-tools-overview.md).
 
 ### Git hooks ###
 # 只有 pre-push（trunk-based 的本地 CI gate）進版控共用。

@@ -14,19 +14,24 @@
 | **Bob (IBM BOB)** | `AGENTS.md`（`@`-import `docs/agents/*`） | `.bob/mcp.json` | `.bob/skills/` | `.bob/custom_modes.yaml` | `.bob/settings.json`（`autoAccept` 等本機偏好） |
 | **agy CLI** | `AGENTS.md`（`@`-import `docs/agents/*`） | `.agents/mcp_config.json` | `.agents/skills/` | — | — |
 
-> **指令檔分工**：Claude Code、Bob、agy CLI 三者皆讀根目錄 `AGENTS.md`；Cline / Copilot 讀 `.github/instructions/Global.instructions.md`。兩份都以 `@`-import 拉入同一組 `docs/agents/*` 真相源，差別在 `Global.instructions.md` 檔頭另含語言 / podman / pnpm / shell 偏好區塊。本專案**刻意不放 `CLAUDE.md`**，見下方「文件真相源」。
+> **指令檔分工**：Claude Code、Bob、agy CLI 三者皆讀根目錄 `AGENTS.md`；Cline / Copilot 讀 `.github/instructions/Global.instructions.md`。兩份內容相同（同一組 `@`-import 加同一份 pointer 清單），只差 `AGENTS.md` 多了 plugin 用的 `## Agent skills` 區塊。本專案**刻意不放 `CLAUDE.md`**，見下方「文件真相源」。
 
 ### 文件真相源（source of truth）
 
-- **唯一真相源**：`docs/agents/01-overview.md` ~ `11-ai-tools-overview.md`。
-- **下游（靠 `@`-import，不該重複貼內容）**：
-  - `AGENTS.md` — `@./docs/agents/*`，Claude Code 讀。
-  - `.github/instructions/Global.instructions.md` — `@../../docs/agents/*`，Cline / Copilot 讀；檔頭另有語言 / podman / pnpm / shell 偏好區塊。
-- **不放 `CLAUDE.md` / `CLAUDE.local.md` / `.claude/CLAUDE.md`**：Claude Code（v2.1.277+）原生讀 `AGENTS.md`，但預設只在 repo 裡**沒有**這三個檔案時才讀。多放任何一個（包括個人的 `CLAUDE.local.md`），Claude Code 就只讀它、不再載入 `AGENTS.md` 與 `docs/agents/*`。
-  - Claude 專屬、只在改特定檔案時才需要的細節放 `.claude/rules/*`（不受上述規則影響，照常載入）；其餘慣例一律寫進 `docs/agents/*`。
-  - 個人非版控的指示改放 `~/.claude/CLAUDE.md`（使用者層級，不會擋住 `AGENTS.md`）。若一定要用 `CLAUDE.local.md`，須在使用者設定把 `agents-md@builtin` 的 `instructionFiles` 設成 `claude-md-and-agents-md`。
+`docs/agents/*` 是唯一真相源，分三層：
 
-兩份 `@`-import 清單（`AGENTS.md` 與 `Global.instructions.md`）須與 `docs/agents/*` 檔案清單保持一一對應，新增 / 刪除文件時兩邊 import 行都要同步增刪。
+| 層級 | 檔案 | 怎麼被讀到 |
+|---|---|---|
+| **常駐** | `01`、`03`、`05`、`06`、`08` | 兩個入口檔 `@`-import，每個 session 都載入 |
+| **pointer-only** | `02`、`09`、`10`、`11` | 不 import；入口檔的「何時讀哪份文件」清單寫明觸發情境，agent 遇到時自己讀 |
+| **plugin 管理** | 未編號的 `issue-tracker.md`、`triage-labels.md`、`domain.md` | 由 `/setup-matt-pocock-skills` 產生，plugin 的 skills 依固定路徑讀取；`AGENTS.md` 的 `## Agent skills` 區塊指向它們 |
+
+**放哪一層的判準**：每個 session 都可能用到 → 常駐；只在動到特定檔案或遇到特定症狀時才需要 → pointer-only。常駐內容越長，每條規則越容易被淹沒，所以新增內容前先問「刪掉它，agent 會不會出錯？」。
+
+- **入口檔（下游，不重複貼內容）**：`AGENTS.md` 用 `@./docs/agents/*`；`Global.instructions.md` 用 `@../../docs/agents/*`。兩份的 import 清單與 pointer 清單必須逐行一致；新增、刪除文件或調整層級時兩邊同步改。
+- **不放 `CLAUDE.md` / `CLAUDE.local.md` / `.claude/CLAUDE.md`**：Claude Code（v2.1.277+）原生讀 `AGENTS.md`，但預設只在 repo 裡**沒有**這三個檔案時才讀。多放任何一個（包括個人的 `CLAUDE.local.md`），Claude Code 就只讀它、不再載入 `AGENTS.md` 與 `docs/agents/*`。
+  - Claude 專屬、只在改特定檔案時才需要的細節放 `.claude/rules/*`（以 `paths:` 限定載入時機）。
+  - 個人非版控的指示放 `~/.claude/CLAUDE.md`（使用者層級，不會擋住 `AGENTS.md`）。若一定要用 `CLAUDE.local.md`，須在使用者設定把 `agents-md@builtin` 的 `instructionFiles` 設成 `claude-md-and-agents-md`。
 
 ### MCP server 現況
 
@@ -54,6 +59,14 @@
 - `.claude/skills/` 與 `.bob/skills/`：互為鏡像 —— caveman、find-skills、github-actions-docs、high-risk-pr-workflow、integration-test-runner、new-domain-scaffold、openapi-doc-gen、skill-creator、skills-cli（9 個）。
 - `.agents/skills/`（agy CLI）：另一套 —— cavecrew、caveman 全家族（commit / compress / help / init / review / stats）、compress、find-skills。
 - 真相源：`skills-lock.json`（記錄每個 skill 的 GitHub 來源與 hash）。
+
+#### Claude Code plugin：mattpocock-skills（刻意不鏡像）
+
+以 `/plugin install mattpocock-skills@claude-plugins-official` 安裝在**使用者層級**，會自動更新，不進 repo、不記入 `skills-lock.json`，也**不鏡像**到 Bob / agy。原因是它屬於個人工作習慣，不是專案契約；換機器時要自己重裝。
+
+- 在 repo 留下的只有 setup 產物：`docs/agents/issue-tracker.md`（local markdown，issue 放 `.scratch/<feature>/` 並納入版控）、`triage-labels.md`、`domain.md`，以及 `AGENTS.md` 的 `## Agent skills` 區塊。
+- skill 名稱帶 `mattpocock-skills:` 前綴，所以它的 `code-review` 和內建的 `/code-review` 是兩個不同的 skill。
+- 想把某個 skill 改寫成繁中或客製時，再用 `npx skills add mattpocock/skills` 把**那一個**複製進 repo，並照上面的鏡像規則同步。
 
 ### Agents ↔ Modes
 
