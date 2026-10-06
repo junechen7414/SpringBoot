@@ -50,3 +50,10 @@ Status: ready-for-agent
 ## Comments
 
 - 2026-10-05：實作於 PR #78（`refactor/order-line-hard-delete-and-unique`）。`./gradlew test` 全綠（含 `SqlStatusIntegrationTest`、新的 `OrderLineIntegrationTest`）；V2 在 Oracle（Testcontainers）與 H2（`openapi` profile）都套用成功；`swagger.json` 的 `UpdateOrderRequest` 只剩 `items`。專案沒有覆寫 `FAIL_ON_UNKNOWN_PROPERTIES`，帶舊欄位的呼叫端不會 400。`OrderDetailRepository` 移除 `softDeleteByOrderId` 後變空，已一併刪除。文件同步留給 issue 05。
+- 2026-10-06：討論「Cancel 是否也改成實體刪除」，結論是**維持軟刪除，不改**。
+  - **軟刪除的目的是保留紀錄（audit），不是為了日後復原。** Deactivate／Delist／Cancel 三者都不可恢復（`restore()` 因此移除），軟刪除是「保留資料列，只是對系統不可見」（ADR 0001）。
+  - 「訂單不復原、要買就重新建立，庫存只從 reserve／release 進出」：這點成立，但軟刪或實刪都一樣成立，因為本來就沒有復原的入口，所以不能拿來支持實體刪除。
+  - 保留被取消訂單的理由：(1) `deleteOrder` 補償失敗、需要人工介入時，要查得到這張單原本有哪些商品與數量；(2) trace、log、下游系統可能存著 order ID，實體刪除後這些參照就對不到資料；(3) 客訴、取消率、詐欺分析這類需求在訂單領域幾乎一定會出現。資料刪掉就找不回來，留著不用的代價只是表會大一些。
+  - 這和 Order Line 改為實體刪除不衝突：被移除的 Order Line 只是殘缺的歷史（數量是原地覆寫的），被取消的 Order 則是完整的業務事件快照。
+  - 若日後真要消除 `STATUS = 1003` 與 `DELETED` 的重複，折衷做法是保留資料列、拿掉 `DELETED`、只靠 `STATUS = CANCELLED` 表示取消，交給 `.scratch/termination-flag-redundancy/issues/01-status-and-deleted-record-the-same-fact.md` 處理，不另開實體刪除的方向。
+  - 附帶發現：「Cancel 之後 `PUT /order/{id}` 回 404」目前由 `OrderInfo` 的 `@SQLRestriction` 保證（`loadOrderView` 會在 `adjustStock` 之前就拋 404，不會動到庫存），但沒有測試釘住；`SqlStatusIntegrationTest` 只釘了「再 `DELETE` 回 404」。
