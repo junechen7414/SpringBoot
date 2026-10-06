@@ -23,3 +23,12 @@ Status: ready-for-agent
 - 下游 E2E 如果在 `PUT /account` 的 body 裡帶了 `status`，一樣要確認未知欄位會被忽略（見 01 的「注意」）。
 
 ## Comments
+
+- 2026-10-06：直接在 `main` 實作（沒有 migration，屬低風險）。
+  - `UpdateAccountRequest` 只剩 `name`；`AccountService.updateAccount` 不再寫 status；移除 `Account.restore()`。
+  - 拿掉 status 之後，`AccountLifecycleService.updateAccount` 只剩委派、不再碰 order，依 06 的判準**把 `PUT /account/{id}` 搬回 `AccountController`**；orchestration 只留下 `DELETE`（Deactivate），行為不變。`ApiSuccessContractTest` 的 `@Import` 仍然需要兩個 controller（`DELETE` 還在 `AccountLifecycleController`），只更新了註解和 PUT 的 body。
+  - `06-architecture.md` 的 Orchestration 一節同步改成「只承接 `DELETE`」。
+  - `swagger.json`（`generateOpenApiDocs`）：`UpdateAccountRequest` 只剩 `name`，PUT 的說明已改寫。
+  - 專案沒有覆寫 `FAIL_ON_UNKNOWN_PROPERTIES`，帶舊 `status` 欄位的呼叫端不會 400，但 status 不再生效。
+  - `./gradlew test -Djunit.platform.exclude.tags=SanityTest`：204 個測試全數通過。
+  - 沒有處理：`account-write-with-validation` 這個 bulkhead 名稱已經名不副實（`updateAccount`／`deleteAccount` 都不再發 HTTP），改名會牽動 Resilience4j 設定，留待之後再處理。

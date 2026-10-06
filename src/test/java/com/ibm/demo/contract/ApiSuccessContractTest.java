@@ -71,9 +71,9 @@ class ApiSuccessContractTest {
      * 明確 {@code @Import} 進來 —— 不開 component scan，因此不會連帶拉進 JPA、{@code RestClientConfig}
      * 等與 wire format 無關的東西。
      *
-     * <p>{@code /account} 的端點分屬兩個 controller：讀取與建立在 {@link AccountController}，
-     * 而依賴 order 領域的 {@code PUT}／{@code DELETE} 在 {@link AccountLifecycleController}。
-     * 對外路徑不變，但少 import 一個就會讓那兩條 204 案例變成 404。
+     * <p>{@code /account} 的端點分屬兩個 controller：讀取、建立與更新在 {@link AccountController}，
+     * 而依賴 order 領域的 {@code DELETE} 在 {@link AccountLifecycleController}。
+     * 對外路徑不變，但少 import 一個就會讓對應的 204 案例變成 404。
      */
     @TestConfiguration
     @Import({ AccountController.class, AccountLifecycleController.class, ProductController.class,
@@ -153,7 +153,7 @@ class ApiSuccessContractTest {
     // =====================================================================
 
     static Stream<Arguments> noContentRequests() {
-        String accountBody = "{\"name\":\"契約帳戶\",\"status\":\"Y\"}";
+        String accountBody = "{\"name\":\"契約帳戶\"}";
         String productBody = "{\"name\":\"契約商品\",\"price\":10.5,\"saleStatus\":1001,\"available\":3}";
                 String items = "{\"items\":[{\"productId\":1,\"quantity\":2}]}";
 

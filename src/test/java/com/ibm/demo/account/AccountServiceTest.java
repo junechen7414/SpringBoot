@@ -208,45 +208,25 @@ public class AccountServiceTest {
     class UpdateAccountSuccessTests {
 
         @Test
-        @DisplayName("將帳戶狀態從 N 更新為 Y 時，應直接儲存而不檢查訂單")
-        void updateAccount_StatusFromNToY_Success() {
-            // Arrange
-            Account inactiveAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_INACTIVE);
-            UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .name("Updated Name")
-                    .status(AccountStatus.ACTIVE)
-                    .build();
-
-            when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(inactiveAccount));
-
-            // Act
-            accountService.updateAccount(ACTIVE_ACCOUNT_ID, request);
-
-            // Assert
-            ArgumentCaptor<Account> captor = ArgumentCaptor.forClass(Account.class);
-            verify(accountRepository).save(captor.capture());
-            assertThat(captor.getValue())
-                    .hasFieldOrPropertyWithValue("name", "Updated Name")
-                    .hasFieldOrPropertyWithValue("status", STATUS_ACTIVE);
-        }
-
-        @Test
-        @DisplayName("更新帳戶名稱但保持狀態不變，應成功儲存")
-        void updateAccount_SameStatus_Success() {
+        @DisplayName("更新帳戶只改名稱，狀態維持原值")
+        void updateAccount_ShouldUpdateNameAndKeepStatus() {
             // Arrange
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
             UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .name("New Name")
-                    .status(AccountStatus.ACTIVE)
+                    .name("Updated Name")
                     .build();
 
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
 
             // Act
-            accountService.updateAccount(activeAccount.getId(), request);
+            accountService.updateAccount(ACTIVE_ACCOUNT_ID, request);
 
-            // Assert
-            verify(accountRepository).save(any(Account.class));
+            // Assert：停用只能走 DELETE，PUT 不會動到 status
+            ArgumentCaptor<Account> captor = ArgumentCaptor.forClass(Account.class);
+            verify(accountRepository).save(captor.capture());
+            assertThat(captor.getValue())
+                    .hasFieldOrPropertyWithValue("name", "Updated Name")
+                    .hasFieldOrPropertyWithValue("status", STATUS_ACTIVE);
         }
     }
 
@@ -259,7 +239,7 @@ public class AccountServiceTest {
         void updateAccount_WhenNotFound_ShouldThrowException() {
             Integer id = 999;
             UpdateAccountRequest request = UpdateAccountRequest.builder()
-                    .name("Any Name").status(AccountStatus.ACTIVE).build();
+                    .name("Any Name").build();
 
             when(accountRepository.findById(id)).thenReturn(Optional.empty());
 

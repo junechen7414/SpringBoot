@@ -3,8 +3,6 @@ package com.ibm.demo.orchestration;
 import org.springframework.stereotype.Service;
 
 import com.ibm.demo.account.AccountService;
-import com.ibm.demo.account.DTO.UpdateAccountRequest;
-import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.order.OrderClient;
@@ -14,7 +12,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 帳戶生命週期的<b>跨領域協調者</b>：停用與刪除帳戶前，必須確認該帳戶沒有有效訂單。
+ * 帳戶生命週期的<b>跨領域協調者</b>：停用（Deactivate，即 {@code DELETE /account/{id}}）前，
+ * 必須確認該帳戶沒有有效訂單。停用只有這一條路，{@code PUT} 不能改 status。
  *
  * <p><b>為什麼這段邏輯不放在 {@code AccountService}？</b>
  * 「還有訂單就不能停用」這條不變量橫跨 account 與 order 兩個聚合。若由 account 端自行檢查，
@@ -39,8 +38,8 @@ import lombok.extern.slf4j.Slf4j;
  * 隔板實例再掛一層，單一請求會吃掉兩個許可，等於把並發上限砍半。此處只掛斷路器保護對外的
  * order 呼叫。
  *
- * <p><b>注意</b>：守門搬上來之後，直接呼叫 {@code AccountService.updateAccount} /
- * {@code deleteAccount} 就不再有訂單檢查。外部流量一律經由 {@link AccountLifecycleController}
+ * <p><b>注意</b>：守門搬上來之後，直接呼叫 {@code AccountService.deleteAccount}
+ * 就不再有訂單檢查。外部流量一律經由 {@link AccountLifecycleController}
  * 進入本層，是唯一入口。
  */
 @Slf4j
@@ -53,27 +52,10 @@ public class AccountLifecycleService {
     private final OrderClient orderClient;
 
     /**
-     * 更新帳戶。狀態由啟用轉為停用時，先確認沒有有效訂單。
+     * 軟刪除帳戶（Deactivate）。一律先確認沒有有效訂單。
      *
      * <p>先讀一次帳戶而非直接委派，是為了維持錯誤碼的優先順序：帳戶不存在要回 404，
-     * 不能因為「先問到它還有訂單」而變成 400。順帶取得當前狀態，用來判斷狀態是否真的改變。
-     */
-    public void updateAccount(Integer id, UpdateAccountRequest request) {
-        AccountStatus currentStatus = accountService.getAccountDetail(id).status();
-
-        boolean beingDeactivated = request.status() == AccountStatus.INACTIVE
-                && currentStatus != AccountStatus.INACTIVE;
-        if (beingDeactivated) {
-            assertNoActiveOrder(id);
-        }
-
-        accountService.updateAccount(id, request);
-    }
-
-    /**
-     * 軟刪除帳戶。一律先確認沒有有效訂單。
-     *
-     * <p>同 {@link #updateAccount}：先讀一次以確保帳戶不存在時回 404 而非 400。
+     * 不能因為「先問到它還有訂單」而變成 400。
      */
     public void deleteAccount(Integer id) {
         accountService.getAccountDetail(id);

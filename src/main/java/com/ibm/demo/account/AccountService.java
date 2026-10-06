@@ -92,11 +92,10 @@ public class AccountService {
     }
 
     /**
-     * 更新帳戶名稱與狀態。
+     * 更新帳戶名稱。
      *
-     * <p><b>不含</b>「停用前須無有效訂單」的檢查 —— 那條不變量橫跨 order 領域，已上提至
-     * {@code orchestration.AccountLifecycleService}（見該處說明：account 不該反向依賴 order）。
-     * 外部流量一律經由該層進入，直接呼叫本方法不會有訂單檢查。
+     * <p>不改 status：停用（Deactivate）只走 {@link #deleteAccount}，且必須經由
+     * {@code orchestration.AccountLifecycleService} 檢查有效訂單。
      *
      * @param updateAccountRequestDto
      */
@@ -110,19 +109,17 @@ public class AccountService {
         // 2. 更新帳戶名稱
         existingAccount.setName(updateAccountRequestDto.name());
 
-        // 3. 更新帳戶狀態
-        existingAccount.setStatus(updateAccountRequestDto.status().getCode());
-
-        // 4. 儲存帳戶實體
+        // 3. 儲存帳戶實體
         accountRepository.save(existingAccount);
-        log.info("帳戶更新成功，帳戶ID: {}, 狀態: {}", id, existingAccount.getStatus());
+        log.info("帳戶更新成功，帳戶ID: {}", id);
     }
 
     /**
-     * 軟刪除帳戶。
+     * 軟刪除帳戶（Deactivate）：設為停用並標記刪除，不可恢復。
      *
-     * <p>同 {@link #updateAccount}：<b>不含</b>「須無有效訂單」的檢查，該守門在
-     * {@code orchestration.AccountLifecycleService}。
+     * <p><b>不含</b>「須無有效訂單」的檢查 —— 那條不變量橫跨 order 領域，已上提至
+     * {@code orchestration.AccountLifecycleService}（account 不該反向依賴 order）。
+     * 外部流量一律經由該層進入，直接呼叫本方法不會有訂單檢查。
      *
      * @param accountId
      */
