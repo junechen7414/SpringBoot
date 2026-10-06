@@ -21,6 +21,7 @@ Status: ready-for-agent
 ## 注意
 
 - 下游 E2E 如果在 `PUT /account` 的 body 裡帶了 `status`，一樣要確認未知欄位會被忽略（見 01 的「注意」）。
+- ⚠️ 下游有 3 條測試靠 `PUT /account` 帶 `status: Inactive` 來停用帳戶，push 之後會紅。push 前先處理 `06-downstream-e2e-stop-using-put-status.md`。
 
 ## Comments
 

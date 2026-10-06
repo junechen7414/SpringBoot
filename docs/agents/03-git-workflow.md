@@ -21,6 +21,8 @@ push `main` 不只是跑測試，還會：
 
 CI 的 `Run Unit Tests (Gate)` 跑在 build image 之前，所以測試抓得到的錯不會產出壞 image；風險在測試抓不到的執行期／整合問題。
 
+> **從 request body 拿掉欄位前，先 grep 下游 E2E（`junechen7414/Playwright-TS`，本機 `../Playwright`）有沒有依賴這個欄位的效果。** 專案沒有覆寫 `FAIL_ON_UNKNOWN_PROPERTIES`，舊欄位不會 400，但會被靜靜忽略。下游如果靠它當前置步驟（例如用 `PUT` 帶 status 來停用資源），請求照樣回 204，後面的斷言才會失敗，上游的測試完全抓不到。實例：`.scratch/order-lifecycle/issues/06-*.md`。
+
 > **改了 API 契約時，下游 job summary 一定會報一次「快照與被測 image 的 spec 有差異」。** 這是 job 順序造成的預期結果：`generate-docs` 是 `needs: build-and-push`，下游 checkout 到的永遠是上一版快照，下一次觸發就恢復。細節見 [09-monitoring.md](./09-monitoring.md#cicd-流程)。
 
 ## pre-push hook

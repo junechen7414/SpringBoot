@@ -22,4 +22,8 @@ Status: ready-for-agent
 - `PUT /product/{id}` 的 body 不再有 `saleStatus`；`swagger.json` 已更新。
 - `./gradlew test` 全部通過。
 
+## 注意
+
+- ⚠️ 下游 `order.spec.ts`「當商品狀態為無效時，無法建立新訂單」靠 `PUT /product` 帶 `saleStatus: Inactive`，做完之後會紅。見 `06-downstream-e2e-stop-using-put-status.md`。
+
 ## Comments

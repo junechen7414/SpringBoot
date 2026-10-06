@@ -46,6 +46,7 @@ Status: ready-for-agent
 ## 注意
 
 - 下游 E2E 如果在 `PUT /order` 的 body 裡帶了 `orderStatus`：Spring Boot 預設會忽略未知欄位（`FAIL_ON_UNKNOWN_PROPERTIES = false`），實作時要確認專案沒有改過這個設定。如果改過，這就是破壞性變更。
+- ⚠️ 上面這點只保證「不會 400」，沒有考慮到下游有測試**依賴 status 被套用**。實際上下游已經因此變紅，見 `06-downstream-e2e-stop-using-put-status.md`。
 
 ## Comments
 

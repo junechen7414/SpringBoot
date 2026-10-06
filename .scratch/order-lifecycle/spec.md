@@ -35,3 +35,4 @@
 | 03 | `issues/03-product-put-drops-status-and-guard-delist.md` | — |
 | 04 | `issues/04-rename-order-and-order-line.md` | 01 |
 | 05 | `issues/05-docs-point-to-adr-0001.md` | 01、02、03 |
+| 06 | `issues/06-downstream-e2e-stop-using-put-status.md`（改下游 repo） | —，要在 02／03 push 前或同時完成 |
