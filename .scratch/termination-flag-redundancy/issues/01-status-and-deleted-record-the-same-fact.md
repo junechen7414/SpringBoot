@@ -14,7 +14,7 @@ Status: needs-triage
 | Product | `SALE_STATUS = 1002` | `DELETED = true` |
 | Order | `STATUS = 1003` | `DELETED = true` |
 
-（`AccountRepository`、`ProductRepository`、`OrderInfoRepository` 的 `softDeleteById`）
+（`AccountRepository`、`ProductRepository`、`OrderRepository` 的 `softDeleteById`）
 
 既然沒有其他路徑能單獨改 status，這兩個欄位以後一定同時變動，等於重複記錄同一件事。各 entity 的 `@SQLRestriction` 也同時檢查這兩個欄位。
 
