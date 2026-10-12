@@ -25,6 +25,11 @@ CI 的 `Run Unit Tests (Gate)` 跑在 build image 之前，所以測試抓得到
 
 > **改了 API 契約時，下游 job summary 一定會報一次「快照與被測 image 的 spec 有差異」。** 這是 job 順序造成的預期結果：`generate-docs` 是 `needs: build-and-push`，下游 checkout 到的永遠是上一版快照，下一次觸發就恢復。細節見 [09-monitoring.md](./09-monitoring.md#cicd-流程)。
 
+> **契約變更需要下游同步改測試時，push 順序固定是：上游 push → 等 `build-and-push` 把 image 推上 ghcr → 下游 rebase 後再 push。** 下游 compose 的 app 設了 `pull_policy: always`，CI 一律拉 ghcr 的 `latest`。下游如果先 push，新測試會打到舊 image，例如 PUT 少了舊 image 仍然必填的欄位，直接被擋成 400。
+> - 上游 push 觸發的那一次下游 E2E 跑的還是舊測試，紅一次是預期的，下游 push 之後那次才算數。
+> - 下游 push 前一定會落後一個 commit：`generate-docs` 會把新的 `swagger.json` push 到下游。要先 `git pull --rebase`；`swagger.json` 有衝突時以那個 commit 的版本為準。
+> - 實例：`.scratch/order-lifecycle/issues/06-*.md`。
+
 ## pre-push hook
 
 `.githooks/pre-push` 在 push 內容含 `main` 時跑與 CI gate 相同的指令：
