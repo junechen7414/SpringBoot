@@ -17,7 +17,7 @@ import com.ibm.demo.account.Account;
 import com.ibm.demo.account.AccountRepository;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.ProductStatus;
-import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
+import com.ibm.demo.order.DTO.CreateOrderLineRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.OrderTransactionalService;
 import com.ibm.demo.product.Product;
@@ -107,13 +107,13 @@ class AuditMetadataIntegrationTest extends BaseIntegrationTest {
                 .build()).getId();
 
         Integer orderId = orderTransactionalService.createOrder(new CreateOrderRequest(
-                accountId, List.of(new CreateOrderDetailRequest(productId, 2))));
+                accountId, List.of(new CreateOrderLineRequest(productId, 2))));
         entityManager.flush();
 
         assertAuditColumnsNotNull("ORDER_INFO", orderId);
 
-        // 明細不是自己被 save 的，而是由 OrderInfo 的 cascade PERSIST 帶進來；
-        // listener 掛在 OrderDetail 自己身上才會生效（不會從父端繼承）。
+        // 明細不是自己被 save 的，而是由 Order 的 cascade PERSIST 帶進來；
+        // listener 掛在 OrderLine 自己身上才會生效（不會從父端繼承）。
         Object[] detail = (Object[]) entityManager.createNativeQuery(
                 "SELECT CREATED_AT, UPDATED_AT FROM ORDER_PRODUCT_DETAIL WHERE ORDER_ID = :id")
                 .setParameter("id", orderId)

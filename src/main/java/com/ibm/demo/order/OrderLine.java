@@ -36,7 +36,7 @@ import lombok.ToString;
 // orphanRemoval 直接實體刪除。Hibernate 對 @Version entity 的預設刪除語句是 WHERE ID = ? AND VERSION = ?，
 // 命中 0 列即拋 StaleObjectStateException，所以逐筆樂觀鎖仍在。
 // 訂單被取消時明細原封不動地保留，跟著訂單一起封存（不會走到這裡）。
-public class OrderDetail {
+public class OrderLine {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_detail_seq_gen")
@@ -45,16 +45,17 @@ public class OrderDetail {
     private Integer id;
 
     // 關聯的擁有端（owning side）：ORDER_ID 這個外鍵欄位由本欄位決定。
-    // 目前沒有任何地方從明細往上走訪 order；留著 @ManyToOne 是因為 OrderInfo 的
+    // 目前沒有任何地方從明細往上走訪 order；留著 @ManyToOne 是因為 Order 的
     // @OneToMany(mappedBy) 與 orphanRemoval 都要求擁有端存在。細節見 筆記.md「要不要做『雙向』關聯？」一節。
     @ManyToOne(fetch = FetchType.LAZY) // 延遲載入
-    // ORDER_ID 是「本表」ORDER_PRODUCT_DETAIL 的外鍵欄位；不指定 name 會被推導成 order_info_id
-    // （屬性名 + 對方 PK 欄位，再過 CamelCaseToUnderscoresNamingStrategy），與 V1 migration 不符
-    // → ddl-auto: validate 啟動即失敗。被參考的目標欄位預設就是 OrderInfo 的 @Id（ORDER_INFO.ID），
+    // ORDER_ID 是「本表」ORDER_PRODUCT_DETAIL 的外鍵欄位。屬性名是 order 時，預設推導（屬性名 + 對方
+    // PK 欄位，再過 CamelCaseToUnderscoresNamingStrategy）剛好也是 order_id，但仍明寫：欄位名來自
+    // V1 migration，不該隨屬性改名而變（改名前屬性叫 orderInfo，推導結果是 order_info_id，
+    // ddl-auto: validate 會讓啟動失敗）。被參考的目標欄位預設就是 Order 的 @Id（ORDER_INFO.ID），
     // 故不需 referencedColumnName。nullable 只影響 DDL 產生（本專案僅 openapi profile 會產 DDL）。
     @JoinColumn(name = "ORDER_ID", nullable = false)
     @ToString.Exclude // 避免Entity中有OneToMany或ManyToOne關聯時，因為循環引用導致 StackOverflowError。
-    private OrderInfo orderInfo;
+    private Order order;
 
     @Column(name = "PRODUCT_ID", columnDefinition = "NUMBER(10)", nullable = false)
     private Integer productId;

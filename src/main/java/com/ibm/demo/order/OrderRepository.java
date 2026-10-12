@@ -13,22 +13,22 @@ import org.springframework.data.repository.query.Param;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.util.SoftDeleteRepository;
 
-public interface OrderInfoRepository extends JpaRepository<OrderInfo, Integer>, SoftDeleteRepository<Integer> {
+public interface OrderRepository extends JpaRepository<Order, Integer>, SoftDeleteRepository<Integer> {
 
     // 必須是 LEFT JOIN FETCH：inner join 會要求「至少一筆明細」才回傳訂單。訂單可能沒有任何明細
     // （例如資料被手動清過，或日後放寬 updateOrder 的 @NotEmpty），用 inner join 的話這種訂單會查不到、
     // 對外誤報 404 ——「查無訂單」與「訂單沒有明細」是兩件事。
-    @Query("SELECT o FROM OrderInfo o LEFT JOIN FETCH o.orderDetails WHERE o.id = :id")
-    Optional<OrderInfo> findByIdWithDetails(@Param("id") Integer id);
+    @Query("SELECT o FROM CustomerOrder o LEFT JOIN FETCH o.orderLines WHERE o.id = :id")
+    Optional<Order> findByIdWithLines(@Param("id") Integer id);
 
-    List<OrderInfo> findByAccountId(@Param("accountId") Integer accountId);
+    List<Order> findByAccountId(@Param("accountId") Integer accountId);
 
-    Page<OrderInfo> findByAccountId(@Param("accountId") Integer accountId, Pageable pageable);
+    Page<Order> findByAccountId(@Param("accountId") Integer accountId, Pageable pageable);
 
     @Override
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     // 寫入的狀態值由 OrderStatus 串接而來，理由見 AccountRepository 上的同款註解。
-    @Query("UPDATE OrderInfo o "
+    @Query("UPDATE CustomerOrder o "
             + "SET o.softDeleteMetadata.deleted = true, "
             + "    o.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP, "
             + "    o.status = " + OrderStatus.Codes.CANCELLED + ", "

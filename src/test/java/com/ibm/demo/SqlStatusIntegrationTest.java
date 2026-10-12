@@ -17,8 +17,8 @@ import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
-import com.ibm.demo.order.OrderInfo;
-import com.ibm.demo.order.OrderInfoRepository;
+import com.ibm.demo.order.Order;
+import com.ibm.demo.order.OrderRepository;
 import com.ibm.demo.order.OrderTransactionalService;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
@@ -51,7 +51,7 @@ class SqlStatusIntegrationTest extends BaseIntegrationTest {
     private ProductRepository productRepository;
 
     @Autowired
-    private OrderInfoRepository orderInfoRepository;
+    private OrderRepository orderRepository;
 
     @Autowired
     private OrderTransactionalService orderTransactionalService;
@@ -84,15 +84,15 @@ class SqlStatusIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("OrderInfo：狀態為 CREATED 的列查得到，CANCELLED 的列雖實體存在但查不到")
+    @DisplayName("Order：狀態為 CREATED 的列查得到，CANCELLED 的列雖實體存在但查不到")
     @Transactional
-    void orderInfo_onlyCreatedRowsAreVisible() {
+    void order_onlyCreatedRowsAreVisible() {
         Integer accountId = insertAccount(AccountStatus.ACTIVE);
         Integer createdId = insertOrder(accountId, OrderStatus.CREATED);
         Integer cancelledId = insertOrder(accountId, OrderStatus.CANCELLED);
 
-        assertThat(orderInfoRepository.findById(createdId)).as("CREATED 訂單應查得到").isPresent();
-        assertThat(orderInfoRepository.findById(cancelledId)).as("CANCELLED 訂單應被 @SQLRestriction 濾掉").isEmpty();
+        assertThat(orderRepository.findById(createdId)).as("CREATED 訂單應查得到").isPresent();
+        assertThat(orderRepository.findById(cancelledId)).as("CANCELLED 訂單應被 @SQLRestriction 濾掉").isEmpty();
         assertThat(countRows("ORDER_INFO", cancelledId)).as("被濾掉的只是查詢結果，實體列仍在").isEqualTo(1);
     }
 
@@ -143,7 +143,7 @@ class SqlStatusIntegrationTest extends BaseIntegrationTest {
         Integer accountId = insertAccount(AccountStatus.ACTIVE);
         Integer id = insertOrder(accountId, OrderStatus.CREATED);
 
-        assertThat(orderInfoRepository.softDeleteById(id, 0)).as("應更新到 1 列（version 相符）").isEqualTo(1);
+        assertThat(orderRepository.softDeleteById(id, 0)).as("應更新到 1 列（version 相符）").isEqualTo(1);
         assertThat(statusOf("ORDER_INFO", "STATUS", id))
                 .isEqualTo(String.valueOf(OrderStatus.Codes.CANCELLED));
     }
@@ -170,7 +170,7 @@ class SqlStatusIntegrationTest extends BaseIntegrationTest {
     }
 
     private Integer insertOrder(Integer accountId, OrderStatus status) {
-        Integer id = orderInfoRepository.saveAndFlush(OrderInfo.builder()
+        Integer id = orderRepository.saveAndFlush(Order.builder()
                 .accountId(accountId)
                 .status(status.getCode())
                 .build()).getId();

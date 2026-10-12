@@ -7,8 +7,9 @@ import jakarta.validation.constraints.Positive;
 import lombok.Builder;
 
 @Builder
-@Schema(description = "建立訂單明細請求")
-public record CreateOrderDetailRequest(
+// schema name 固定成改名前的名稱，OpenAPI 契約與下游產生的型別才不會變。
+@Schema(name = "CreateOrderDetailRequest", description = "建立訂單明細請求")
+public record CreateOrderLineRequest(
         @NotNull(message = "Product ID is required")
         @Digits(integer = 10, fraction = 0, message = "10 characters max")
         @Positive(message = "Product ID must be positive")

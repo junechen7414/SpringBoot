@@ -389,7 +389,7 @@ status:
 
 | 原則 | 符合度 | 說明 |
 |------|--------|------|
-| 1. Schema Object 封裝 | ✅ 良好 | `GetOrderDetailResponse` 使用 `List<OrderItemDTO>` 巢狀物件 |
+| 1. Schema Object 封裝 | ✅ 良好 | `GetOrderDetailResponse` 使用 `List<OrderLineResponse>` 巢狀物件（schema 名稱固定為 `OrderItemDTO`） |
 | 2. 共用 Schema | ✅ 已改善 | DTO 已加上完整 `@Schema` 註解，Entity 已移除 `@Schema` |
 | 3. 明確標示 required | ✅ 已改善 | DTO 使用 `requiredMode = Schema.RequiredMode.REQUIRED` 明確標示 |
 | 4. 寫 description | ✅ 已改善 | 所有 DTO 欄位皆有 `description` |
@@ -399,7 +399,7 @@ status:
 | 8. Error Response 標準化 | ✅ 優秀 | RFC 9457 `application/problem+json`（`ProblemDetail` + extension `code`，驗證失敗另帶 `errors`），由 `GlobalExceptionHandler` 單一組裝；`ApiErrorResponse` 僅為 schema 宣告 |
 | 9. Enum 定義清楚 | ✅ 已改善 | DTO 中使用 `@Schema(description)` 說明可選值含義 |
 | 10. Schema 不暴露 Entity | ✅ 優秀 | Entity 已移除所有 `@Schema`，僅 DTO 有 Swagger 註解 |
-| 11. 善用巢狀物件 | ✅ 良好 | Order items 使用獨立 `OrderItemDTO` |
+| 11. 善用巢狀物件 | ✅ 良好 | Order items 使用獨立的 `OrderLineResponse`（schema 名稱 `OrderItemDTO`） |
 | 12. Response Wrapper | ✅ 優秀 | 沒有成功信封：建立回 `201` + `Location` + `{"id": n}`、無內容回 `204`、有內容才 `200` + 具名 DTO；契約由 `ApiSuccessContractTest` 釘住 |
 
 ---
@@ -412,7 +412,7 @@ status:
 
 **解決方式：**
 - 所有 DTO 已加上完整 `@Schema(description, example, requiredMode)` 註解
-- Entity（`Account`, `Product`, `OrderInfo`, `OrderDetail`）已移除所有 `@Schema` 註解
+- Entity（`Account`, `Product`, `Order`, `OrderLine`）已移除所有 `@Schema` 註解
 
 ---
 

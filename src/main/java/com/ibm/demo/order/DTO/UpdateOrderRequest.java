@@ -22,5 +22,5 @@ import lombok.Builder;
 public record UpdateOrderRequest(
         @NotEmpty(message = "Order items are required")
         @Schema(description = "訂單明細項目列表", requiredMode = Schema.RequiredMode.REQUIRED)
-        List<@Valid UpdateOrderDetailRequest> items) {
+        List<@Valid UpdateOrderLineRequest> items) {
 }

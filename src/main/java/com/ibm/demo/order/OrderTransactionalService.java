@@ -17,7 +17,7 @@ import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderView;
-import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
+import com.ibm.demo.order.DTO.UpdateOrderLineRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 import com.ibm.demo.util.DBAssertion;
@@ -31,7 +31,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class OrderTransactionalService {
-        private final OrderInfoRepository orderInfoRepository;
+        private final OrderRepository orderRepository;
 
         @Transactional
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
@@ -40,25 +40,25 @@ public class OrderTransactionalService {
                         createOrderRequest.items().size());
                 
                 // 建立新訂單
-                OrderInfo newOrderInfo = OrderInfo.builder()
+                Order newOrder = Order.builder()
                                 .accountId(createOrderRequest.accountId())
                                 .status(OrderStatus.CREATED.getCode())
                                 .build();
 
-                // 明細先掛到父端（addOrderDetail 同步雙向兩端），再以單一 save 由 cascade PERSIST 一併寫入。
-                // 舊寫法只設子端的 orderInfo 再另外 saveAll，交易內父端集合會是空的（雙向不一致）。
-                createOrderRequest.items().forEach(detailRequest -> newOrderInfo.addOrderDetail(
-                                OrderDetail.builder()
+                // 明細先掛到父端（addOrderLine 同步雙向兩端），再以單一 save 由 cascade PERSIST 一併寫入。
+                // 舊寫法只設子端的 order 再另外 saveAll，交易內父端集合會是空的（雙向不一致）。
+                createOrderRequest.items().forEach(detailRequest -> newOrder.addOrderLine(
+                                OrderLine.builder()
                                                 .productId(detailRequest.productId())
                                                 .quantity(detailRequest.quantity())
                                                 .build()));
 
-                OrderInfo savedOrderInfo = orderInfoRepository.save(newOrderInfo);
+                Order savedOrder = orderRepository.save(newOrder);
 
                 log.info("訂單建立成功，訂單ID: {}, 帳戶ID: {}", 
-                        savedOrderInfo.getId(), 
+                        savedOrder.getId(), 
                         createOrderRequest.accountId());
-                return savedOrderInfo.getId();
+                return savedOrder.getId();
         }
 
         @Transactional
@@ -68,35 +68,35 @@ public class OrderTransactionalService {
                         request.items().size());
 
                 // 交易內自行載入(managed)：關閉 OSIV 後不可沿用外部傳入的 detached entity，否則
-                // 存取 lazy orderDetails 仍會拋 LazyInitializationException。
-                OrderInfo order = orderInfoRepository.findById(orderId).orElseThrow(
+                // 存取 lazy orderLines 仍會拋 LazyInitializationException。
+                Order order = orderRepository.findById(orderId).orElseThrow(
                                 () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                                                 "Order not found with ID: " + orderId));
 
-                Map<Integer, OrderDetail> existingMap = order.getOrderDetails().stream()
-                                .collect(Collectors.toMap(OrderDetail::getProductId, Function.identity()));
-                Map<Integer, UpdateOrderDetailRequest> incomingMap = request.items().stream()
-                                .collect(Collectors.toMap(UpdateOrderDetailRequest::productId, Function.identity()));
+                Map<Integer, OrderLine> existingMap = order.getOrderLines().stream()
+                                .collect(Collectors.toMap(OrderLine::getProductId, Function.identity()));
+                Map<Integer, UpdateOrderLineRequest> incomingMap = request.items().stream()
+                                .collect(Collectors.toMap(UpdateOrderLineRequest::productId, Function.identity()));
 
-                List<OrderDetail> detailsToRemove = order.getOrderDetails().stream()
+                List<OrderLine> detailsToRemove = order.getOrderLines().stream()
                                 .filter(detail -> !incomingMap.containsKey(detail.getProductId()))
                                 .collect(Collectors.toList());
 
-                order.getOrderDetails().removeAll(detailsToRemove);
+                order.getOrderLines().removeAll(detailsToRemove);
 
-                order.getOrderDetails().forEach(detail -> {
-                        UpdateOrderDetailRequest incoming = incomingMap.get(detail.getProductId());
+                order.getOrderLines().forEach(detail -> {
+                        UpdateOrderLineRequest incoming = incomingMap.get(detail.getProductId());
                         detail.setQuantity(incoming.quantity());
                 });
 
                 request.items().stream()
                                 .filter(item -> !existingMap.containsKey(item.productId()))
-                                .forEach(item -> order.addOrderDetail(
-                                                OrderDetail.builder()
+                                .forEach(item -> order.addOrderLine(
+                                                OrderLine.builder()
                                                                 .productId(item.productId())
                                                                 .quantity(item.quantity())
                                                                 .build()));
-                orderInfoRepository.save(order);
+                orderRepository.save(order);
 
                 log.info("訂單更新成功，訂單ID: {}", orderId);
         }
@@ -107,7 +107,7 @@ public class OrderTransactionalService {
          */
         @Transactional(readOnly = true)
         public OrderView loadOrderView(Integer orderId) {
-                OrderInfo order = orderInfoRepository.findByIdWithDetails(orderId).orElseThrow(
+                Order order = orderRepository.findByIdWithLines(orderId).orElseThrow(
                                 () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                                                 "Order not found with ID: " + orderId));
                 return toView(order);
@@ -115,16 +115,16 @@ public class OrderTransactionalService {
 
         /**
          * 交易內分頁載入某帳戶的訂單並各自萃取為 {@link OrderView}。lazy 明細於 session 內載入
-         * (搭配 OrderInfo.orderDetails 的 @BatchSize 緩解 N+1)，回傳 detached-safe 的純快照頁。
+         * (搭配 Order.orderLines 的 @BatchSize 緩解 N+1)，回傳 detached-safe 的純快照頁。
          */
         @Transactional(readOnly = true)
         public Page<OrderView> loadOrderViews(Integer accountId, Pageable pageable) {
-                return orderInfoRepository.findByAccountId(accountId, pageable).map(this::toView);
+                return orderRepository.findByAccountId(accountId, pageable).map(this::toView);
         }
 
-        /** 在交易/session 內把 OrderInfo(含 lazy orderDetails)轉為純快照。 */
-        private OrderView toView(OrderInfo order) {
-                List<OrderItemRequest> items = order.getOrderDetails().stream()
+        /** 在交易/session 內把 Order(含 lazy orderLines)轉為純快照。 */
+        private OrderView toView(Order order) {
+                List<OrderItemRequest> items = order.getOrderLines().stream()
                                 .map(detail -> OrderItemRequest.builder()
                                                 .productId(detail.getProductId())
                                                 .quantity(detail.getQuantity())
@@ -138,13 +138,13 @@ public class OrderTransactionalService {
          * 刪除前的交易內準備：載入訂單、驗證可刪狀態，並把後續步驟(遠端釋放庫存、
          * 樂觀鎖軟刪、補償告警)所需資料萃取為純 DTO 回傳。
          * <p>
-         * lazy 關聯 {@code orderDetails} 的載入與轉換都發生在本 readOnly 交易/session 內，
+         * lazy 關聯 {@code orderLines} 的載入與轉換都發生在本 readOnly 交易/session 內，
          * 故不依賴 OSIV；呼叫端拿到的是 detached-safe 的純資料。version 於此刻擷取，
          * 用於後續軟刪的樂觀鎖檢查——釋放庫存期間若訂單被並發修改，軟刪將命中 0 列而觸發補償。
          */
         @Transactional(readOnly = true)
         public OrderDeletionPlan prepareOrderDeletion(Integer orderId) {
-                OrderInfo order = orderInfoRepository.findById(orderId).orElseThrow(
+                Order order = orderRepository.findById(orderId).orElseThrow(
                                 () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                                                 "Order not found with ID: " + orderId));
 
@@ -152,7 +152,7 @@ public class OrderTransactionalService {
                 // DB 存了無法識別的狀態時會被「不等於 CREATED」悄悄吸收成 400，而那其實是資料
                 // 完整性問題 —— fromCode 會把它照實抬成 SystemException(500)。
                 //
-                // 這段對走 repository 的呼叫端目前不可達：OrderInfo 的 @SQLRestriction 已限定
+                // 這段對走 repository 的呼叫端目前不可達：Order 的 @SQLRestriction 已限定
                 // STATUS = CREATED，非 CREATED 的訂單在上面 findById 就先撞 RESOURCE_NOT_FOUND
                 // （由 SqlStatusIntegrationTest 釘住）。仍保留，因為它防的正是那條裸 SQL
                 // 條件被放寬的那天 —— 屆時這裡就是唯一擋住「刪除已取消訂單」的地方。
@@ -162,7 +162,7 @@ public class OrderTransactionalService {
                 }
 
                 // 仍在交易/session 內 → lazy 載入明細合法安全，當場轉為純 DTO
-                Set<OrderItemRequest> items = order.getOrderDetails().stream()
+                Set<OrderItemRequest> items = order.getOrderLines().stream()
                                 .map(detail -> OrderItemRequest.builder()
                                                 .productId(detail.getProductId())
                                                 .quantity(detail.getQuantity())
@@ -176,9 +176,9 @@ public class OrderTransactionalService {
         public void deleteOrder(Integer orderId, Integer version) {
                 log.debug("開始刪除訂單，訂單ID: {}", orderId);
 
-                int updated = orderInfoRepository.softDeleteById(orderId, version);
+                int updated = orderRepository.softDeleteById(orderId, version);
 
-                DBAssertion.assertUpdated(updated, OrderInfo.class, orderId);
+                DBAssertion.assertUpdated(updated, Order.class, orderId);
                 // 明細原封不動地保留：訂單這一列保留但查不到，明細跟著一起封存（ADR 0001），
                 // 被取消的訂單買了什麼仍查得回來。
 

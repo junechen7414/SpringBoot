@@ -17,7 +17,7 @@ import com.ibm.demo.account.AccountRepository;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.enums.ProductStatus;
-import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
+import com.ibm.demo.order.DTO.CreateOrderLineRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.product.Product;
@@ -26,10 +26,10 @@ import com.ibm.demo.product.ProductRepository;
 import jakarta.persistence.EntityManager;
 
 /**
- * 迴歸測試：{@code createOrder} 必須經由 {@code OrderInfo.addOrderDetail} 掛載明細，
+ * 迴歸測試：{@code createOrder} 必須經由 {@code Order.addOrderLine} 掛載明細，
  * 讓交易內的雙向關聯兩端一致，並由 cascade PERSIST 以單一 save 寫入明細。
  * <p>
- * 修正前的寫法只設子端的 {@code orderInfo} 再另外 {@code saveAll}，父端集合在同一個
+ * 修正前的寫法只設子端的 {@code order} 再另外 {@code saveAll}，父端集合在同一個
  * persistence context 內會是空的；DB 資料雖正確，但這份正確性只靠「沒人在交易內讀父端集合」
  * 這條沒寫下來也沒測到的前提。第一個測試就是在釘住這條前提。
  */
@@ -58,20 +58,20 @@ class OrderCreateCascadeIntegrationTest extends BaseIntegrationTest {
 
         Integer orderId = orderTransactionalService.createOrder(new CreateOrderRequest(
                 accountId,
-                List.of(new CreateOrderDetailRequest(productAId, 2),
-                        new CreateOrderDetailRequest(productBId, 3))));
+                List.of(new CreateOrderLineRequest(productAId, 2),
+                        new CreateOrderLineRequest(productBId, 3))));
 
         // createOrder 併入測試交易，因此這裡拿到的是同一個 persistence context 中的實例
-        OrderInfo order = entityManager.find(OrderInfo.class, orderId);
-        assertThat(order.getOrderDetails())
+        Order order = entityManager.find(Order.class, orderId);
+        assertThat(order.getOrderLines())
                 .as("父端集合應看得到兩筆明細（修正前為空）")
                 .hasSize(2);
-        assertThat(order.getOrderDetails())
-                .allSatisfy(detail -> assertThat(detail.getOrderInfo())
+        assertThat(order.getOrderLines())
+                .allSatisfy(detail -> assertThat(detail.getOrder())
                         .as("子端反向參考應指回同一個父實例")
                         .isSameAs(order));
-        assertThat(order.getOrderDetails())
-                .extracting(OrderDetail::getProductId)
+        assertThat(order.getOrderLines())
+                .extracting(OrderLine::getProductId)
                 .containsExactlyInAnyOrder(productAId, productBId);
     }
 
@@ -84,7 +84,7 @@ class OrderCreateCascadeIntegrationTest extends BaseIntegrationTest {
 
         Integer orderId = orderTransactionalService.createOrder(new CreateOrderRequest(
                 accountId,
-                List.of(new CreateOrderDetailRequest(productId, 4))));
+                List.of(new CreateOrderLineRequest(productId, 4))));
 
         entityManager.flush();
         entityManager.clear();

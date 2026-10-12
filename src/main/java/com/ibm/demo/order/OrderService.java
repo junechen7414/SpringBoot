@@ -17,7 +17,7 @@ import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
-import com.ibm.demo.order.DTO.OrderItemDTO;
+import com.ibm.demo.order.DTO.OrderLineResponse;
 import com.ibm.demo.order.DTO.OrderView;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.product.ProductClient;
@@ -39,7 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @CircuitBreaker(name = "OrderService")
 public class OrderService {
-        private final OrderInfoRepository orderInfoRepository;
+        private final OrderRepository orderRepository;
         private final AccountClient accountClient;
         private final ProductClient productClient;
         private final OrderTransactionalService orderTransactionalService;
@@ -47,9 +47,10 @@ public class OrderService {
         /**
          * 注入Repository和Client，已用lombok註解RequiredArgsConstructor定義建構子。
          * 
-         * @param orderInfoRepository   訂單主檔資料庫存取介面
-         * @param accountClient         帳戶服務的Client，用於驗證帳戶狀態
-         * @param productClient         商品服務的Client，用於驗證商品庫存和獲取商品資訊
+         * @param orderRepository           訂單資料庫存取介面
+         * @param accountClient             帳戶服務的Client，用於驗證帳戶狀態
+         * @param productClient             商品服務的Client，用於驗證商品庫存和獲取商品資訊
+         * @param orderTransactionalService 隔離 DB 交易邊界的訂單寫入／讀取快照服務
          */
 
         /**
@@ -142,10 +143,10 @@ public class OrderService {
                 Map<Integer, GetProductDetailResponse> productMap = batchGetProductDetails(productIds);
 
                 // 3. 組裝明細 DTO
-                List<OrderItemDTO> itemDTOs = view.items().stream()
+                List<OrderLineResponse> itemDTOs = view.items().stream()
                                 .map(item -> {
                                         GetProductDetailResponse product = productMap.get(item.productId());
-                                        return OrderItemDTO.builder()
+                                        return OrderLineResponse.builder()
                                                         .productId(item.productId())
                                                         .productName(product.name())
                                                         .quantity(item.quantity())
@@ -329,7 +330,7 @@ public class OrderService {
          * @return 若帳戶有關聯訂單則返回 true，否則返回 false
          */
         public boolean isActiveAccountInOrder(Integer accountId) {
-                return !orderInfoRepository.findByAccountId(accountId).isEmpty();
+                return !orderRepository.findByAccountId(accountId).isEmpty();
         }
 
 }

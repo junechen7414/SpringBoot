@@ -35,12 +35,14 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Entity
+// entity name 和 class 名稱不同：ORDER 是 JPQL 保留字，JPA 規格不允許拿來當 entity name，
+// 所以 JPQL 要寫 FROM CustomerOrder。class 名稱照 CONTEXT.md 的用語叫 Order。
+@Entity(name = "CustomerOrder")
 @EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
 // 只選擇未刪除且已確認的訂單。狀態值由 OrderStatus 串接而來，理由見 Account 上的同款註解。
 @SQLRestriction("DELETED = false AND STATUS=" + OrderStatus.Codes.CREATED)
 @Table(name = "ORDER_INFO") // 指定對應的資料表名稱
-public class OrderInfo {
+public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "order_seq_gen")
@@ -54,14 +56,14 @@ public class OrderInfo {
     @Column(name = "STATUS", columnDefinition = "NUMBER(4)", nullable = false)
     private Integer status;
 
-    // 雙向關聯（配對 OrderDetail.orderInfo）：判準是生命週期綁定 —— 明細隨 order 而生滅，
+    // 雙向關聯（配對 OrderLine.order）：判準是生命週期綁定 —— 明細隨 order 而生滅，
     // 沒有跨 order 查明細的需求。cascade 只留實際用到的 PERSIST/MERGE，REMOVE 由 orphanRemoval 涵蓋。
     // 完整取捨（收益、代價、為何不改單向）見 筆記.md「要不要做『雙向』關聯？」一節。
-    @OneToMany(mappedBy = "orderInfo", cascade = { CascadeType.PERSIST, CascadeType.MERGE }, orphanRemoval = true)
-    @BatchSize(size = 50) // 列表分頁載入時，把多筆 order 的 lazy orderDetails 併成少量 IN 查詢，緩解 N+1
+    @OneToMany(mappedBy = "order", cascade = { CascadeType.PERSIST, CascadeType.MERGE }, orphanRemoval = true)
+    @BatchSize(size = 50) // 列表分頁載入時，把多筆 order 的 lazy orderLines 併成少量 IN 查詢，緩解 N+1
     @ToString.Exclude // 避免Entity中有OneToMany或ManyToOne關聯時，因為循環引用導致 StackOverflowError。
     @Builder.Default // @Builder 走 all-args constructor 會蓋掉欄位初始值，少了這行 builder 路徑會拿到 null
-    private List<OrderDetail> orderDetails = new ArrayList<>();
+    private List<OrderLine> orderLines = new ArrayList<>();
     // 改用組合（@Embedded 元數據）後已無 @MappedSuperclass 父類，直接用類別上的 @Builder 即可（不需 @SuperBuilder）
 
     // 組合：審計欄位
@@ -82,10 +84,10 @@ public class OrderInfo {
 
     /**
      * 掛載明細的唯一入口：同步雙向關聯的兩端（JPA 不會自動維護，只設一端會讓物件圖與 DB 不一致）。
-     * 刻意不提供成對的 removeOrderDetail，理由見 筆記.md「要不要做『雙向』關聯？」一節。
+     * 刻意不提供成對的 removeOrderLine，理由見 筆記.md「要不要做『雙向』關聯？」一節。
      */
-    public void addOrderDetail(OrderDetail detail) {
-        this.orderDetails.add(detail);
-        detail.setOrderInfo(this);
+    public void addOrderLine(OrderLine line) {
+        this.orderLines.add(line);
+        line.setOrder(this);
     }
 }

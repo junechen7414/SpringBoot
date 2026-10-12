@@ -28,11 +28,11 @@ import com.ibm.demo.account.AccountClient;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
-import com.ibm.demo.order.DTO.CreateOrderDetailRequest;
+import com.ibm.demo.order.DTO.CreateOrderLineRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderView;
-import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
+import com.ibm.demo.order.DTO.UpdateOrderLineRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.product.DTO.internal.AdjustStockRequest;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
@@ -44,7 +44,7 @@ import com.ibm.demo.product.ProductClient;
 class OrderServiceTest {
 
         @Mock
-        private OrderInfoRepository orderInfoRepository;
+        private OrderRepository orderRepository;
         @Mock
         private AccountClient accountClient;
         @Mock
@@ -62,7 +62,7 @@ class OrderServiceTest {
         @BeforeEach
         void setUp() {
                 // 顯性建立 SUT (System Under Test)
-                orderService = new OrderService(orderInfoRepository, accountClient,
+                orderService = new OrderService(orderRepository, accountClient,
                                 productClient, orderTransactionalService);
         }
 
@@ -76,7 +76,7 @@ class OrderServiceTest {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
-                                        .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
+                                        .items(List.of(new CreateOrderLineRequest(SELLABLE_PRODUCT_ID, 2)))
                                         .build();
 
                         // 帳號資格校驗為 void，預設不拋例外即代表通過，無須 stub。
@@ -108,7 +108,7 @@ class OrderServiceTest {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
-                                        .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2)))
+                                        .items(List.of(new CreateOrderLineRequest(SELLABLE_PRODUCT_ID, 2)))
                                         .build();
 
                         // 模擬交易服務拋出異常
@@ -137,7 +137,7 @@ class OrderServiceTest {
                         Integer ineligibleId = 2;
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ineligibleId)
-                                        .items(List.of(CreateOrderDetailRequest.builder()
+                                        .items(List.of(CreateOrderLineRequest.builder()
                                                         .productId(SELLABLE_PRODUCT_ID)
                                                         .quantity(1)
                                                         .build()))
@@ -163,7 +163,7 @@ class OrderServiceTest {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
-                                        .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)))
+                                        .items(List.of(new CreateOrderLineRequest(SELLABLE_PRODUCT_ID, 1)))
                                         .build();
 
                         // 關鍵：不可售商品受 @SQLRestriction 濾除，reserveStock 視為查無而拋出 ResourceNotFoundException
@@ -187,7 +187,7 @@ class OrderServiceTest {
                         // Arrange
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
-                                        .items(List.of(new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)))
+                                        .items(List.of(new CreateOrderLineRequest(SELLABLE_PRODUCT_ID, 999)))
                                         .build();
 
                         // 關鍵：模擬 reserveStock 發現庫存不足
@@ -211,8 +211,8 @@ class OrderServiceTest {
                         CreateOrderRequest request = CreateOrderRequest.builder()
                                         .accountId(ACTIVE_ACCOUNT_ID)
                                         .items(List.of(
-                                                        new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2),
-                                                        new CreateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)))
+                                                        new CreateOrderLineRequest(SELLABLE_PRODUCT_ID, 2),
+                                                        new CreateOrderLineRequest(SELLABLE_PRODUCT_ID, 5)))
                                         .build();
 
                         // Act & Assert
@@ -237,7 +237,7 @@ class OrderServiceTest {
                 void updateOrder_Success() {
                         // Arrange
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
+                                        List.of(new UpdateOrderLineRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
                                         new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, OrderStatus.CREATED, List.of()));
@@ -255,7 +255,7 @@ class OrderServiceTest {
                 void updateOrder_WhenTransactionFails_ShouldCompensateAndThrow() {
                         // Arrange
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
+                                        List.of(new UpdateOrderLineRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
                                         new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, OrderStatus.CREATED, List.of()));
@@ -288,7 +288,7 @@ class OrderServiceTest {
                 void updateOrder_WhenOrderNotFound_ShouldThrowException(String scenario, Integer nonExistentId) {
                         // Arrange：NotFound 由 loadOrderView（交易內載入）拋出
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 1)));
+                                        List.of(new UpdateOrderLineRequest(SELLABLE_PRODUCT_ID, 1)));
 
                         when(orderTransactionalService.loadOrderView(nonExistentId))
                                         .thenThrow(new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Order not found with ID: " + nonExistentId));
@@ -310,7 +310,7 @@ class OrderServiceTest {
                 void updateOrder_WhenInsufficientStock_ShouldThrowException() {
                         // Arrange
                         UpdateOrderRequest request = new UpdateOrderRequest(
-                                        List.of(new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 999)));
+                                        List.of(new UpdateOrderLineRequest(SELLABLE_PRODUCT_ID, 999)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
                                         new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, OrderStatus.CREATED, List.of()));
@@ -336,8 +336,8 @@ class OrderServiceTest {
                         // Arrange：同一 productId 兩筆、數量不同 —— 以 productId 判重應在查 DB 前攔下
                         UpdateOrderRequest request = new UpdateOrderRequest(
                                         List.of(
-                                                        new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 2),
-                                                        new UpdateOrderDetailRequest(SELLABLE_PRODUCT_ID, 5)));
+                                                        new UpdateOrderLineRequest(SELLABLE_PRODUCT_ID, 2),
+                                                        new UpdateOrderLineRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         // Act & Assert
                         assertThatThrownBy(() -> orderService.updateOrder(EXISTING_ORDER_ID, request))
@@ -428,7 +428,7 @@ class OrderServiceTest {
                         when(orderTransactionalService.prepareOrderDeletion(EXISTING_ORDER_ID)).thenReturn(plan);
 
                         // 模擬交易服務拋出樂觀鎖異常
-                        doThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(OrderInfo.class, EXISTING_ORDER_ID))
+                        doThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Order.class, EXISTING_ORDER_ID))
                                         .when(orderTransactionalService).deleteOrder(EXISTING_ORDER_ID, version);
 
                         // Act & Assert

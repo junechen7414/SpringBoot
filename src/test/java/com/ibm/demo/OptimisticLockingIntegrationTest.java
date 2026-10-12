@@ -16,8 +16,8 @@ import com.ibm.demo.account.AccountRepository;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.enums.ProductStatus;
-import com.ibm.demo.order.OrderInfo;
-import com.ibm.demo.order.OrderInfoRepository;
+import com.ibm.demo.order.Order;
+import com.ibm.demo.order.OrderRepository;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
 
@@ -36,7 +36,7 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
     private AccountRepository accountRepository;
 
     @Autowired
-    private OrderInfoRepository orderInfoRepository;
+    private OrderRepository orderRepository;
 
     @Autowired
     private EntityManager entityManager;
@@ -106,26 +106,26 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
                 .status(AccountStatus.ACTIVE.getCode())
                 .build());
         
-        OrderInfo order = OrderInfo.builder()
+        Order order = Order.builder()
                 .accountId(account.getId())
                 .status(OrderStatus.CREATED.getCode())
                 .build();
-        order = orderInfoRepository.saveAndFlush(order);
+        order = orderRepository.saveAndFlush(order);
         Integer id = order.getId();
 
-        OrderInfo orderInfo1 = orderInfoRepository.findById(id).get();
-        OrderInfo orderInfo2 = orderInfoRepository.findById(id).get();
-        // 關鍵：將 orderInfo2 脫離 JPA 託管（Detach）。
-        // 這樣 orderInfo1 更新時，orderInfo2 手中的 Version 0 才不會被同步更新為 1。
+        Order order1 = orderRepository.findById(id).get();
+        Order order2 = orderRepository.findById(id).get();
+        // 關鍵：將 order2 脫離 JPA 託管（Detach）。
+        // 這樣 order1 更新時，order2 手中的 Version 0 才不會被同步更新為 1。
         // 這是在同一個交易內「人工模擬」出持有舊版資料的客戶端物件。
-        entityManager.detach(orderInfo2); // 模擬不同的交易上下文
+        entityManager.detach(order2); // 模擬不同的交易上下文
 
-        orderInfo1.setStatus(OrderStatus.CANCELLED.getCode());
-        orderInfoRepository.saveAndFlush(orderInfo1);
+        order1.setStatus(OrderStatus.CANCELLED.getCode());
+        orderRepository.saveAndFlush(order1);
 
-        orderInfo2.setStatus(OrderStatus.CANCELLED.getCode());
+        order2.setStatus(OrderStatus.CANCELLED.getCode());
         assertThrows(ObjectOptimisticLockingFailureException.class, () -> {
-            orderInfoRepository.saveAndFlush(orderInfo2);
+            orderRepository.saveAndFlush(order2);
         });
     }
 
@@ -210,7 +210,7 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
                 .status(AccountStatus.ACTIVE.getCode())
                 .build());
         
-        OrderInfo order = orderInfoRepository.saveAndFlush(OrderInfo.builder()
+        Order order = orderRepository.saveAndFlush(Order.builder()
                 .accountId(account.getId())
                 .status(OrderStatus.CREATED.getCode())
                 .build());
@@ -218,12 +218,12 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         Integer version = order.getVersion();
 
         // 模擬 A 先更新了資料
-        OrderInfo order1 = orderInfoRepository.findById(id).get();
+        Order order1 = orderRepository.findById(id).get();
         order1.setStatus(OrderStatus.CANCELLED.getCode());
-        orderInfoRepository.saveAndFlush(order1);
+        orderRepository.saveAndFlush(order1);
 
         // B 嘗試用舊版本刪除
-        int updated = orderInfoRepository.softDeleteById(id, version);
+        int updated = orderRepository.softDeleteById(id, version);
         assertEquals(0, updated);
     }
 

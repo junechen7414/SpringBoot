@@ -21,5 +21,5 @@ public record CreateOrderRequest(
 
         @NotEmpty(message = "Order items are required")
         @Schema(description = "訂單明細項目列表", requiredMode = Schema.RequiredMode.REQUIRED)
-        List<@Valid CreateOrderDetailRequest> items) {
+        List<@Valid CreateOrderLineRequest> items) {
 }

@@ -31,7 +31,7 @@ import com.ibm.demo.util.PageResponse;
 
 /**
  * 迴歸測試：關閉 OSIV 後，非交易的訂單讀取端點在「無環境 session」下組裝回應時，
- * 不得因存取 lazy 的 {@code orderDetails} 而拋 {@code LazyInitializationException}。
+ * 不得因存取 lazy 的 {@code orderLines} 而拋 {@code LazyInitializationException}。
  * <p>
  * 這是先前 OSIV 關閉退化(order 端點 500)未被單元/整合測試攔下、僅由下游 E2E 抓到的補課：
  * <ul>
@@ -40,7 +40,7 @@ import com.ibm.demo.util.PageResponse;
  *       關閉的條件驗證端點的 session 獨立性，不受全域設定變動影響；</li>
  *   <li>{@code ProductClient} 以 {@code @MockitoBean} 取代，聚焦 lazy/session 行為而非跨服務自呼叫。</li>
  * </ul>
- * 於本次重構前（讀取端點在交易外直接碰 {@code getOrderDetails()}）本測試會失敗。
+ * 於本次重構前（讀取端點在交易外直接碰 {@code getOrderLines()}）本測試會失敗。
  */
 @Tag("IntegrationTest")
 @TestPropertySource(properties = "spring.jpa.open-in-view=false")
@@ -53,7 +53,7 @@ class OrderReadEndpointOsivIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private ProductRepository productRepository;
     @Autowired
-    private OrderInfoRepository orderInfoRepository;
+    private OrderRepository orderRepository;
 
     @MockitoBean
     private ProductClient productClient;
@@ -110,12 +110,12 @@ class OrderReadEndpointOsivIntegrationTest extends BaseIntegrationTest {
                 .price(new BigDecimal("100"))
                 .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .build()).getId();
-        OrderInfo order = OrderInfo.builder()
+        Order order = Order.builder()
                 .accountId(accountId)
                 .status(OrderStatus.CREATED.getCode())
                 .build();
-        order.addOrderDetail(OrderDetail.builder().productId(productId).quantity(2).build());
-        Integer orderId = orderInfoRepository.saveAndFlush(order).getId();
+        order.addOrderLine(OrderLine.builder().productId(productId).quantity(2).build());
+        Integer orderId = orderRepository.saveAndFlush(order).getId();
         return new Seed(accountId, productId, orderId);
     }
 

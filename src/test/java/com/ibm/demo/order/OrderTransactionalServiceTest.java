@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,13 +30,13 @@ import com.ibm.demo.exception.ErrorCode;
 public class OrderTransactionalServiceTest {
 
     @Mock
-    private OrderInfoRepository orderInfoRepository;
+    private OrderRepository orderRepository;
 
     private OrderTransactionalService orderTransactionalService;
 
     @BeforeEach
     void setUp() {
-        orderTransactionalService = new OrderTransactionalService(orderInfoRepository);
+        orderTransactionalService = new OrderTransactionalService(orderRepository);
     }
 
     @Test
@@ -44,28 +45,29 @@ public class OrderTransactionalServiceTest {
         // Arrange
         Integer orderId = 1;
         Integer version = 1;
-        when(orderInfoRepository.softDeleteById(orderId, version)).thenReturn(0);
+        when(orderRepository.softDeleteById(orderId, version)).thenReturn(0);
 
         // Act & Assert
         assertThatThrownBy(() -> orderTransactionalService.deleteOrder(orderId, version))
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
 
-        verify(orderInfoRepository).softDeleteById(orderId, version);
+        verify(orderRepository).softDeleteById(orderId, version);
     }
 
     @Test
     @DisplayName("prepareOrderDeletion 應載入 CREATED 訂單，並在交易內把明細萃取為 items DTO")
     void prepareOrderDeletion_Success() {
         // Arrange
-        OrderInfo order = new OrderInfo();
+        Order order = new Order();
         order.setId(1);
         order.setAccountId(42);
         order.setStatus(OrderStatus.CREATED.getCode());
         order.setVersion(3);
-        order.setOrderDetails(List.of(
-                OrderDetail.builder().productId(10).quantity(2).build(),
-                OrderDetail.builder().productId(11).quantity(5).build()));
-        when(orderInfoRepository.findById(1)).thenReturn(Optional.of(order));
+        // 用可變的 list：entity 的集合會被 addOrderLine／orphanRemoval 改動，List.of 會拋 UnsupportedOperationException。
+        order.setOrderLines(new ArrayList<>(List.of(
+                OrderLine.builder().productId(10).quantity(2).build(),
+                OrderLine.builder().productId(11).quantity(5).build())));
+        when(orderRepository.findById(1)).thenReturn(Optional.of(order));
 
         // Act
         OrderDeletionPlan plan = orderTransactionalService.prepareOrderDeletion(1);
@@ -82,7 +84,7 @@ public class OrderTransactionalServiceTest {
     @DisplayName("prepareOrderDeletion 若訂單不存在，應拋出 ResourceNotFoundException")
     void prepareOrderDeletion_WhenNotFound_ShouldThrow() {
         // Arrange
-        when(orderInfoRepository.findById(99)).thenReturn(Optional.empty());
+        when(orderRepository.findById(99)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThatThrownBy(() -> orderTransactionalService.prepareOrderDeletion(99))
@@ -96,10 +98,10 @@ public class OrderTransactionalServiceTest {
     @DisplayName("prepareOrderDeletion 若狀態非 CREATED，應拋出 OrderStatusInvalidException")
     void prepareOrderDeletion_WhenStatusNotCreated_ShouldThrow() {
         // Arrange
-        OrderInfo order = new OrderInfo();
+        Order order = new Order();
         order.setId(1);
         order.setStatus(OrderStatus.CANCELLED.getCode());
-        when(orderInfoRepository.findById(1)).thenReturn(Optional.of(order));
+        when(orderRepository.findById(1)).thenReturn(Optional.of(order));
 
         // Act & Assert
         assertThatThrownBy(() -> orderTransactionalService.prepareOrderDeletion(1))
@@ -112,13 +114,13 @@ public class OrderTransactionalServiceTest {
     @DisplayName("loadOrderView 應載入訂單並把明細萃取為 items 快照")
     void loadOrderView_Success() {
         // Arrange
-        OrderInfo order = new OrderInfo();
+        Order order = new Order();
         order.setId(7);
         order.setAccountId(3);
         order.setStatus(OrderStatus.CREATED.getCode());
-        order.setOrderDetails(List.of(
-                OrderDetail.builder().productId(20).quantity(4).build()));
-        when(orderInfoRepository.findByIdWithDetails(7)).thenReturn(Optional.of(order));
+        order.setOrderLines(new ArrayList<>(List.of(
+                OrderLine.builder().productId(20).quantity(4).build())));
+        when(orderRepository.findByIdWithLines(7)).thenReturn(Optional.of(order));
 
         // Act
         OrderView view = orderTransactionalService.loadOrderView(7);
@@ -134,7 +136,7 @@ public class OrderTransactionalServiceTest {
     @DisplayName("loadOrderView 若訂單不存在應拋出 ResourceNotFoundException")
     void loadOrderView_WhenNotFound_ShouldThrow() {
         // Arrange
-        when(orderInfoRepository.findByIdWithDetails(404)).thenReturn(Optional.empty());
+        when(orderRepository.findByIdWithLines(404)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThatThrownBy(() -> orderTransactionalService.loadOrderView(404))

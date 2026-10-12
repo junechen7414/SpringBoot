@@ -24,7 +24,7 @@ import com.ibm.demo.account.AccountRepository;
 import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.enums.ProductStatus;
-import com.ibm.demo.order.DTO.UpdateOrderDetailRequest;
+import com.ibm.demo.order.DTO.UpdateOrderLineRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductClient;
@@ -53,7 +53,7 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
     private AccountRepository accountRepository;
 
     @Autowired
-    private OrderInfoRepository orderInfoRepository;
+    private OrderRepository orderRepository;
 
     @Autowired
     private OrderTransactionalService orderTransactionalService;
@@ -81,14 +81,14 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
     void saveOrder_withDuplicateProductLines_shouldBeRejectedByDb() {
         Integer accountId = createAccount();
         Integer productId = createProduct("商品A", 0);
-        OrderInfo order = OrderInfo.builder()
+        Order order = Order.builder()
                 .accountId(accountId)
                 .status(OrderStatus.CREATED.getCode())
                 .build();
-        order.addOrderDetail(OrderDetail.builder().productId(productId).quantity(1).build());
-        order.addOrderDetail(OrderDetail.builder().productId(productId).quantity(2).build());
+        order.addOrderLine(OrderLine.builder().productId(productId).quantity(1).build());
+        order.addOrderLine(OrderLine.builder().productId(productId).quantity(2).build());
 
-        assertThrows(DataIntegrityViolationException.class, () -> orderInfoRepository.saveAndFlush(order));
+        assertThrows(DataIntegrityViolationException.class, () -> orderRepository.saveAndFlush(order));
     }
 
     @Test
@@ -102,7 +102,7 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
 
         // 第一次更新：移除 B → 實體刪除
         orderTransactionalService.updateOrder(orderId,
-                new UpdateOrderRequest(List.of(new UpdateOrderDetailRequest(productAId, 5))));
+                new UpdateOrderRequest(List.of(new UpdateOrderLineRequest(productAId, 5))));
         entityManager.flush();
         entityManager.clear();
         assertEquals(0, countRows(orderId, productBId), "B 明細列應被實體刪除");
@@ -110,14 +110,14 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
         // 第二次更新：把 B 加回來
         orderTransactionalService.updateOrder(orderId,
                 new UpdateOrderRequest(List.of(
-                        new UpdateOrderDetailRequest(productAId, 5),
-                        new UpdateOrderDetailRequest(productBId, 7))));
+                        new UpdateOrderLineRequest(productAId, 5),
+                        new UpdateOrderLineRequest(productBId, 7))));
         entityManager.flush();
         entityManager.clear();
 
         assertEquals(1, countRows(orderId, productBId), "B 只應有一列");
-        OrderInfo reloaded = orderInfoRepository.findById(orderId).orElseThrow();
-        assertEquals(2, reloaded.getOrderDetails().size(), "重新載入後應有 A 與 B");
+        Order reloaded = orderRepository.findById(orderId).orElseThrow();
+        assertEquals(2, reloaded.getOrderLines().size(), "重新載入後應有 A 與 B");
     }
 
     @Test
@@ -127,14 +127,14 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
         Integer accountId = createAccount();
         Integer productAId = createProduct("商品A", 0);
         Integer productBId = createProduct("商品B", 0);
-        OrderInfo order = createOrderWithTwoDetails(accountId, productAId, productBId);
+        Order order = createOrderWithTwoDetails(accountId, productAId, productBId);
         Integer orderId = order.getId();
-        Integer bDetailId = order.getOrderDetails().stream()
+        Integer bDetailId = order.getOrderLines().stream()
                 .filter(d -> d.getProductId().equals(productBId))
                 .findFirst().orElseThrow().getId();
 
         // 先把訂單載入 persistence context；稍後 updateOrder 於同一交易內 findById 會命中此快取(VERSION=0)
-        orderInfoRepository.findById(orderId).orElseThrow();
+        orderRepository.findById(orderId).orElseThrow();
 
         // 在 Hibernate 背後直接把 B 列的 VERSION 加 1，使 persistence context 手中的版本(0)過期
         entityManager.createNativeQuery(
@@ -144,10 +144,10 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
 
         // 移除 B：orphanRemoval 觸發的 DELETE ... WHERE ID = ? AND VERSION = 0 將影響 0 列
         orderTransactionalService.updateOrder(orderId,
-                new UpdateOrderRequest(List.of(new UpdateOrderDetailRequest(productAId, 5))));
+                new UpdateOrderRequest(List.of(new UpdateOrderLineRequest(productAId, 5))));
 
         // flush 透過 repository proxy，Hibernate 的 StaleObjectStateException 會被轉為 Spring 的樂觀鎖例外
-        assertThrows(ObjectOptimisticLockingFailureException.class, () -> orderInfoRepository.flush());
+        assertThrows(ObjectOptimisticLockingFailureException.class, () -> orderRepository.flush());
     }
 
     @Test
@@ -196,14 +196,14 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
                 .build()).getId();
     }
 
-    private OrderInfo createOrderWithTwoDetails(Integer accountId, Integer productAId, Integer productBId) {
-        OrderInfo order = OrderInfo.builder()
+    private Order createOrderWithTwoDetails(Integer accountId, Integer productAId, Integer productBId) {
+        Order order = Order.builder()
                 .accountId(accountId)
                 .status(OrderStatus.CREATED.getCode())
                 .build();
-        order.addOrderDetail(OrderDetail.builder().productId(productAId).quantity(2).build());
-        order.addOrderDetail(OrderDetail.builder().productId(productBId).quantity(3).build());
-        return orderInfoRepository.saveAndFlush(order); // cascade PERSIST 一併存明細
+        order.addOrderLine(OrderLine.builder().productId(productAId).quantity(2).build());
+        order.addOrderLine(OrderLine.builder().productId(productBId).quantity(3).build());
+        return orderRepository.saveAndFlush(order); // cascade PERSIST 一併存明細
     }
 
     /** 直接數資料表的列；ORDER_INFO 的 @SQLRestriction 在取消後會把整張訂單濾掉，不能走 repository。 */

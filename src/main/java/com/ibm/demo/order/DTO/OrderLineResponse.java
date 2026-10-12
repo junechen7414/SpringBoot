@@ -6,8 +6,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
 @Builder
-@Schema(description = "訂單明細項目")
-public record OrderItemDTO(
+// schema name 固定成改名前的名稱，OpenAPI 契約與下游產生的型別才不會變。
+@Schema(name = "OrderItemDTO", description = "訂單明細項目")
+public record OrderLineResponse(
         @Schema(description = "商品 ID", example = "1")
         Integer productId,
 

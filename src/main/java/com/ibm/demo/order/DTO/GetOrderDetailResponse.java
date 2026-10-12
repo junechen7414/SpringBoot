@@ -21,5 +21,5 @@ public record GetOrderDetailResponse(
         BigDecimal totalAmount,
 
         @Schema(description = "訂單明細項目列表")
-        List<OrderItemDTO> items) {
+        List<OrderLineResponse> items) {
 }
