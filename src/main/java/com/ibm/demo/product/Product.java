@@ -74,10 +74,4 @@ public class Product {
     @Column(name = "VERSION", columnDefinition = "NUMBER(10) DEFAULT 0", nullable = false)
     @Builder.Default
     private Integer version = 0;
-
-    public void restore() {
-        this.softDeleteMetadata.setDeleted(false);
-        this.softDeleteMetadata.setDeletedAt(null);
-        this.setSaleStatus(ProductStatus.AVAILABLE.getCode()); // 恢復上架狀態
-    }
 }

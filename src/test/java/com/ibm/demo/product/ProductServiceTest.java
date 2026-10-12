@@ -313,7 +313,6 @@ class ProductServiceTest {
                         UpdateProductRequest request = UpdateProductRequest.builder()
                                         .name(newName)
                                         .price(newPrice)
-                                        .saleStatus(ProductStatus.AVAILABLE)
                                         .available(newAvailable)
                                         .build();
 
@@ -342,7 +341,6 @@ class ProductServiceTest {
                         UpdateProductRequest request = UpdateProductRequest.builder()
                                         .name("Same Name")
                                         .price(new BigDecimal("25.00"))
-                                        .saleStatus(ProductStatus.AVAILABLE)
                                         .available(150)
                                         .build();
 
@@ -414,6 +412,23 @@ class ProductServiceTest {
         class DeleteProductSuccessTests {
 
                 @Test
+                @DisplayName("保留量為 0 時，應以讀到的 version 軟刪除")
+                void deleteProduct_WhenNoReservation_ShouldSoftDelete() {
+                        // Arrange
+                        Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE,
+                                        STATUS_SELLABLE, DEFAULT_STOCK);
+                        product.setVersion(1);
+                        when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(product));
+                        when(productRepository.softDeleteById(ACTIVE_PRODUCT_ID, 1)).thenReturn(1);
+
+                        // Act
+                        productService.deleteProduct(ACTIVE_PRODUCT_ID);
+
+                        // Assert
+                        verify(productRepository).softDeleteById(ACTIVE_PRODUCT_ID, 1);
+                }
+
+                @Test
                 @DisplayName("刪除時若版本不符 (樂觀鎖衝突)，應拋出 ObjectOptimisticLockingFailureException")
                 void deleteProduct_WhenOptimisticLockingConflict_ShouldThrowException() {
                         // Arrange
@@ -435,6 +450,25 @@ class ProductServiceTest {
         @Nested
         @DisplayName("刪除產品業務邏輯")
         class DeleteProductTests {
+
+                @Test
+                @DisplayName("刪除時若仍有保留庫存，應拋出 PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED 且不軟刪除")
+                void deleteProduct_WhenHasReservation_ShouldThrowException() {
+                        // Arrange
+                        Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE,
+                                        STATUS_SELLABLE, DEFAULT_STOCK);
+                        product.setReserved(3);
+                        when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(product));
+
+                        // Act & Assert
+                        assertThatThrownBy(() -> productService.deleteProduct(ACTIVE_PRODUCT_ID))
+                                        .isInstanceOf(BusinessException.class)
+                                        .hasFieldOrPropertyWithValue("errorCode",
+                                                        ErrorCode.PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED)
+                                        .hasMessageContaining(String.valueOf(ACTIVE_PRODUCT_ID));
+
+                        verify(productRepository, never()).softDeleteById(any(), any());
+                }
 
                 @Test
                 @DisplayName("刪除時若產品已是停效狀態，應拋出 ResourceNotFoundException")
@@ -490,6 +524,7 @@ class ProductServiceTest {
                 product.setPrice(price);
                 product.setSaleStatus(saleStatus);
                 product.setAvailable(available);
+                product.setReserved(0);
                 return product;
         }
 }

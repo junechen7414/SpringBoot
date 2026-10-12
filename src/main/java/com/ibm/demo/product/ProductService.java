@@ -131,15 +131,20 @@ public class ProductService {
         // 3. 更新商品屬性
         existingProduct.setName(updateProductRequestDto.name());
         existingProduct.setPrice(updateProductRequestDto.price());
-        existingProduct.setSaleStatus(updateProductRequestDto.saleStatus().getCode());
         existingProduct.setAvailable(updateProductRequestDto.available());
         // 4. 儲存商品資料
         productRepository.save(existingProduct);
-        log.info("商品更新成功，商品ID: {}, 銷售狀態: {}", id, existingProduct.getSaleStatus());
+        log.info("商品更新成功，商品ID: {}", id);
     }
 
     /**
-     * 刪除商品 (邏輯刪除，將銷售狀態設為不可銷售)。
+     * 刪除商品（Delist：軟刪除，並將銷售狀態設為不可銷售）。還有保留庫存時拒絕。
+     *
+     * <p>還有保留量代表有訂單佔著這個商品；先下架的話，那張訂單之後被取消時，保留量就要歸還給
+     * 一個已經不存在的商品。這條檢查只看商品自己的庫存數字，不向 order 查詢。
+     *
+     * <p>檢查與軟刪除之間若有並發的 reserve，軟刪除的 UPDATE 帶著讀到的 version，而
+     * reserve／release 會把 version 加 1，所以這種情況會變成樂觀鎖衝突，不會靜默成功。
      *
      * @param productId 要刪除的商品 ID
      */
@@ -148,6 +153,11 @@ public class ProductService {
     @RateLimiter(name = "product-write")
     public void deleteProduct(Integer productId) {
         Product existingProduct = findProductByIdOrThrow(productId);
+        if (existingProduct.getReserved() > 0) {
+            throw new BusinessException(ErrorCode.PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED,
+                    "Product with id: " + productId + " still has " + existingProduct.getReserved()
+                            + " reserved and cannot be delisted.");
+        }
         int updated = productRepository.softDeleteById(productId, existingProduct.getVersion());
         DBAssertion.assertUpdated(updated, Product.class, productId);
         log.info("商品軟刪除成功，商品ID: {}", productId);

@@ -154,7 +154,7 @@ class ApiSuccessContractTest {
 
     static Stream<Arguments> noContentRequests() {
         String accountBody = "{\"name\":\"契約帳戶\"}";
-        String productBody = "{\"name\":\"契約商品\",\"price\":10.5,\"saleStatus\":1001,\"available\":3}";
+        String productBody = "{\"name\":\"契約商品\",\"price\":10.5,\"available\":3}";
                 String items = "{\"items\":[{\"productId\":1,\"quantity\":2}]}";
 
         return Stream.of(

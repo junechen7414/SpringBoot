@@ -151,6 +151,34 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         assertEquals(0, updated, "版本不符時應不更新任何資料");
     }
 
+    /**
+     * Delist 先檢查保留量為 0、再用讀到的 version 軟刪除。兩步之間若有並發的 reserve，
+     * 軟刪除必須失敗，否則保留量會留在一個已下架的商品上。
+     * <p>
+     * reserve 是 bulk UPDATE，不會自動遞增 {@code @Version}；這支測試釘住的是
+     * {@code reserveProduct} 有自己把 version 加 1。
+     */
+    @Test
+    @DisplayName("Delist 檢查保留量之後若有並發的 reserve，帶舊 version 的軟刪除應失敗")
+    @Transactional
+    public void testSoftDeleteProductFailsAfterConcurrentReserve() {
+        Product product = productRepository.saveAndFlush(Product.builder()
+                .name("Delist 並發 reserve 測試")
+                .price(new BigDecimal("100"))
+                .saleStatus(ProductStatus.AVAILABLE.getCode())
+                .available(10)
+                .build());
+        Integer id = product.getId();
+        // Delist 讀到的版本（此時保留量為 0，通過檢查）
+        Integer version = product.getVersion();
+
+        // 另一張訂單在檢查之後預留了庫存
+        assertEquals(1, productRepository.reserveProduct(id, 2));
+
+        int updated = productRepository.softDeleteById(id, version);
+        assertEquals(0, updated, "reserve 之後版本已改變，軟刪除不應命中");
+    }
+
     @Test
     @DisplayName("測試帳戶軟刪除時的樂觀鎖機制 (自定義 @Query)")
     @Transactional

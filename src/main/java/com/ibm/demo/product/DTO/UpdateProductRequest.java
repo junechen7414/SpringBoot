@@ -2,8 +2,6 @@ package com.ibm.demo.product.DTO;
 
 import java.math.BigDecimal;
 
-import com.ibm.demo.enums.ProductStatus;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
@@ -12,6 +10,10 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
+/**
+ * 更新商品請求。刻意不含 saleStatus —— 下架（Delist）只走 {@code DELETE /product/{id}}，
+ * 見 {@code docs/adr/0001-soft-delete-only-for-termination.md}。
+ */
 @Builder
 @Schema(description = "更新商品請求")
 public record UpdateProductRequest(
@@ -25,10 +27,6 @@ public record UpdateProductRequest(
         @Positive(message = "Price must be positive")
         @Schema(description = "商品價格", example = "250.00", requiredMode = Schema.RequiredMode.REQUIRED)
         BigDecimal price,
-
-        @NotNull(message = "Sale Status is required")
-        @Schema(description = "銷售狀態 (1001=可銷售, 1002=不可銷售)", example = "1001", requiredMode = Schema.RequiredMode.REQUIRED)
-        ProductStatus saleStatus,
 
         @NotNull(message = "Stock Qty is required")
         @Digits(integer = 10, fraction = 0)

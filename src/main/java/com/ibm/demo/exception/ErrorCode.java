@@ -35,6 +35,7 @@ public enum ErrorCode {
     ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED(HttpStatus.BAD_REQUEST, "帳戶仍有訂單，無法刪除"),
     ORDER_STATUS_INVALID(HttpStatus.BAD_REQUEST, "訂單狀態無效"),
     PRODUCT_ALREADY_EXIST(HttpStatus.BAD_REQUEST, "商品名稱已存在"),
+    PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED(HttpStatus.BAD_REQUEST, "商品仍有保留庫存，無法刪除"),
     PRODUCT_STOCK_NOT_ENOUGH(HttpStatus.BAD_REQUEST, "商品庫存不足"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "找不到資源"),
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "無效的請求"),
