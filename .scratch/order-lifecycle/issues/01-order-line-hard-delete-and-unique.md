@@ -1,6 +1,6 @@
 # Order：Order Line 改為實體刪除、加上唯一約束，`PUT` 拿掉 status
 
-Status: ready-for-agent
+Status: resolved（PR #78，`7e70a2e`）
 
 背景與決策見 `../spec.md`、`docs/adr/0001-soft-delete-only-for-termination.md`。
 

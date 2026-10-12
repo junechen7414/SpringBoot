@@ -1,6 +1,6 @@
 # Account：`PUT` 拿掉 status，Deactivate 只走 `DELETE`
 
-Status: ready-for-agent
+Status: resolved（`7976925`）
 
 背景與決策見 `../spec.md`。
 

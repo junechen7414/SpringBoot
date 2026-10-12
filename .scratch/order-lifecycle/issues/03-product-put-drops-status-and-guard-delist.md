@@ -1,6 +1,6 @@
 # Product：`PUT` 拿掉 saleStatus，有 Reservation 時不能 Delist
 
-Status: ready-for-agent
+Status: resolved（`98884d8`）
 
 背景與決策見 `../spec.md`。
 
@@ -27,3 +27,12 @@ Status: ready-for-agent
 - ⚠️ 下游 `order.spec.ts`「當商品狀態為無效時，無法建立新訂單」靠 `PUT /product` 帶 `saleStatus: Inactive`，做完之後會紅。見 `06-downstream-e2e-stop-using-put-status.md`。
 
 ## Comments
+
+- 2026-10-10：直接在 `main` 實作（沒有 migration，屬低風險）。
+  - `UpdateProductRequest` 只剩 `name`、`price`、`available`；`ProductService.updateProduct` 不再寫 saleStatus；移除 `Product.restore()`。
+  - 新增 `ErrorCode.PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED`（400）。`deleteProduct` 在 `reserved > 0` 時拋出，不呼叫 `softDeleteById`。`ErrorCodeTest` 用 `@EnumSource` 自動涵蓋新常數，不需要改。
+  - **驗收第 2 條原本的前提不成立**：`reserveProduct`／`releaseProduct` 是 JPQL bulk UPDATE，Hibernate 不會自動遞增 `@Version`。所以「檢查完、軟刪除前有並發 reserve」時，帶 version 的軟刪除仍然會命中，靜默成功。已改成兩條 UPDATE 都自己 `p.version = p.version + 1`，並補 `OptimisticLockingIntegrationTest.testSoftDeleteProductFailsAfterConcurrentReserve`。拿掉 version 加 1 時這支測試會紅，已確認。
+    - 副作用（符合預期）：`PUT /product/{id}` 讀到商品之後如果有並發的 reserve／release，現在會回 409，不會再用舊的 `available` 蓋掉這次預留。
+  - `ProductController` 的 `PUT`、`DELETE` 說明已改寫，`DELETE` 補上 400 回應。
+  - `swagger.json`（`generateOpenApiDocs`）：`UpdateProductRequest` 已經沒有 `saleStatus`。
+  - `./gradlew test -Djunit.platform.exclude.tags=SanityTest`：211 個測試全數通過。
