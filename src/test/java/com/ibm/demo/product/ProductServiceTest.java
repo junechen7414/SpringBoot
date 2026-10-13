@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -67,7 +66,7 @@ class ProductServiceTest {
                         // Arrange
                         Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2));
                         when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
-                                        .thenReturn(List.of(ACTIVE_PRODUCT_ID));
+                                        .thenReturn(Set.of(ACTIVE_PRODUCT_ID));
                         when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 2)).thenReturn(1);
 
                         // Act
@@ -84,7 +83,7 @@ class ProductServiceTest {
                         // Arrange
                         Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 999));
                         when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
-                                        .thenReturn(List.of(ACTIVE_PRODUCT_ID));
+                                        .thenReturn(Set.of(ACTIVE_PRODUCT_ID));
                         when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 999)).thenReturn(0);
 
                         // Act & Assert
@@ -99,7 +98,7 @@ class ProductServiceTest {
                         // Arrange
                         Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 1));
                         when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
-                                        .thenReturn(List.of());
+                                        .thenReturn(Set.of());
 
                         // Act & Assert
                         assertThatThrownBy(() -> productService.reserveStock(items))
@@ -131,7 +130,7 @@ class ProductServiceTest {
                                         .to(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 5)))
                                         .build();
                         when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
-                                        .thenReturn(List.of(ACTIVE_PRODUCT_ID));
+                                        .thenReturn(Set.of(ACTIVE_PRODUCT_ID));
                         when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 3)).thenReturn(1);
 
                         // Act
@@ -151,7 +150,7 @@ class ProductServiceTest {
                                         .to(Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2)))
                                         .build();
                         when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
-                                        .thenReturn(List.of(ACTIVE_PRODUCT_ID));
+                                        .thenReturn(Set.of(ACTIVE_PRODUCT_ID));
                         when(productRepository.releaseProduct(ACTIVE_PRODUCT_ID, 3)).thenReturn(1);
 
                         // Act

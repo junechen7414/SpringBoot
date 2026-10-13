@@ -217,7 +217,7 @@ public class ProductService {
         if (!updatedProductIds.isEmpty()) {
             // 僅做存在性(且可銷售，受 @SQLRestriction 限制)檢查：查 id 投影而非水合整個 entity，
             // 避免把 Product 載入 persistence context 後被 bulk update(reserve/release)繞過而 stale。
-            Set<Integer> existingIds = new HashSet<>(productRepository.findExistingIds(updatedProductIds));
+            Set<Integer> existingIds = productRepository.findExistingIds(updatedProductIds);
             if (!existingIds.containsAll(updatedProductIds)) {
                 String missingIds = updatedProductIds.stream()
                         .filter(id -> !existingIds.contains(id))

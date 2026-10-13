@@ -2,6 +2,7 @@ package com.ibm.demo.product;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,7 +41,7 @@ public interface ProductRepository extends JpaRepository<Product, Integer>, Soft
     // 存在性(且可銷售)檢查：僅投影 id，不載入整個 Product entity。
     // 受 @SQLRestriction("DELETED = false AND SALE_STATUS = 1001") 限制，故等同「存在且可銷售」。
     @Query("SELECT p.id FROM Product p WHERE p.id IN :ids")
-    List<Integer> findExistingIds(@Param("ids") Collection<Integer> ids);
+    Set<Integer> findExistingIds(@Param("ids") Collection<Integer> ids);
 
     @Override
     @Modifying(flushAutomatically = true, clearAutomatically = true)
