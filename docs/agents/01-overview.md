@@ -16,7 +16,7 @@
 ### 架構特色
 
 1. **分層架構**: Controller → Service → Repository → Entity；跨模組呼叫走 `*Client`（細節見 06）
-2. **軟刪除與審計**: `@Embedded` 組合 `SoftDeleteMetadata` / `AuditMetadata`
+2. **軟刪除與審計**: `@Embedded` 組合 `SoftDeleteMetadata` / `AuditMetadata`；軟刪除只用於終止動作（Deactivate／Delist／Cancel），見 ADR 0001
 3. **樂觀鎖**: `@Version`
 4. **全域異常處理**: `@RestControllerAdvice`，對外 RFC 9457 `application/problem+json`
 5. **併發控制**: Resilience4j Bulkhead fail-fast

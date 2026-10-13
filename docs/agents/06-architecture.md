@@ -79,7 +79,8 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
 
 ### Entity 層
 
-- 以 `@Embedded` 組合 `AuditMetadata` / `SoftDeleteMetadata` 獲得審計欄位與軟刪除支援；`@Version` 樂觀鎖欄位直接定義在 entity（JPA 不支援 `@Version` 在 `@Embeddable`）
+- **軟刪除只用於終止動作**（Account 的 Deactivate、Product 的 Delist、Order 的 Cancel），Order Line 沒有自己的終止動作，更新 Order 時被移除的 Order Line 直接實體刪除。新 entity 要不要軟刪除照這條判斷，見 [ADR 0001](../adr/0001-soft-delete-only-for-termination.md)
+- 以 `@Embedded` 組合 `AuditMetadata` / `SoftDeleteMetadata` 獲得審計欄位與軟刪除支援（`SoftDeleteMetadata` 只給有終止動作的 entity）；`@Version` 樂觀鎖欄位直接定義在 entity（JPA 不支援 `@Version` 在 `@Embeddable`）
 - 舊的 `BaseEntity` 繼承基底已移除：一律用組合，**不要**再引入 `@MappedSuperclass` 基底類別
 - 軟刪除的過濾由 entity 上的 `@SQLRestriction` 在 query 層自動套用（需要軟刪除的 repository 繼承 `util/SoftDeleteRepository`），**不要**在查詢裡手寫 `deleted = false`
 - 使用 `@Builder` 支援建構者模式（改用組合後不再需要 `@SuperBuilder`）

@@ -32,7 +32,7 @@ src/main/java/com/ibm/demo/{domain}/
 
 - [ ] **不要繼承任何基底類別**（舊的 `util/BaseEntity` `@MappedSuperclass` 已移除，一律用組合）
 - [ ] 標註 `@Entity`、`@Table(name = "...")`
-- [ ] 稽核欄位：以 `@Embedded` 組合 `util/AuditMetadata`；需要 soft delete 再以 `@Embedded` 組合 `util/SoftDeleteMetadata`
+- [ ] 稽核欄位：以 `@Embedded` 組合 `util/AuditMetadata`；只有具備終止動作（如 Deactivate／Delist／Cancel）的 entity 才以 `@Embedded` 組合 `util/SoftDeleteMetadata`；沒有終止動作的子項目（如 Order Line）直接實體刪除，判準見 `docs/adr/0001-soft-delete-only-for-termination.md`
 - [ ] `@Version` optimistic locking 欄位**直接定義在 entity**（因 JPA 不支援放進 `@Embeddable`）
 - [ ] 使用 `@Builder`（不需 `@SuperBuilder`，已無繼承基底）
 - [ ] 關聯欄位標註 `@ToString.Exclude` 避免循環引用
@@ -113,7 +113,7 @@ src/main/java/com/ibm/demo/{domain}/
 | 規則 | 說明 |
 |------|------|
 | 跨 domain 呼叫 | 一律經由 `*Client`，不直接注入其他 domain 的 Service |
-| Soft delete | 繼承 `SoftDeleteRepository`，不手刻 `deleted = false` 條件 |
+| Soft delete | 只用於有終止動作的 entity（ADR 0001）；需要時繼承 `SoftDeleteRepository`，不手刻 `deleted = false` 條件 |
 | 分頁 | 所有列表端點用 `Pageable` + `PageResponse<T>`，無例外；`Pageable` 一律標 `@ParameterObject`，不可用 `@Parameter` |
 | 錯誤 | 拋 `BusinessException` 並帶入 `ErrorCode`，由 `GlobalExceptionHandler` 統一處理 |
 | 安全 | `*Client` 自呼叫需帶 `internal` 帳號憑證 |
