@@ -10,7 +10,6 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.util.SoftDeleteRepository;
 
 public interface OrderRepository extends JpaRepository<Order, Integer>, SoftDeleteRepository<Integer> {
@@ -27,11 +26,9 @@ public interface OrderRepository extends JpaRepository<Order, Integer>, SoftDele
 
     @Override
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    // 寫入的狀態值由 OrderStatus 串接而來，理由見 AccountRepository 上的同款註解。
     @Query("UPDATE CustomerOrder o "
             + "SET o.softDeleteMetadata.deleted = true, "
             + "    o.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP, "
-            + "    o.status = " + OrderStatus.Codes.CANCELLED + ", "
             + "    o.version = o.version + 1 "
             + "WHERE o.id = :id AND o.version = :version")
     int softDeleteById(@Param("id") Integer id, @Param("version") Integer version);

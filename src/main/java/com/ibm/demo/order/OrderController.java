@@ -41,7 +41,7 @@ public class OrderController {
         private final OrderService orderService;
 
         // Create Order
-        @Operation(summary = "建立新訂單", description = "建立新訂單。先驗證帳戶具下單資格（受 SQLRestriction 限制，停用或不存在的帳戶一律回傳 NotFound），檢查訂單內是否有重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），最後透過商品服務預留庫存（商品不可銷售視為 NotFound、庫存不足則拋出 BusinessException（PRODUCT_STOCK_NOT_ENOUGH））。成功則新增訂單主檔（預設狀態 1001）與明細。")
+        @Operation(summary = "建立新訂單", description = "建立新訂單。先驗證帳戶具下單資格（受 SQLRestriction 限制，停用或不存在的帳戶一律回傳 NotFound），檢查訂單內是否有重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），最後透過商品服務預留庫存（商品不可銷售視為 NotFound、庫存不足則拋出 BusinessException（PRODUCT_STOCK_NOT_ENOUGH））。成功則新增訂單與 Order Line。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "201", description = "建立成功，回傳訂單 ID 與 Location 標頭"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
@@ -55,7 +55,7 @@ public class OrderController {
         }
 
         // Read Order List (Paginated)
-        @Operation(summary = "獲取帳戶訂單清單（分頁）", description = "獲取該帳戶的所有有效訂單分頁清單。受限於SQLRestriction規則，僅會回傳未被軟刪除且狀態為 1001 (CREATED) 的訂單。")
+        @Operation(summary = "獲取帳戶訂單清單（分頁）", description = "獲取該帳戶的所有有效訂單分頁清單。受限於SQLRestriction規則，僅會回傳未取消（未軟刪除）的訂單。")
         @ApiResponse(responseCode = "200", description = "成功取得訂單分頁列表")
         @GetMapping("/account/{accountId}")
         public ResponseEntity<PageResponse<GetOrderListResponse>> getOrderList(
@@ -67,7 +67,7 @@ public class OrderController {
         }
 
         // Read Order Detail
-        @Operation(summary = "獲取訂單詳細資訊", description = "獲取指定訂單的詳細資訊。受限於SQLRestriction規則，若訂單不存在、已被軟刪除或狀態非 1001 (CREATED)，將回傳 NotFound。")
+        @Operation(summary = "獲取訂單詳細資訊", description = "獲取指定訂單的詳細資訊。受限於SQLRestriction規則，若訂單不存在或已取消，將回傳 NotFound。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "成功取得訂單詳細資訊"),
                         @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
@@ -80,7 +80,7 @@ public class OrderController {
         }
 
         // Update Order
-        @Operation(summary = "更新訂單內容", description = "更新訂單內容。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。接著檢查重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），並透過商品服務調整庫存（包含歸還舊品項庫存與扣除新品項庫存），最後更新訂單明細。訂單狀態不能經由此端點變更，取消訂單請用 DELETE。")
+        @Operation(summary = "更新訂單內容", description = "更新訂單內容。若訂單不存在或已取消，將拋出 NotFound。接著檢查重複商品（重複則拋出 BusinessException（INVALID_REQUEST）），並透過商品服務調整庫存（包含歸還舊品項庫存與扣除新品項庫存），最後更新訂單明細。取消訂單請用 DELETE。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "204", description = "更新成功"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗、重複商品或庫存不足", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
@@ -95,7 +95,7 @@ public class OrderController {
         }
 
         // Delete Order
-        @Operation(summary = "刪除訂單", description = "刪除訂單。若訂單不存在、已軟刪除或狀態非 1001 (CREATED)，將拋出 NotFound。執行時會軟刪除訂單主檔（明細保留不動），並透過商品服務歸還商品庫存。")
+        @Operation(summary = "刪除訂單", description = "取消訂單（Cancel）。若訂單不存在或已取消，將拋出 NotFound。執行時會軟刪除訂單主檔（明細保留不動），並透過商品服務歸還商品庫存。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "204", description = "刪除成功"),
                         @ApiResponse(responseCode = "404", description = "訂單不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
@@ -108,7 +108,7 @@ public class OrderController {
         }
 
         // Check if account ID exists in any order (internal)
-        @Operation(summary = "查詢帳戶是否仍有有效訂單", description = "內部使用：判斷帳戶是否有關聯的有效訂單，用於帳戶更新與刪除時的檢核。受限於系統規則，僅會針對未軟刪除且狀態為 1001 (CREATED) 的訂單進行判定。true 與 false 都是查詢成功，故一律回 200 帶 body。")
+        @Operation(summary = "查詢帳戶是否仍有有效訂單", description = "內部使用：判斷帳戶是否有關聯的有效訂單，用於帳戶更新與刪除時的檢核。受限於系統規則，僅會針對未取消（未軟刪除）的訂單進行判定。true 與 false 都是查詢成功，故一律回 200 帶 body。")
         @ApiResponse(responseCode = "200", description = "查詢成功；hasActiveOrder 為 true 表示仍有關聯訂單")
         @GetMapping("/account/{accountId}/existence")
         public ResponseEntity<OrderExistenceResponse> getOrderExistence(

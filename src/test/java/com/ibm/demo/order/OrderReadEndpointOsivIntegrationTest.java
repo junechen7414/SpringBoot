@@ -18,9 +18,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.ibm.demo.BaseIntegrationTest;
 import com.ibm.demo.account.Account;
 import com.ibm.demo.account.AccountRepository;
-import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.order.DTO.GetOrderDetailResponse;
 import com.ibm.demo.order.DTO.GetOrderListResponse;
 import com.ibm.demo.product.Product;
@@ -67,7 +64,6 @@ class OrderReadEndpointOsivIntegrationTest extends BaseIntegrationTest {
         GetOrderDetailResponse resp = orderService.getOrderDetailByOrderId(seed.orderId());
 
         assertThat(resp.accountId()).isEqualTo(seed.accountId());
-        assertThat(resp.orderStatus()).isEqualTo(OrderStatus.CREATED);
         assertThat(resp.items()).hasSize(1);
         assertThat(resp.items().get(0).productId()).isEqualTo(seed.productId());
         assertThat(resp.totalAmount()).isEqualByComparingTo(new BigDecimal("200")); // 100 * 2
@@ -95,7 +91,6 @@ class OrderReadEndpointOsivIntegrationTest extends BaseIntegrationTest {
                         .id(productId)
                         .name("OSIV 讀取測試商品")
                         .price(new BigDecimal("100"))
-                        .saleStatus(ProductStatus.AVAILABLE)
                         .available(100)
                         .build()));
     }
@@ -103,16 +98,13 @@ class OrderReadEndpointOsivIntegrationTest extends BaseIntegrationTest {
     private Seed seedOrderWithOneDetail() {
         Integer accountId = accountRepository.saveAndFlush(Account.builder()
                 .name("OSIV 讀取測試帳戶")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build()).getId();
         Integer productId = productRepository.saveAndFlush(Product.builder()
                 .name("OSIV 讀取測試商品")
                 .price(new BigDecimal("100"))
-                .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .build()).getId();
         Order order = Order.builder()
                 .accountId(accountId)
-                .status(OrderStatus.CREATED.getCode())
                 .build();
         order.addOrderLine(OrderLine.builder().productId(productId).quantity(2).build());
         Integer orderId = orderRepository.saveAndFlush(order).getId();

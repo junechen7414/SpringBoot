@@ -30,7 +30,6 @@ import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
 import com.ibm.demo.util.PageResponse;
-import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 
@@ -47,8 +46,6 @@ public class AccountServiceTest {
     // 測試資料常數
     private final Integer ACTIVE_ACCOUNT_ID = 1;
     private final String DEFAULT_NAME = "Test User";
-    private final String STATUS_ACTIVE = AccountStatus.ACTIVE.getCode();
-    private final String STATUS_INACTIVE = AccountStatus.INACTIVE.getCode();
 
     @BeforeEach
     void setUp() {
@@ -81,8 +78,7 @@ public class AccountServiceTest {
             ArgumentCaptor<Account> captor = ArgumentCaptor.forClass(Account.class);
             verify(accountRepository).save(captor.capture());
             assertThat(captor.getValue())
-                    .hasFieldOrPropertyWithValue("name", DEFAULT_NAME)
-                    .hasFieldOrPropertyWithValue("status", STATUS_ACTIVE);
+                    .hasFieldOrPropertyWithValue("name", DEFAULT_NAME);
         }
     }
 
@@ -97,7 +93,6 @@ public class AccountServiceTest {
             Account activeAccount = Account.builder()
                     .id(ACTIVE_ACCOUNT_ID)
                     .name(DEFAULT_NAME)
-                    .status(STATUS_ACTIVE)
                     .build();
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
 
@@ -131,12 +126,10 @@ public class AccountServiceTest {
             Account account1 = Account.builder()
                     .id(1)
                     .name("User1")
-                    .status(STATUS_ACTIVE)
                     .build();
             Account account2 = Account.builder()
                     .id(2)
                     .name("User2")
-                    .status(STATUS_INACTIVE)
                     .build();
             List<Account> accounts = List.of(account1, account2);
             Pageable pageable = PageRequest.of(0, 20);
@@ -150,10 +143,8 @@ public class AccountServiceTest {
             assertThat(result.content()).hasSize(2);
             assertThat(result.content().get(0).id()).isEqualTo(1);
             assertThat(result.content().get(0).name()).isEqualTo("User1");
-            assertThat(result.content().get(0).status()).isEqualTo(AccountStatus.ACTIVE);
             assertThat(result.content().get(1).id()).isEqualTo(2);
             assertThat(result.content().get(1).name()).isEqualTo("User2");
-            assertThat(result.content().get(1).status()).isEqualTo(AccountStatus.INACTIVE);
             assertThat(result.page()).isEqualTo(0);
             assertThat(result.size()).isEqualTo(20);
             assertThat(result.totalElements()).isEqualTo(2);
@@ -165,7 +156,7 @@ public class AccountServiceTest {
         @DisplayName("查詢存在的帳戶應成功回傳詳細資訊")
         void getAccountDetail_WhenExists_Success() {
             // Arrange
-            Account existingAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
+            Account existingAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(existingAccount));
 
             // Act
@@ -173,8 +164,7 @@ public class AccountServiceTest {
 
             // Assert
             assertThat(response)
-                    .hasFieldOrPropertyWithValue("name", DEFAULT_NAME)
-                    .hasFieldOrPropertyWithValue("status", AccountStatus.ACTIVE);
+                    .hasFieldOrPropertyWithValue("name", DEFAULT_NAME);
 
             verify(accountRepository).findById(ACTIVE_ACCOUNT_ID);
         }
@@ -208,10 +198,10 @@ public class AccountServiceTest {
     class UpdateAccountSuccessTests {
 
         @Test
-        @DisplayName("更新帳戶只改名稱，狀態維持原值")
-        void updateAccount_ShouldUpdateNameAndKeepStatus() {
+        @DisplayName("更新帳戶只改名稱")
+        void updateAccount_ShouldUpdateName() {
             // Arrange
-            Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
+            Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME);
             UpdateAccountRequest request = UpdateAccountRequest.builder()
                     .name("Updated Name")
                     .build();
@@ -221,12 +211,11 @@ public class AccountServiceTest {
             // Act
             accountService.updateAccount(ACTIVE_ACCOUNT_ID, request);
 
-            // Assert：停用只能走 DELETE，PUT 不會動到 status
+            // Assert
             ArgumentCaptor<Account> captor = ArgumentCaptor.forClass(Account.class);
             verify(accountRepository).save(captor.capture());
             assertThat(captor.getValue())
-                    .hasFieldOrPropertyWithValue("name", "Updated Name")
-                    .hasFieldOrPropertyWithValue("status", STATUS_ACTIVE);
+                    .hasFieldOrPropertyWithValue("name", "Updated Name");
         }
     }
 
@@ -262,7 +251,7 @@ public class AccountServiceTest {
         @DisplayName("刪除時若版本不符 (樂觀鎖衝突)，應拋出 ObjectOptimisticLockingFailureException")
         void deleteAccount_WhenOptimisticLockingConflict_ShouldThrowException() {
             // Arrange
-            Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
+            Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME);
             activeAccount.setVersion(1);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
             // 模擬版本不符更新失敗
@@ -279,7 +268,7 @@ public class AccountServiceTest {
         @DisplayName("刪除存在的活躍帳戶且無訂單時應成功")
         void deleteAccount_Success() {
             // Arrange
-            Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME, STATUS_ACTIVE);
+            Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME);
             activeAccount.setVersion(1);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
             when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1)).thenReturn(1);
@@ -334,11 +323,10 @@ public class AccountServiceTest {
     }
 
     // --- Helper Methods ---
-    private Account createTestAccount(Integer id, String name, String status) {
+    private Account createTestAccount(Integer id, String name) {
         Account account = new Account();
         account.setId(id);
         account.setName(name);
-        account.setStatus(status);
         return account;
     }
 }

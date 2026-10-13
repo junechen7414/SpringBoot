@@ -220,7 +220,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     /**
      * request body 讀不進來。父類別對它一律回一句籠統的 {@code "Failed to read request"}，
-     * 而其中有一類**其實是欄位驗證失敗**：DTO 的欄位宣告成 enum（如 {@code ProductStatus}）時，
+     * 而其中有一類**其實是欄位驗證失敗**：DTO 的欄位宣告成 enum 時（目前正式 DTO 沒有 enum 欄位，行為由 {@code ContractProbeController} 的探針釘住），
      * 值域檢查由 Jackson 在反序列化當下完成 —— 早於 Bean Validation，所以不會走
      * {@link #handleMethodArgumentNotValid}，呼叫端得不到「是哪個欄位的值不合法」。
      *
@@ -230,9 +230,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * regex 表達值域而分岔。其餘成因（JSON 語法壞掉、型別完全不符）仍交給父類別，因為那些
      * 不是「某個欄位填錯」，指不出欄位。
      *
-     * <p><b>刻意不把允許值列進 {@code errors[].message}</b>：那份清單能拿到的是 Java 常數名
-     * （{@code AVAILABLE}），而 wire format 上是 {@code 1001}（見 {@code @JsonValue}），寫進去只會
-     * 誤導。值域屬於契約，該由 OpenAPI 文件承載 —— springdoc 會自動為 enum 欄位產出 {@code enum}。
+     * <p><b>刻意不把允許值列進 {@code errors[].message}</b>：那份清單能拿到的是 Java 常數名，
+     * 而 wire format 可能是 {@code @JsonValue} 指定的另一個值（例如數字代碼），寫進去只會誤導。值域屬於契約，該由 OpenAPI 文件承載 —— springdoc 會自動為 enum 欄位產出 {@code enum}。
      */
     @Override
     protected @Nullable ResponseEntity<Object> handleHttpMessageNotReadable(

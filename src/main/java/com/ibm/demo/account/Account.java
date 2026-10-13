@@ -3,7 +3,6 @@ package com.ibm.demo.account;
 import org.hibernate.annotations.SQLRestriction;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.util.AuditMetadata;
 import com.ibm.demo.util.SoftDeleteMetadata;
 
@@ -30,9 +29,8 @@ import lombok.Setter;
 @Entity
 @Builder
 @EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
-// 只選擇啟用狀態且未被刪除的資料。狀態值由 AccountStatus 串接而來，不硬編字面值 ——
-// @SQLRestriction 是生 SQL 用的字串，編譯器與型別系統都不會檢查，改了 enum 而漏改這裡不會有任何錯誤。
-@SQLRestriction("STATUS = '" + AccountStatus.Codes.ACTIVE + "' AND DELETED = false")
+// 只選擇未被終止（未軟刪除）的資料；終止狀態只由 DELETED 記錄，見 docs/adr/0001-soft-delete-only-for-termination.md。
+@SQLRestriction("DELETED = false")
 @Table(name = "ACCOUNT") // 指定對應的資料表名稱
 public class Account {
 
@@ -44,9 +42,6 @@ public class Account {
 
     @Column(name = "NAME", columnDefinition = "NVARCHAR2(50)", nullable = false)
     private String name;
-
-    @Column(name = "STATUS", columnDefinition = "VARCHAR2(1)", nullable = false)
-    private String status;
 
     // 組合：審計欄位
     @Embedded

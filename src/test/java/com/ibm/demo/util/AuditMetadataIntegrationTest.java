@@ -15,8 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ibm.demo.BaseIntegrationTest;
 import com.ibm.demo.account.Account;
 import com.ibm.demo.account.AccountRepository;
-import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.order.DTO.CreateOrderLineRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.OrderTransactionalService;
@@ -57,7 +55,6 @@ class AuditMetadataIntegrationTest extends BaseIntegrationTest {
     void insert_shouldPersistAuditTimestamps() {
         Account saved = accountRepository.saveAndFlush(Account.builder()
                 .name("審計測試帳戶")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build());
 
         assertThat(saved.getAuditMetadata().getCreatedAt()).as("createdAt 應由 auditing 填入").isNotNull();
@@ -71,7 +68,6 @@ class AuditMetadataIntegrationTest extends BaseIntegrationTest {
     void update_shouldAdvanceUpdatedAtOnly() {
         Account account = accountRepository.saveAndFlush(Account.builder()
                 .name("審計測試帳戶")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build());
         LocalDateTime createdAt = account.getAuditMetadata().getCreatedAt();
         LocalDateTime firstUpdatedAt = account.getAuditMetadata().getUpdatedAt();
@@ -98,12 +94,10 @@ class AuditMetadataIntegrationTest extends BaseIntegrationTest {
     void cascadePersistedChild_shouldPersistAuditTimestamps() {
         Integer accountId = accountRepository.saveAndFlush(Account.builder()
                 .name("審計測試帳戶")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build()).getId();
         Integer productId = productRepository.saveAndFlush(Product.builder()
                 .name("審計測試商品")
                 .price(new BigDecimal("100"))
-                .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .build()).getId();
 
         Integer orderId = orderTransactionalService.createOrder(new CreateOrderRequest(

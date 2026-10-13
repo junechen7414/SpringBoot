@@ -462,11 +462,7 @@ public record CreateAccountRequest(
 @Schema(description = "帳戶詳細資訊回應")
 public record GetAccountDetailResponse(
         @Schema(description = "帳戶名稱", example = "Bobby")
-        String name,
-
-        // 值域用 enum 型別表達，不手抄 allowableValues —— 見「改善 4」
-        @Schema(description = "啟用狀態 (Y=啟用, N=停用)", example = "Y")
-        AccountStatus status) {
+        String name) {
 }
 ```
 
@@ -483,7 +479,7 @@ public class AccountController {
 
     @Operation(
         summary = "建立新帳戶",
-        description = "建立新帳戶。成功則新增帳戶資料，預設狀態為啟用 'Y'。"
+        description = "建立新帳戶。"
     )
     @ApiResponses(value = {
         @ApiResponse(responseCode = "201", description = "建立成功；Location 指向新資源，body 為 {\"id\": n}"),
@@ -512,6 +508,10 @@ public ResponseEntity<GetAccountDetailResponse> getAccountDetail(
 ---
 
 ### 改善 4：Enum 值在 Schema 中明確標示（已實作，做法與本節原本的建議不同）
+
+> **現況**：V3 移除了 Account／Product／Order 的 status 欄位（終止狀態只由 `DELETED` 記錄），
+> 下面範例裡的 `ProductStatus` 已經不存在，正式 DTO 目前沒有 enum 欄位。做法本身仍是之後新增值域欄位時的建議；
+> `GlobalExceptionHandler` 對 enum 值域錯誤的轉譯，改由測試裡 `ContractProbeController.ProbeStatus` 這個探針 enum 釘住。
 
 本節原先提的兩個方案 —— `allowableValues = {"Y", "N"}` 與把值域寫進 `description` —— 都是**手抄**：
 文件裡的清單與程式碼裡真正接受的值是兩份資料，改了一邊另一邊不會跟著動，也不會有測試變紅。

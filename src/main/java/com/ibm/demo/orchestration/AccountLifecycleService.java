@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 帳戶生命週期的<b>跨領域協調者</b>：停用（Deactivate，即 {@code DELETE /account/{id}}）前，
- * 必須確認該帳戶沒有有效訂單。停用只有這一條路，{@code PUT} 不能改 status。
+ * 必須確認該帳戶沒有有效訂單。停用只有這一條路，{@code PUT} 只能改名稱。
  *
  * <p><b>為什麼這段邏輯不放在 {@code AccountService}？</b>
  * 「還有訂單就不能停用」這條不變量橫跨 account 與 order 兩個聚合。若由 account 端自行檢查，

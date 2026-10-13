@@ -42,7 +42,7 @@ public class AccountController {
         private final AccountService accountService;
 
         // Create Account
-        @Operation(summary = "建立新帳戶", description = "建立新帳戶。成功則新增帳戶資料，預設狀態為啟用 'Y'。")
+        @Operation(summary = "建立新帳戶", description = "建立新帳戶。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "201", description = "建立成功，回傳帳戶 ID 與 Location 標頭"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
@@ -55,7 +55,7 @@ public class AccountController {
         }
 
         // Read Account List (Paginated)
-        @Operation(summary = "獲取帳戶列表（分頁）", description = "獲取所有帳戶的分頁列表。受限於 SQLRestriction 規則，僅會回傳未軟刪除且狀態為啟用 'Y' 的帳戶。")
+        @Operation(summary = "獲取帳戶列表（分頁）", description = "獲取所有帳戶的分頁列表。受限於 SQLRestriction 規則，僅會回傳未停用（未軟刪除）的帳戶。")
         @ApiResponse(responseCode = "200", description = "成功取得帳戶分頁列表")
         @GetMapping
         public ResponseEntity<PageResponse<GetAccountListResponse>> getAccountList(
@@ -65,7 +65,7 @@ public class AccountController {
         }
 
         // Read Account Detail
-        @Operation(summary = "獲取帳戶詳細資訊", description = "根據 ID 獲取帳戶詳細資訊。受限於 SQLRestriction 規則，若帳戶不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。")
+        @Operation(summary = "獲取帳戶詳細資訊", description = "根據 ID 獲取帳戶詳細資訊。受限於 SQLRestriction 規則，若帳戶不存在或已停用，將拋出 NotFound。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "成功取得帳戶詳細資訊"),
                         @ApiResponse(responseCode = "404", description = "帳戶不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
@@ -78,7 +78,7 @@ public class AccountController {
         }
 
         // Update Account
-        @Operation(summary = "更新帳戶", description = "更新帳戶名稱，不能變更狀態；要停用帳戶請改用 DELETE。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。")
+        @Operation(summary = "更新帳戶", description = "更新帳戶名稱；要停用帳戶請改用 DELETE。受限於 SQLRestriction 規則，若帳戶 ID 不存在或已停用，將拋出 NotFound。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "204", description = "更新成功"),
                         @ApiResponse(responseCode = "400", description = "參數驗證失敗", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
@@ -93,7 +93,7 @@ public class AccountController {
         }
 
         // Assert Account Order Eligibility (internal)
-        @Operation(summary = "驗證帳戶下單資格", description = "內部使用：驗證帳戶是否具下單資格。受限於 SQLRestriction 規則，停用或已軟刪除的帳戶查詢即不可見，故帳戶不存在、已軟刪除或狀態非啟用 'Y' 時一律回傳 NotFound。")
+        @Operation(summary = "驗證帳戶下單資格", description = "內部使用：驗證帳戶是否具下單資格。受限於 SQLRestriction 規則，已停用（軟刪除）的帳戶查詢即不可見，故帳戶不存在或已停用時一律回傳 NotFound。")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "204", description = "帳戶具下單資格"),
                         @ApiResponse(responseCode = "404", description = "帳戶不存在或不可下單", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))

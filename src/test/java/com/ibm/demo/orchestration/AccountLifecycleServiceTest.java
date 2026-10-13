@@ -18,7 +18,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.AccountService;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
-import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.order.DTO.internal.OrderExistenceResponse;
@@ -53,9 +52,9 @@ class AccountLifecycleServiceTest {
 
     // --- Helpers ---
 
-    private void stubCurrentStatus(AccountStatus status) {
+    private void stubAccountExists() {
         when(accountService.getAccountDetail(ACCOUNT_ID)).thenReturn(
-                GetAccountDetailResponse.builder().name("Test User").status(status).build());
+                GetAccountDetailResponse.builder().name("Test User").build());
     }
 
     private void stubHasActiveOrder(boolean hasActiveOrder) {
@@ -69,7 +68,7 @@ class AccountLifecycleServiceTest {
         @Test
         @DisplayName("仍有有效訂單時，應拋出例外且不委派刪除")
         void delete_WhenHasActiveOrder_ShouldThrowAndNotDelegate() {
-            stubCurrentStatus(AccountStatus.ACTIVE);
+            stubAccountExists();
             stubHasActiveOrder(true);
 
             assertThatThrownBy(() -> accountLifecycleService.deleteAccount(ACCOUNT_ID))
@@ -83,7 +82,7 @@ class AccountLifecycleServiceTest {
         @Test
         @DisplayName("無有效訂單時，應委派刪除")
         void delete_WhenNoActiveOrder_ShouldDelegate() {
-            stubCurrentStatus(AccountStatus.ACTIVE);
+            stubAccountExists();
             stubHasActiveOrder(false);
 
             accountLifecycleService.deleteAccount(ACCOUNT_ID);

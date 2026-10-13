@@ -18,7 +18,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
-import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
 import com.ibm.demo.order.DTO.OrderView;
@@ -55,13 +54,12 @@ public class OrderTransactionalServiceTest {
     }
 
     @Test
-    @DisplayName("prepareOrderDeletion 應載入 CREATED 訂單，並在交易內把明細萃取為 items DTO")
+    @DisplayName("prepareOrderDeletion 應載入訂單，並在交易內把明細萃取為 items DTO")
     void prepareOrderDeletion_Success() {
         // Arrange
         Order order = new Order();
         order.setId(1);
         order.setAccountId(42);
-        order.setStatus(OrderStatus.CREATED.getCode());
         order.setVersion(3);
         // 用可變的 list：entity 的集合會被 addOrderLine／orphanRemoval 改動，List.of 會拋 UnsupportedOperationException。
         order.setOrderLines(new ArrayList<>(List.of(
@@ -95,29 +93,12 @@ public class OrderTransactionalServiceTest {
     }
 
     @Test
-    @DisplayName("prepareOrderDeletion 若狀態非 CREATED，應拋出 OrderStatusInvalidException")
-    void prepareOrderDeletion_WhenStatusNotCreated_ShouldThrow() {
-        // Arrange
-        Order order = new Order();
-        order.setId(1);
-        order.setStatus(OrderStatus.CANCELLED.getCode());
-        when(orderRepository.findById(1)).thenReturn(Optional.of(order));
-
-        // Act & Assert
-        assertThatThrownBy(() -> orderTransactionalService.prepareOrderDeletion(1))
-                .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_STATUS_INVALID)
-                .hasMessageContaining("訂單狀態不允許刪除");
-    }
-
-    @Test
     @DisplayName("loadOrderView 應載入訂單並把明細萃取為 items 快照")
     void loadOrderView_Success() {
         // Arrange
         Order order = new Order();
         order.setId(7);
         order.setAccountId(3);
-        order.setStatus(OrderStatus.CREATED.getCode());
         order.setOrderLines(new ArrayList<>(List.of(
                 OrderLine.builder().productId(20).quantity(4).build())));
         when(orderRepository.findByIdWithLines(7)).thenReturn(Optional.of(order));
@@ -128,7 +109,6 @@ public class OrderTransactionalServiceTest {
         // Assert
         assertThat(view.orderId()).isEqualTo(7);
         assertThat(view.accountId()).isEqualTo(3);
-        assertThat(view.status()).isEqualTo(OrderStatus.CREATED);
         assertThat(view.items()).containsExactly(new OrderItemRequest(20, 4));
     }
 

@@ -7,7 +7,6 @@ import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.SQLRestriction;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.util.AuditMetadata;
 import com.ibm.demo.util.SoftDeleteMetadata;
 
@@ -39,8 +38,8 @@ import lombok.ToString;
 // 所以 JPQL 要寫 FROM CustomerOrder。class 名稱照 CONTEXT.md 的用語叫 Order。
 @Entity(name = "CustomerOrder")
 @EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
-// 只選擇未刪除且已確認的訂單。狀態值由 OrderStatus 串接而來，理由見 Account 上的同款註解。
-@SQLRestriction("DELETED = false AND STATUS=" + OrderStatus.Codes.CREATED)
+// 只選擇未被終止（未軟刪除）的資料；終止狀態只由 DELETED 記錄，見 docs/adr/0001-soft-delete-only-for-termination.md。
+@SQLRestriction("DELETED = false")
 @Table(name = "ORDER_INFO") // 指定對應的資料表名稱
 public class Order {
 
@@ -52,9 +51,6 @@ public class Order {
 
     @Column(name = "ACCOUNT_ID", columnDefinition = "NUMBER(10)", nullable = false)
     private Integer accountId;
-
-    @Column(name = "STATUS", columnDefinition = "NUMBER(4)", nullable = false)
-    private Integer status;
 
     // 雙向關聯（配對 OrderLine.order）：判準是生命週期綁定 —— 明細隨 order 而生滅，
     // 沒有跨 order 查明細的需求。cascade 只留實際用到的 PERSIST/MERGE，REMOVE 由 orphanRemoval 涵蓋。

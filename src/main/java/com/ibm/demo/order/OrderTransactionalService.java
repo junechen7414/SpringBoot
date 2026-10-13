@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderDeletionPlan;
@@ -42,7 +41,6 @@ public class OrderTransactionalService {
                 // 建立新訂單
                 Order newOrder = Order.builder()
                                 .accountId(createOrderRequest.accountId())
-                                .status(OrderStatus.CREATED.getCode())
                                 .build();
 
                 // 明細先掛到父端（addOrderLine 同步雙向兩端），再以單一 save 由 cascade PERSIST 一併寫入。
@@ -130,8 +128,7 @@ public class OrderTransactionalService {
                                                 .quantity(detail.getQuantity())
                                                 .build())
                                 .collect(Collectors.toList());
-                return new OrderView(order.getId(), order.getAccountId(),
-                                OrderStatus.fromCode(order.getStatus()), items);
+                return new OrderView(order.getId(), order.getAccountId(), items);
         }
 
         /**
@@ -148,18 +145,8 @@ public class OrderTransactionalService {
                                 () -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                                                 "Order not found with ID: " + orderId));
 
-                // 先轉列舉再比對，不拿 Integer 去跟 int 比：後者除了會 unboxing，更關鍵的是
-                // DB 存了無法識別的狀態時會被「不等於 CREATED」悄悄吸收成 400，而那其實是資料
-                // 完整性問題 —— fromCode 會把它照實抬成 SystemException(500)。
-                //
-                // 這段對走 repository 的呼叫端目前不可達：Order 的 @SQLRestriction 已限定
-                // STATUS = CREATED，非 CREATED 的訂單在上面 findById 就先撞 RESOURCE_NOT_FOUND
-                // （由 SqlStatusIntegrationTest 釘住）。仍保留，因為它防的正是那條裸 SQL
-                // 條件被放寬的那天 —— 屆時這裡就是唯一擋住「刪除已取消訂單」的地方。
-                if (OrderStatus.fromCode(order.getStatus()) != OrderStatus.CREATED) {
-                        throw new BusinessException(ErrorCode.ORDER_STATUS_INVALID,
-                                        "訂單狀態不允許刪除，目前狀態: " + order.getStatus());
-                }
+                // 已取消的訂單被 Order 的 @SQLRestriction("DELETED = false") 濾掉，在上面
+                // findById 就先撞 RESOURCE_NOT_FOUND（由 SoftDeleteIntegrationTest 釘住）。
 
                 // 仍在交易/session 內 → lazy 載入明細合法安全，當場轉為純 DTO
                 Set<OrderItemRequest> items = order.getOrderLines().stream()

@@ -1,7 +1,5 @@
 package com.ibm.demo.account.DTO;
 
-import com.ibm.demo.enums.AccountStatus;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -9,8 +7,5 @@ import lombok.Builder;
 @Schema(description = "帳戶詳細資訊回應")
 public record GetAccountDetailResponse(
         @Schema(description = "帳戶名稱", example = "Bobby")
-        String name,
-
-        @Schema(description = "啟用狀態 (Y=啟用, N=停用)", example = "Y")
-        AccountStatus status) {
+        String name) {
 }

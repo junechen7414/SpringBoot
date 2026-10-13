@@ -25,7 +25,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ibm.demo.account.AccountClient;
-import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.order.DTO.CreateOrderLineRequest;
@@ -240,7 +239,7 @@ class OrderServiceTest {
                                         List.of(new UpdateOrderLineRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
-                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, OrderStatus.CREATED, List.of()));
+                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, List.of()));
 
                         // Act
                         orderService.updateOrder(EXISTING_ORDER_ID, request);
@@ -258,7 +257,7 @@ class OrderServiceTest {
                                         List.of(new UpdateOrderLineRequest(SELLABLE_PRODUCT_ID, 5)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
-                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, OrderStatus.CREATED, List.of()));
+                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, List.of()));
 
                         // 模擬交易服務拋出異常
                         doThrow(new RuntimeException("DB update failed"))
@@ -313,7 +312,7 @@ class OrderServiceTest {
                                         List.of(new UpdateOrderLineRequest(SELLABLE_PRODUCT_ID, 999)));
 
                         when(orderTransactionalService.loadOrderView(EXISTING_ORDER_ID)).thenReturn(
-                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, OrderStatus.CREATED, List.of()));
+                                        new OrderView(EXISTING_ORDER_ID, ACTIVE_ACCOUNT_ID, List.of()));
 
                         // 關鍵：模擬 adjustStock 拋出庫存不足異常
                         doThrow(new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH, "庫存不足"))
@@ -396,24 +395,6 @@ class OrderServiceTest {
                                         .hasMessageContaining(String.valueOf(nonExistentId));
 
                         // Verify: 準備階段失敗 → 不應釋放庫存、也不應執行刪除
-                        verifyNoInteractions(productClient);
-                        verify(orderTransactionalService, never()).deleteOrder(any(), any());
-                }
-
-                @Test
-                @DisplayName("刪除時若訂單狀態非 CREATED (例如已取消)，應拋出 OrderStatusInvalidException")
-                void deleteOrder_WhenStatusNotPending_ShouldThrowOrderStatusInvalidException() {
-                        // Arrange：狀態驗證已收斂至 prepareOrderDeletion
-                        when(orderTransactionalService.prepareOrderDeletion(EXISTING_ORDER_ID))
-                                        .thenThrow(new BusinessException(ErrorCode.ORDER_STATUS_INVALID, "訂單狀態不允許刪除，目前狀態: " + OrderStatus.CANCELLED.getCode()));
-
-                        // Act & Assert
-                        assertThatThrownBy(() -> orderService.deleteOrder(EXISTING_ORDER_ID))
-                                        .isInstanceOf(BusinessException.class)
-                                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_STATUS_INVALID)
-                                        .hasMessageContaining("訂單狀態不允許刪除");
-
-                        // 驗證：狀態不對，不應該執行後續任何扣庫存或刪除動作
                         verifyNoInteractions(productClient);
                         verify(orderTransactionalService, never()).deleteOrder(any(), any());
                 }

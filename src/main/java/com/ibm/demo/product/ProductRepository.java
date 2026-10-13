@@ -11,12 +11,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.util.SoftDeleteRepository;
 
 public interface ProductRepository extends JpaRepository<Product, Integer>, SoftDeleteRepository<Integer> {
-    List<Product> findBySaleStatus(Integer saleStatus);
-
     @Query("SELECT p FROM Product p")
     List<Product> findAllProducts();
 
@@ -39,16 +36,14 @@ public interface ProductRepository extends JpaRepository<Product, Integer>, Soft
     Integer releaseProduct(Integer productId, Integer qty);
 
     // 存在性(且可銷售)檢查：僅投影 id，不載入整個 Product entity。
-    // 受 @SQLRestriction("DELETED = false AND SALE_STATUS = 1001") 限制，故等同「存在且可銷售」。
+    // 受 @SQLRestriction("DELETED = false") 限制，故等同「存在且未下架」。
     @Query("SELECT p.id FROM Product p WHERE p.id IN :ids")
     Set<Integer> findExistingIds(@Param("ids") Collection<Integer> ids);
 
     @Override
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    // 寫入的狀態值由 ProductStatus 串接而來，理由見 AccountRepository 上的同款註解。
     @Query("UPDATE Product p SET p.softDeleteMetadata.deleted = true, "
             + "p.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP, "
-            + "p.saleStatus = " + ProductStatus.Codes.UNAVAILABLE + ", "
             + "p.version = p.version + 1 "
             + "WHERE p.id = :id AND p.version = :version")
     // 確保 @Param 名稱與 Query 中的 :名稱 一致

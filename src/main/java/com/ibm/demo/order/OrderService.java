@@ -119,7 +119,6 @@ public class OrderService {
                 // 3. 計算每個訂單的總金額並轉換為 DTO
                 Page<GetOrderListResponse> responsePage = orderViews.map(v -> GetOrderListResponse.builder()
                                 .orderId(v.orderId())
-                                .status(v.status())
                                 .totalAmount(calculateTotalAmount(v.items(), productMap))
                                 .build());
 
@@ -158,7 +157,6 @@ public class OrderService {
                 // 4. 回傳結果（總金額沿用同一份 productMap，不重複遠端查詢）
                 return GetOrderDetailResponse.builder()
                                 .accountId(view.accountId())
-                                .orderStatus(view.status())
                                 .totalAmount(calculateTotalAmount(view.items(), productMap))
                                 .items(itemDTOs)
                                 .build();

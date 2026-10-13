@@ -11,7 +11,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
 /**
- * 更新商品請求。刻意不含 saleStatus —— 下架（Delist）只走 {@code DELETE /product/{id}}，
+ * 更新商品請求。下架（Delist）只走 {@code DELETE /product/{id}}，
  * 見 {@code docs/adr/0001-soft-delete-only-for-termination.md}。
  */
 @Builder

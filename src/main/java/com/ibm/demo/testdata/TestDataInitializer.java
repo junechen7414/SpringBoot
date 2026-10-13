@@ -11,8 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ibm.demo.account.Account;
 import com.ibm.demo.account.AccountRepository;
-import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.product.Product;
 import com.ibm.demo.product.ProductRepository;
 
@@ -73,12 +71,10 @@ public class TestDataInitializer implements CommandLineRunner {
                     .name("Product " + i)
                     .price(BigDecimal.valueOf((long) i * i))
                     .available(i * i + 888888888)
-                    .saleStatus(ProductStatus.AVAILABLE.getCode())
                     .build());
                     
             accounts.add(Account.builder()
                     .name("Account " + i)
-                    .status(AccountStatus.ACTIVE.getCode())
                     .build());
         }
         

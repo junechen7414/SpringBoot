@@ -11,7 +11,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.product.DTO.CreateProductRequest;
 import com.ibm.demo.product.DTO.GetProductDetailResponse;
@@ -57,7 +56,6 @@ public class ProductService {
                 .name(requestProductName)
                 .price(product_DTO.price())
                 .available(product_DTO.available())
-                .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .build();
         // 3. 儲存商品資料
         Product savedProduct = productRepository.save(newProduct);
@@ -284,7 +282,6 @@ public class ProductService {
                 .id(product.getId())
                 .name(product.getName())
                 .price(product.getPrice())
-                .saleStatus(ProductStatus.fromCode(product.getSaleStatus()))
                 .available(product.getAvailable())
                 .build();
     }
@@ -300,7 +297,6 @@ public class ProductService {
                 product.getId(),
                 product.getName(),
                 product.getPrice(),
-                ProductStatus.fromCode(product.getSaleStatus()),
                 product.getAvailable());
     }
 
