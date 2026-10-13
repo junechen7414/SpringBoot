@@ -14,9 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ibm.demo.BaseIntegrationTest;
 import com.ibm.demo.account.Account;
 import com.ibm.demo.account.AccountRepository;
-import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.order.DTO.CreateOrderLineRequest;
 import com.ibm.demo.order.DTO.CreateOrderRequest;
 import com.ibm.demo.order.DTO.OrderView;
@@ -98,7 +95,6 @@ class OrderCreateCascadeIntegrationTest extends BaseIntegrationTest {
 
         OrderView view = orderTransactionalService.loadOrderView(orderId);
         assertThat(view.accountId()).isEqualTo(accountId);
-        assertThat(view.status()).isEqualTo(OrderStatus.CREATED);
         assertThat(view.items()).hasSize(1);
         assertThat(view.items().get(0).productId()).isEqualTo(productId);
         assertThat(view.items().get(0).quantity()).isEqualTo(4);
@@ -109,7 +105,6 @@ class OrderCreateCascadeIntegrationTest extends BaseIntegrationTest {
     private Integer createAccount() {
         return accountRepository.saveAndFlush(Account.builder()
                 .name("建立訂單測試帳戶")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build()).getId();
     }
 
@@ -117,7 +112,6 @@ class OrderCreateCascadeIntegrationTest extends BaseIntegrationTest {
         return productRepository.saveAndFlush(Product.builder()
                 .name(name)
                 .price(new BigDecimal("100"))
-                .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .build()).getId();
     }
 }

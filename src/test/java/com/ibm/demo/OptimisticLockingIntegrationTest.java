@@ -13,9 +13,6 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import com.ibm.demo.account.Account;
 import com.ibm.demo.account.AccountRepository;
-import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.order.Order;
 import com.ibm.demo.order.OrderRepository;
 import com.ibm.demo.product.Product;
@@ -48,7 +45,6 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         Product product = Product.builder()
                 .name("商品樂觀鎖測試")
                 .price(new BigDecimal("100"))
-                .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .build();
         product = productRepository.saveAndFlush(product);
         Integer id = product.getId();
@@ -75,7 +71,6 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
     public void testUpdateAccountOptimisticLocking() {
         Account account = Account.builder()
                 .name("帳戶樂觀鎖測試")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build();
         account = accountRepository.saveAndFlush(account);
         Integer id = account.getId();
@@ -103,12 +98,10 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         // 先建立帳戶以滿足外鍵約束
         Account account = accountRepository.saveAndFlush(Account.builder()
                 .name("訂單測試帳戶")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build());
         
         Order order = Order.builder()
                 .accountId(account.getId())
-                .status(OrderStatus.CREATED.getCode())
                 .build();
         order = orderRepository.saveAndFlush(order);
         Integer id = order.getId();
@@ -120,10 +113,14 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         // 這是在同一個交易內「人工模擬」出持有舊版資料的客戶端物件。
         entityManager.detach(order2); // 模擬不同的交易上下文
 
-        order1.setStatus(OrderStatus.CANCELLED.getCode());
+        // Order 只剩 accountId 這個可改的純量欄位，用它製造一次版本遞增
+        Integer otherAccountId = accountRepository.saveAndFlush(Account.builder()
+                .name("訂單測試帳戶-另一個")
+                .build()).getId();
+        order1.setAccountId(otherAccountId);
         orderRepository.saveAndFlush(order1);
 
-        order2.setStatus(OrderStatus.CANCELLED.getCode());
+        order2.setAccountId(otherAccountId);
         assertThrows(ObjectOptimisticLockingFailureException.class, () -> {
             orderRepository.saveAndFlush(order2);
         });
@@ -136,7 +133,6 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         Product product = productRepository.saveAndFlush(Product.builder()
                 .name("軟刪除測試")
                 .price(new BigDecimal("100"))
-                .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .build());
         Integer id = product.getId();
         Integer version = product.getVersion();
@@ -165,7 +161,6 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         Product product = productRepository.saveAndFlush(Product.builder()
                 .name("Delist 並發 reserve 測試")
                 .price(new BigDecimal("100"))
-                .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .available(10)
                 .build());
         Integer id = product.getId();
@@ -185,7 +180,6 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
     public void testSoftDeleteAccountOptimisticLocking() {
         Account account = accountRepository.saveAndFlush(Account.builder()
                 .name("帳戶軟刪除測試")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build());
         Integer id = account.getId();
         Integer version = account.getVersion();
@@ -207,19 +201,20 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         // 先建立帳戶以滿足外鍵約束
         Account account = accountRepository.saveAndFlush(Account.builder()
                 .name("訂單軟刪除測試帳戶")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build());
         
         Order order = orderRepository.saveAndFlush(Order.builder()
                 .accountId(account.getId())
-                .status(OrderStatus.CREATED.getCode())
                 .build());
         Integer id = order.getId();
         Integer version = order.getVersion();
 
-        // 模擬 A 先更新了資料
+        // 模擬 A 先更新了資料（Order 只剩 accountId 這個可改的純量欄位）
+        Integer otherAccountId = accountRepository.saveAndFlush(Account.builder()
+                .name("訂單軟刪除測試帳戶-另一個")
+                .build()).getId();
         Order order1 = orderRepository.findById(id).get();
-        order1.setStatus(OrderStatus.CANCELLED.getCode());
+        order1.setAccountId(otherAccountId);
         orderRepository.saveAndFlush(order1);
 
         // B 嘗試用舊版本刪除
@@ -250,16 +245,15 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
     public void testSoftDeleteClearsPersistenceContext() {
         Account account = accountRepository.saveAndFlush(Account.builder()
                 .name("PC 一致性測試")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build());
         Integer id = account.getId();
         Integer version = account.getVersion();
 
         // 先讓實體進入一級快取（managed）
         Account managed = accountRepository.findById(id).get();
-        assertEquals(AccountStatus.ACTIVE.getCode(), managed.getStatus());
+        assertEquals(false, managed.getSoftDeleteMetadata().isDeleted());
 
-        // bulk 軟刪：DB 變 deleted=true / status='N'
+        // bulk 軟刪：DB 變 deleted=true
         int updated = accountRepository.softDeleteById(id, version);
         assertEquals(1, updated, "版本相符時應更新 1 列");
 

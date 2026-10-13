@@ -3,8 +3,6 @@ package com.ibm.demo.order.DTO;
 import java.math.BigDecimal;
 import java.util.List;
 
-import com.ibm.demo.enums.OrderStatus;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -13,9 +11,6 @@ import lombok.Builder;
 public record GetOrderDetailResponse(
         @Schema(description = "帳戶 ID", example = "1")
         Integer accountId,
-
-        @Schema(description = "訂單狀態 (1001=訂單建立, 1003=訂單取消)", example = "1001")
-        OrderStatus orderStatus,
 
         @Schema(description = "訂單總金額", example = "500.00")
         BigDecimal totalAmount,

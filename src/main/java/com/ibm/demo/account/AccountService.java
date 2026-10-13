@@ -9,7 +9,6 @@ import com.ibm.demo.account.DTO.CreateAccountRequest;
 import com.ibm.demo.account.DTO.GetAccountDetailResponse;
 import com.ibm.demo.account.DTO.GetAccountListResponse;
 import com.ibm.demo.account.DTO.UpdateAccountRequest;
-import com.ibm.demo.enums.AccountStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.util.DBAssertion;
 import com.ibm.demo.exception.ErrorCode;
@@ -39,7 +38,6 @@ public class AccountService {
 
         Account newAccount = Account.builder()
                 .name(account_DTO.name())
-                .status(AccountStatus.ACTIVE.getCode())
                 .build();
 
         Account savedAccount = accountRepository.save(newAccount);
@@ -78,8 +76,8 @@ public class AccountService {
      * 驗證帳戶是否具下單資格。下單資格規則收斂於帳戶領域，呼叫端（如訂單服務）
      * 只需表達意圖，無須知道帳戶的狀態欄位或代碼。
      * <p>
-     * 帳戶實體受 {@code @SQLRestriction("STATUS = 'Y' AND DELETED = false")} 限制，
-     * 停用或已軟刪除的帳戶查詢即不可見，故「存在且可載入」等同於「具下單資格」；
+     * 帳戶實體受 {@code @SQLRestriction("DELETED = false")} 限制，
+     * 已停用（軟刪除）的帳戶查詢即不可見，故「存在且可載入」等同於「具下單資格」；
      * 不符者一律由 {@code findAccountByIdOrThrow} 拋出 BusinessException（RESOURCE_NOT_FOUND, 404）。
      *
      * @param id 帳戶 ID
@@ -94,7 +92,7 @@ public class AccountService {
     /**
      * 更新帳戶名稱。
      *
-     * <p>不改 status：停用（Deactivate）只走 {@link #deleteAccount}，且必須經由
+     * <p>停用（Deactivate）只走 {@link #deleteAccount}，且必須經由
      * {@code orchestration.AccountLifecycleService} 檢查有效訂單。
      *
      * @param updateAccountRequestDto
@@ -138,15 +136,13 @@ public class AccountService {
     private GetAccountDetailResponse mapAccountToDetailResponse(Account account) {
         return GetAccountDetailResponse.builder()
                 .name(account.getName())
-                .status(AccountStatus.fromCode(account.getStatus()))
                 .build();
     }
 
     private GetAccountListResponse mapAccountToListResponse(Account account) {
         return new GetAccountListResponse(
                 account.getId(),
-                account.getName(),
-                AccountStatus.fromCode(account.getStatus()));
+                account.getName());
     }
 
     /**

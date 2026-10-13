@@ -5,7 +5,6 @@ import java.math.BigDecimal;
 import org.hibernate.annotations.SQLRestriction;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.util.AuditMetadata;
 import com.ibm.demo.util.SoftDeleteMetadata;
 
@@ -32,8 +31,8 @@ import lombok.Setter;
 @Entity
 @Builder
 @EntityListeners(AuditingEntityListener.class) // 必須標在 @Entity；標在 @Embeddable 會被靜默忽略（見 AuditMetadata）
-// 只選擇未刪除且上架的商品。狀態值由 ProductStatus 串接而來，理由見 Account 上的同款註解。
-@SQLRestriction("DELETED = false AND SALE_STATUS = " + ProductStatus.Codes.AVAILABLE)
+// 只選擇未被終止（未軟刪除）的資料；終止狀態只由 DELETED 記錄，見 docs/adr/0001-soft-delete-only-for-termination.md。
+@SQLRestriction("DELETED = false")
 @Table(name = "PRODUCT")
 public class Product {
     @Id
@@ -47,9 +46,6 @@ public class Product {
 
     @Column(name = "PRICE", columnDefinition = "NUMBER(12,4)", nullable = false)
     private BigDecimal price;
-
-    @Column(name = "SALE_STATUS", columnDefinition = "NUMBER(4)", nullable = false)
-    private Integer saleStatus;
 
     @Column(name = "AVAILABLE", columnDefinition = "NUMBER(10)", nullable = false)
     @Builder.Default

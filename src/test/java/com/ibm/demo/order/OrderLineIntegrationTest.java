@@ -21,9 +21,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.ibm.demo.BaseIntegrationTest;
 import com.ibm.demo.account.Account;
 import com.ibm.demo.account.AccountRepository;
-import com.ibm.demo.enums.AccountStatus;
-import com.ibm.demo.enums.OrderStatus;
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.order.DTO.UpdateOrderLineRequest;
 import com.ibm.demo.order.DTO.UpdateOrderRequest;
 import com.ibm.demo.product.Product;
@@ -83,7 +80,6 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
         Integer productId = createProduct("商品A", 0);
         Order order = Order.builder()
                 .accountId(accountId)
-                .status(OrderStatus.CREATED.getCode())
                 .build();
         order.addOrderLine(OrderLine.builder().productId(productId).quantity(1).build());
         order.addOrderLine(OrderLine.builder().productId(productId).quantity(2).build());
@@ -183,7 +179,6 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
     private Integer createAccount() {
         return accountRepository.saveAndFlush(Account.builder()
                 .name("明細測試帳戶")
-                .status(AccountStatus.ACTIVE.getCode())
                 .build()).getId();
     }
 
@@ -191,7 +186,6 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
         return productRepository.saveAndFlush(Product.builder()
                 .name(name)
                 .price(new BigDecimal("100"))
-                .saleStatus(ProductStatus.AVAILABLE.getCode())
                 .available(available)
                 .build()).getId();
     }
@@ -199,7 +193,6 @@ class OrderLineIntegrationTest extends BaseIntegrationTest {
     private Order createOrderWithTwoDetails(Integer accountId, Integer productAId, Integer productBId) {
         Order order = Order.builder()
                 .accountId(accountId)
-                .status(OrderStatus.CREATED.getCode())
                 .build();
         order.addOrderLine(OrderLine.builder().productId(productAId).quantity(2).build());
         order.addOrderLine(OrderLine.builder().productId(productBId).quantity(3).build());

@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
 /**
- * 更新帳戶請求。刻意不含 status —— 停用（Deactivate）只走 {@code DELETE /account/{id}}，
+ * 更新帳戶請求。停用（Deactivate）只走 {@code DELETE /account/{id}}，
  * 見 {@code docs/adr/0001-soft-delete-only-for-termination.md}。
  */
 @Builder

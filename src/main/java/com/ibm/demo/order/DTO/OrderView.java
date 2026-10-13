@@ -2,7 +2,6 @@ package com.ibm.demo.order.DTO;
 
 import java.util.List;
 
-import com.ibm.demo.enums.OrderStatus;
 import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 
 /**
@@ -16,6 +15,5 @@ import com.ibm.demo.product.DTO.internal.OrderItemRequest;
 public record OrderView(
         Integer orderId,
         Integer accountId,
-        OrderStatus status,
         List<OrderItemRequest> items) {
 }

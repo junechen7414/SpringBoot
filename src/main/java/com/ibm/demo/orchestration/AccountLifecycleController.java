@@ -42,7 +42,7 @@ public class AccountLifecycleController {
     private final AccountLifecycleService accountLifecycleService;
 
     // Delete Account
-    @Operation(summary = "刪除帳戶", description = "執行帳戶軟刪除。受限於 SQLRestriction 規則，若帳戶 ID 不存在、已軟刪除或狀態非啟用 'Y'，將拋出 NotFound。若該帳戶仍有關聯訂單，則拋出 BusinessException（ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED）。")
+    @Operation(summary = "刪除帳戶", description = "停用帳戶（Deactivate）：軟刪除，不可恢復。受限於 SQLRestriction 規則，若帳戶 ID 不存在或已停用，將拋出 NotFound。若該帳戶仍有關聯訂單，則拋出 BusinessException（ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED）。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "204", description = "刪除成功"),
             @ApiResponse(responseCode = "400", description = "帳戶仍有關聯訂單，無法刪除", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),

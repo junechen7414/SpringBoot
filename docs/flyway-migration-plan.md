@@ -1,5 +1,12 @@
 # Flyway 遷移計劃
 
+> **現況（2026-10）**：本文是導入 Flyway 當時的計劃，下面的表結構與 `@SQLRestriction` 停在 V1。之後的變動：
+> - V2 拿掉 `ORDER_PRODUCT_DETAIL` 的軟刪除欄位，並加上唯一約束（ADR 0001）。
+> - V3 移除 `ACCOUNT.STATUS`、`PRODUCT.SALE_STATUS`、`ORDER_INFO.STATUS`，終止狀態只由 `DELETED`／`DELETED_AT` 記錄，三個 entity 的 `@SQLRestriction` 都只剩 `DELETED = false`。
+> - 「openapi 環境 `flyway.enabled: false`」也已不成立：目前所有 profile 都跑 Flyway，`openapi` 只是另外搭配 H2 與 `ddl-auto: create-drop`。
+>
+> 現行 schema 以 `src/main/resources/db/migration/` 為準。
+
 ## 目標
 將專案從 JPA DDL-auto 遷移到 Flyway 進行資料庫版本控制管理。
 

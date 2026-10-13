@@ -25,7 +25,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.ibm.demo.enums.ProductStatus;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.product.DTO.CreateProductRequest;
@@ -47,7 +46,6 @@ class ProductServiceTest {
         private final Integer ACTIVE_PRODUCT_ID = 1;
         private final BigDecimal DEFAULT_PRICE = new BigDecimal("10.00");
         private final Integer DEFAULT_STOCK = 100;
-        private final Integer STATUS_SELLABLE = ProductStatus.AVAILABLE.getCode();
         private final String NEW_PRODUCT_NAME = "New Product Name";
 
         @BeforeEach
@@ -199,8 +197,7 @@ class ProductServiceTest {
                         assertThat(captor.getValue())
                                         .hasFieldOrPropertyWithValue("name", name)
                                         .hasFieldOrPropertyWithValue("price", price)
-                                        .hasFieldOrPropertyWithValue("available", available)
-                                        .hasFieldOrPropertyWithValue("saleStatus", ProductStatus.AVAILABLE.getCode());
+                                        .hasFieldOrPropertyWithValue("available", available);
                 }
         }
 
@@ -249,8 +246,7 @@ class ProductServiceTest {
                 @DisplayName("查詢存在的產品應成功回傳詳細資訊")
                 void getProductDetail_WhenExists_Success(Integer id, String name, BigDecimal price, int available) {
                         // Arrange
-                        Product existingProduct = createTestProduct(id, name, price,
-                                        STATUS_SELLABLE, available);
+                        Product existingProduct = createTestProduct(id, name, price, available);
                         when(productRepository.findById(id)).thenReturn(Optional.of(existingProduct));
 
                         // Act
@@ -260,7 +256,6 @@ class ProductServiceTest {
                         assertThat(response)
                                         .hasFieldOrPropertyWithValue("name", name)
                                         .hasFieldOrPropertyWithValue("price", price)
-                                        .hasFieldOrPropertyWithValue("saleStatus", ProductStatus.AVAILABLE)
                                         .hasFieldOrPropertyWithValue("available", available);
 
                         verify(productRepository).findById(id);
@@ -307,8 +302,7 @@ class ProductServiceTest {
                 void updateProduct_AllFields_Success(Integer id, String oldName, BigDecimal oldPrice, String newName,
                                 BigDecimal newPrice, int newAvailable) {
                         // Arrange
-                        Product existingProduct = createTestProduct(id, oldName, oldPrice,
-                                        STATUS_SELLABLE, 50);
+                        Product existingProduct = createTestProduct(id, oldName, oldPrice, 50);
                         UpdateProductRequest request = UpdateProductRequest.builder()
                                         .name(newName)
                                         .price(newPrice)
@@ -335,8 +329,7 @@ class ProductServiceTest {
                 @DisplayName("更新產品名稱保持不變時，不應驗證名稱重複")
                 void updateProduct_SameNameNoCheck_Success() {
                         // Arrange
-                        Product existingProduct = createTestProduct(ACTIVE_PRODUCT_ID, "Same Name", DEFAULT_PRICE,
-                                        STATUS_SELLABLE, DEFAULT_STOCK);
+                        Product existingProduct = createTestProduct(ACTIVE_PRODUCT_ID, "Same Name", DEFAULT_PRICE, DEFAULT_STOCK);
                         UpdateProductRequest request = UpdateProductRequest.builder()
                                         .name("Same Name")
                                         .price(new BigDecimal("25.00"))
@@ -386,8 +379,7 @@ class ProductServiceTest {
                 @DisplayName("更新產品名稱時，若新名稱已被其他產品佔用應拋出異常")
                 void updateProduct_WhenNewNameExists_ShouldThrowException(Integer id, String oldName, String newName) {
                         // Arrange (建議點：在每個測試內建立獨立實例，確保隔離性)
-                        Product existingProduct = createTestProduct(id, oldName, DEFAULT_PRICE, STATUS_SELLABLE,
-                                        DEFAULT_STOCK);
+                        Product existingProduct = createTestProduct(id, oldName, DEFAULT_PRICE, DEFAULT_STOCK);
                         UpdateProductRequest request = UpdateProductRequest.builder()
                                         .name(newName)
                                         .build();
@@ -414,8 +406,7 @@ class ProductServiceTest {
                 @DisplayName("保留量為 0 時，應以讀到的 version 軟刪除")
                 void deleteProduct_WhenNoReservation_ShouldSoftDelete() {
                         // Arrange
-                        Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE,
-                                        STATUS_SELLABLE, DEFAULT_STOCK);
+                        Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE, DEFAULT_STOCK);
                         product.setVersion(1);
                         when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(product));
                         when(productRepository.softDeleteById(ACTIVE_PRODUCT_ID, 1)).thenReturn(1);
@@ -431,8 +422,7 @@ class ProductServiceTest {
                 @DisplayName("刪除時若版本不符 (樂觀鎖衝突)，應拋出 ObjectOptimisticLockingFailureException")
                 void deleteProduct_WhenOptimisticLockingConflict_ShouldThrowException() {
                         // Arrange
-                        Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE,
-                                        STATUS_SELLABLE, DEFAULT_STOCK);
+                        Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE, DEFAULT_STOCK);
                         product.setVersion(1);
                         when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(product));
                         // 模擬更新失敗 (傳回 0)
@@ -454,8 +444,7 @@ class ProductServiceTest {
                 @DisplayName("刪除時若仍有保留庫存，應拋出 PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED 且不軟刪除")
                 void deleteProduct_WhenHasReservation_ShouldThrowException() {
                         // Arrange
-                        Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE,
-                                        STATUS_SELLABLE, DEFAULT_STOCK);
+                        Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE, DEFAULT_STOCK);
                         product.setReserved(3);
                         when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(product));
 
@@ -515,13 +504,12 @@ class ProductServiceTest {
         }
 
         // --- Helper Methods ---
-        private Product createTestProduct(Integer id, String name, BigDecimal price, Integer saleStatus,
+        private Product createTestProduct(Integer id, String name, BigDecimal price,
                         Integer available) {
                 Product product = new Product();
                 product.setId(id);
                 product.setName(name);
                 product.setPrice(price);
-                product.setSaleStatus(saleStatus);
                 product.setAvailable(available);
                 product.setReserved(0);
                 return product;

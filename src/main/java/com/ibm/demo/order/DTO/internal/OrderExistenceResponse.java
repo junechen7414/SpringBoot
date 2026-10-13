@@ -25,7 +25,7 @@ import lombok.Builder;
 @Schema(description = "帳戶訂單存在性查詢結果（內部使用）")
 public record OrderExistenceResponse(
 
-        @Schema(description = "該帳戶是否仍有未軟刪除且狀態為 1001 (CREATED) 的訂單",
+        @Schema(description = "該帳戶是否仍有未取消（未軟刪除）的訂單",
                 example = "true", requiredMode = Schema.RequiredMode.REQUIRED)
         boolean hasActiveOrder) {
 }

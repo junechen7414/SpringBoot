@@ -46,7 +46,7 @@ public class ProductController {
     private final ProductService productService;
 
     // Create Product
-    @Operation(summary = "新增商品", description = "建立新商品。若已存在同名商品則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。成功則新增商品資料，預設銷售狀態為 1001 (AVAILABLE)。")
+    @Operation(summary = "新增商品", description = "建立新商品。若已存在同名商品則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。成功則新增商品資料。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "建立成功，回傳商品 ID 與 Location 標頭"),
             @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
@@ -59,7 +59,7 @@ public class ProductController {
     }
 
     // Read Product List (Paginated)
-    @Operation(summary = "獲取商品列表（分頁）", description = "獲取所有商品的分頁列表。受限於 SQLRestriction 規則，僅會回傳未被軟刪除且銷售狀態為 1001 (AVAILABLE) 的商品。")
+    @Operation(summary = "獲取商品列表（分頁）", description = "獲取所有商品的分頁列表。受限於 SQLRestriction 規則，僅會回傳未下架（未軟刪除）的商品。")
     @ApiResponse(responseCode = "200", description = "成功取得商品分頁列表")
     @GetMapping
     public ResponseEntity<PageResponse<GetProductListResponse>> getProductList(
@@ -69,7 +69,7 @@ public class ProductController {
     }
 
     // Batch Read Product Detail
-    @Operation(summary = "批量獲取商品詳細資訊", description = "根據多個 ID 獲取商品詳細資訊。受限於 SQLRestriction 規則，若商品不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，該 ID 將被忽略。")
+    @Operation(summary = "批量獲取商品詳細資訊", description = "根據多個 ID 獲取商品詳細資訊。受限於 SQLRestriction 規則，若商品不存在或已下架，該 ID 將被忽略。")
     @ApiResponse(responseCode = "200", description = "成功取得商品詳細資訊列表")
     @GetMapping("/batch")
     public ResponseEntity<List<GetProductDetailResponse>> getProductBatch(
@@ -78,7 +78,7 @@ public class ProductController {
     }
 
     // Read Product Detail
-    @Operation(summary = "獲取單一商品詳細資訊", description = "根據 ID 獲取商品詳細資訊。受限於 SQLRestriction 規則，若商品不存在、已軟刪除或銷售狀態非 1001 (AVAILABLE)，將回傳 NotFound。")
+    @Operation(summary = "獲取單一商品詳細資訊", description = "根據 ID 獲取商品詳細資訊。受限於 SQLRestriction 規則，若商品不存在或已下架，將回傳 NotFound。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "成功取得商品詳細資訊"),
             @ApiResponse(responseCode = "404", description = "商品不存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
@@ -91,7 +91,7 @@ public class ProductController {
     }
 
     // Update Product
-    @Operation(summary = "更新商品", description = "更新商品名稱、價格與可用庫存。不能改銷售狀態：下架只走 DELETE /product/{id}。受限於 SQLRestriction 規則，若商品 ID 不存在或已下架，將拋出 NotFound。若嘗試更改為已存在的商品名稱，則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。")
+    @Operation(summary = "更新商品", description = "更新商品名稱、價格與可用庫存。下架只走 DELETE /product/{id}。受限於 SQLRestriction 規則，若商品 ID 不存在或已下架，將拋出 NotFound。若嘗試更改為已存在的商品名稱，則拋出 BusinessException（PRODUCT_ALREADY_EXIST）。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "204", description = "更新成功"),
             @ApiResponse(responseCode = "400", description = "參數驗證失敗或商品名稱已存在", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
@@ -106,7 +106,7 @@ public class ProductController {
     }
 
     // Delete Product
-    @Operation(summary = "刪除商品", description = "下架商品（Delist）：軟刪除並將銷售狀態設為 1002 (UNAVAILABLE)，不可恢復。受限於 SQLRestriction 規則，若商品 ID 不存在或已下架，將拋出 NotFound。若商品仍有保留庫存（有訂單佔用），則拋出 BusinessException（PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED）。")
+    @Operation(summary = "刪除商品", description = "下架商品（Delist）：軟刪除，不可恢復。受限於 SQLRestriction 規則，若商品 ID 不存在或已下架，將拋出 NotFound。若商品仍有保留庫存（有訂單佔用），則拋出 BusinessException（PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED）。")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "204", description = "刪除成功"),
             @ApiResponse(responseCode = "400", description = "商品仍有保留庫存", content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),

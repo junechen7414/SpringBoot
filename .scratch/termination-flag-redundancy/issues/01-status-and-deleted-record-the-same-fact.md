@@ -1,6 +1,6 @@
 # 終止動作同時寫 status 與 DELETED，兩個欄位記同一件事
 
-Status: needs-triage
+Status: resolved（PR 審查中）
 
 ## 背景
 
@@ -39,3 +39,25 @@ Status: needs-triage
 2026-10-05 的 grill session 刻意不把這件事併進 `order-lifecycle`，以免範圍擴大。使用者要求：**這件事一定要回來處理，不能漏掉。**
 
 ## Comments
+
+- 2026-10-13：決定**以 `DELETED`／`DELETED_AT` 為準，移除 status**（使用者確認）。之後某個 entity 真的需要多個「活著」的業務狀態時，再在那個 entity 加回 status 欄位。demo 用途以簡單一致為優先。
+  - **V3 migration**（`V3__drop_redundant_status_columns.sql`）：
+    - 先補正「只靠 PUT 改 status 停用、`DELETED` 仍是 false」的舊資料，不補的話 drop 之後它們會重新出現。
+    - 接著 drop `CK_ORDER_STATUS`，再 drop `ACCOUNT.STATUS`、`PRODUCT.SALE_STATUS`、`ORDER_INFO.STATUS`。
+    - 已驗證能套用：Oracle 由 Testcontainers 整合測試涵蓋；H2 用 `e2e` profile 起 app，Flyway 依序套用 V1–V3，`ddl-auto: validate` 也通過。
+  - **程式碼**：
+    - 三個 entity 的 `@SQLRestriction` 都只剩 `DELETED = false`；`softDeleteById` 不再寫 status。
+    - 刪除 `AccountStatus`、`ProductStatus`、`OrderStatus`，以及沒人呼叫的 `findByStatus`／`findBySaleStatus`。
+    - 刪除 `ErrorCode.ORDER_STATUS_INVALID`，連同 `prepareOrderDeletion` 裡那段不可達的狀態檢查：已取消的訂單在 `findById` 就被濾掉。
+  - **「entity 的 status 改成 enum」**：status 已經整個移除，這部分不用做了。
+  - **API 契約（破壞性）**：六個回應拿掉 status 欄位：
+    - `GetAccountDetail/ListResponse.status`
+    - `GetProductDetail/ListResponse.saleStatus`
+    - `GetOrderDetailResponse.orderStatus`
+    - `GetOrderListResponse.status`
+    - 這些欄位原本永遠是「啟用」那個值（終止的資料會被濾掉），沒有承載資訊。
+    - 下游已在合併前先移除依賴（`Playwright-TS` 的 `7c3f52b`）：拿掉斷言只會讓新舊 image 都通過，所以這次的順序是下游先 push。
+  - **測試**：
+    - `SqlStatusIntegrationTest` 改寫並改名為 `SoftDeleteIntegrationTest`，改成驗證軟刪除後查不到、但資料列還在，且 `DELETED`／`DELETED_AT` 都已寫入。
+    - `GlobalExceptionHandler` 對 enum 值域錯誤的轉譯，改由 `ContractProbeController.ProbeStatus` 這個探針 enum 釘住。
+    - `./gradlew test -Djunit.platform.exclude.tags=SanityTest`：202 個測試全數通過。和之前比，刪掉了 5 個只驗證 status 的測試；之前回報的 211 多算了殘留的舊結果檔，實際是 207。

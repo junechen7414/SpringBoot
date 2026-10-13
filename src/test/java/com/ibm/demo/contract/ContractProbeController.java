@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ibm.demo.enums.ProductStatus;
+import com.fasterxml.jackson.annotation.JsonValue;
 import com.ibm.demo.exception.BusinessException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.exception.SystemException;
@@ -144,11 +144,28 @@ public class ContractProbeController {
     public record ProbeResponse(String value) {
     }
 
-    /** enum 值域探針的請求體。{@link ProductStatus} 的 wire format 是數字（見其 {@code @JsonValue}）。 */
-    public record ProbeEnumRequest(ProductStatus status, List<ProbeEnumItem> items) {
+    /**
+     * enum 值域探針專用的列舉。正式 DTO 已經沒有 enum 欄位，但 {@code GlobalExceptionHandler} 把 enum
+     * 值域錯誤轉成 {@code VALIDATION_FAILED} 的邏輯仍要釘住，所以在這裡自備一個：wire format 是數字
+     * （{@code @JsonValue}），Java 常數名與它不同，正好能驗證錯誤訊息不會洩漏常數名。
+     */
+    public enum ProbeStatus {
+        AVAILABLE(1001),
+        UNAVAILABLE(1002);
+
+        @JsonValue
+        private final int code;
+
+        ProbeStatus(int code) {
+            this.code = code;
+        }
     }
 
-    public record ProbeEnumItem(ProductStatus status) {
+    /** enum 值域探針的請求體。{@link ProbeStatus} 的 wire format 是數字（見其 {@code @JsonValue}）。 */
+    public record ProbeEnumRequest(ProbeStatus status, List<ProbeEnumItem> items) {
+    }
+
+    public record ProbeEnumItem(ProbeStatus status) {
     }
 
     /**
