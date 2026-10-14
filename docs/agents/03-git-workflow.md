@@ -21,14 +21,15 @@ push `main` 不只是跑測試，還會：
 
 CI 的 `Run Unit Tests (Gate)` 跑在 build image 之前，所以測試抓得到的錯不會產出壞 image；風險在測試抓不到的執行期／整合問題。
 
-> **從 request body 拿掉欄位前，先 grep 下游 E2E（`junechen7414/Playwright-TS`，本機 `../Playwright`）有沒有依賴這個欄位的效果。** 專案沒有覆寫 `FAIL_ON_UNKNOWN_PROPERTIES`，舊欄位不會 400，但會被靜靜忽略。下游如果靠它當前置步驟（例如用 `PUT` 帶 status 來停用資源），請求照樣回 204，後面的斷言才會失敗，上游的測試完全抓不到。實例：`.scratch/order-lifecycle/issues/06-*.md`。
+> **從 request body 拿掉欄位前，先 grep 下游 E2E（`junechen7414/Playwright-TS`，本機 `../Playwright`）有沒有依賴這個欄位的效果。** 專案沒有覆寫 `FAIL_ON_UNKNOWN_PROPERTIES`，舊欄位不會 400，但會被靜靜忽略。下游如果靠它當前置步驟（例如用 `PUT` 帶 status 來停用資源），請求照樣回 204，後面的斷言才會失敗，上游的測試完全抓不到。實例：上游 `7976925`、`98884d8` 從 `PUT` 拿掉 status 之後，下游在 `3d1ab02` 改成走 `DELETE`。
 
 > **改了 API 契約時，下游 job summary 一定會報一次「快照與被測 image 的 spec 有差異」。** 這是 job 順序造成的預期結果：`generate-docs` 是 `needs: build-and-push`，下游 checkout 到的永遠是上一版快照，下一次觸發就恢復。細節見 [09-monitoring.md](./09-monitoring.md#cicd-流程)。
 
-> **契約變更需要下游同步改測試時，push 順序固定是：上游 push → 等 `build-and-push` 把 image 推上 ghcr → 下游 rebase 後再 push。** 下游 compose 的 app 設了 `pull_policy: always`，CI 一律拉 ghcr 的 `latest`。下游如果先 push，新測試會打到舊 image，例如 PUT 少了舊 image 仍然必填的欄位，直接被擋成 400。
+> **契約變更需要下游同步改測試時，push 順序通常是：上游 push → 等 `build-and-push` 把 image 推上 ghcr → 下游 rebase 後再 push。** 下游 compose 的 app 設了 `pull_policy: always`，CI 一律拉 ghcr 的 `latest`。下游如果先 push，新測試會打到舊 image，例如 PUT 少了舊 image 仍然必填的欄位，直接被擋成 400。
 > - 上游 push 觸發的那一次下游 E2E 跑的還是舊測試，紅一次是預期的，下游 push 之後那次才算數。
 > - 下游 push 前一定會落後一個 commit：`generate-docs` 會把新的 `swagger.json` push 到下游。要先 `git pull --rebase`；`swagger.json` 有衝突時以那個 commit 的版本為準。
-> - 實例：`.scratch/order-lifecycle/issues/06-*.md`。
+> - 實例：上游 `98884d8` push 並等 image 發布後，下游才 push `3d1ab02`。
+> - **只從回應拿掉欄位時順序相反，下游先 push 才安全**：下游先刪掉對該欄位的斷言，這對新舊 image 都會通過；上游再合併，中間沒有紅燈空檔。實例：下游 `7c3f52b` → 上游 PR #79。
 
 ## pre-push hook
 
