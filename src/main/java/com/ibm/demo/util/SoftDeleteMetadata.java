@@ -31,14 +31,6 @@ public class SoftDeleteMetadata {
     private LocalDateTime deletedAt;
     
     /**
-     * 標記為已刪除
-     */
-    public void markAsDeleted() {
-        this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
-    }
-    
-    /**
      * 檢查是否已刪除
      */
     public boolean isDeleted() {

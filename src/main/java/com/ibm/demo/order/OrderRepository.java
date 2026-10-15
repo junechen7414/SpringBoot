@@ -1,5 +1,6 @@
 package com.ibm.demo.order;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,8 +29,10 @@ public interface OrderRepository extends JpaRepository<Order, Integer>, SoftDele
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE CustomerOrder o "
             + "SET o.softDeleteMetadata.deleted = true, "
-            + "    o.softDeleteMetadata.deletedAt = CURRENT_TIMESTAMP, "
+            + "    o.softDeleteMetadata.deletedAt = :now, "
+            + "    o.auditMetadata.updatedAt = :now, "
             + "    o.version = o.version + 1 "
             + "WHERE o.id = :id AND o.version = :version")
-    int softDeleteById(@Param("id") Integer id, @Param("version") Integer version);
+    int softDeleteById(@Param("id") Integer id, @Param("version") Integer version,
+            @Param("now") LocalDateTime now);
 }

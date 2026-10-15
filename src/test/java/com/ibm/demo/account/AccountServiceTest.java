@@ -7,6 +7,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,12 +51,16 @@ public class AccountServiceTest {
     private final Integer ACTIVE_ACCOUNT_ID = 1;
     private final String DEFAULT_NAME = "Test User";
 
+    // 固定時鐘：軟刪除與庫存異動的時間由 service 傳給 repository，斷言時才能比對到確切的值
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final LocalDateTime NOW = LocalDateTime.now(CLOCK);
+
     @BeforeEach
     void setUp() {
         // 手動注入 Mock 依賴，結構清晰且易於維護。
         // 停用／刪除帳戶前的跨域訂單守門已移至 orchestration.AccountLifecycleService，
         // 由 AccountLifecycleServiceTest 覆蓋，本測試只驗 account 自身行為。
-        accountService = new AccountService(accountRepository);
+        accountService = new AccountService(accountRepository, CLOCK);
     }
 
     @Nested
@@ -255,13 +263,13 @@ public class AccountServiceTest {
             activeAccount.setVersion(1);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
             // 模擬版本不符更新失敗
-            when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1)).thenReturn(0);
+            when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1, NOW)).thenReturn(0);
 
             // Act & Assert
             assertThatThrownBy(() -> accountService.deleteAccount(ACTIVE_ACCOUNT_ID))
                     .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
 
-            verify(accountRepository).softDeleteById(ACTIVE_ACCOUNT_ID, 1);
+            verify(accountRepository).softDeleteById(ACTIVE_ACCOUNT_ID, 1, NOW);
         }
 
         @Test
@@ -271,13 +279,13 @@ public class AccountServiceTest {
             Account activeAccount = createTestAccount(ACTIVE_ACCOUNT_ID, DEFAULT_NAME);
             activeAccount.setVersion(1);
             when(accountRepository.findById(ACTIVE_ACCOUNT_ID)).thenReturn(Optional.of(activeAccount));
-            when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1)).thenReturn(1);
+            when(accountRepository.softDeleteById(ACTIVE_ACCOUNT_ID, 1, NOW)).thenReturn(1);
 
             // Act
             accountService.deleteAccount(ACTIVE_ACCOUNT_ID);
 
             // Assert
-            verify(accountRepository).softDeleteById(ACTIVE_ACCOUNT_ID, 1);
+            verify(accountRepository).softDeleteById(ACTIVE_ACCOUNT_ID, 1, NOW);
         }
     }
 

@@ -1,5 +1,7 @@
 package com.ibm.demo.order;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class OrderTransactionalService {
         private final OrderRepository orderRepository;
+        private final Clock clock;
 
         @Transactional
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
@@ -163,7 +166,7 @@ public class OrderTransactionalService {
         public void deleteOrder(Integer orderId, Integer version) {
                 log.debug("開始刪除訂單，訂單ID: {}", orderId);
 
-                int updated = orderRepository.softDeleteById(orderId, version);
+                int updated = orderRepository.softDeleteById(orderId, version, LocalDateTime.now(clock));
 
                 DBAssertion.assertUpdated(updated, Order.class, orderId);
                 // 明細原封不動地保留：訂單這一列保留但查不到，明細跟著一起封存（ADR 0001），

@@ -10,6 +10,10 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 
@@ -48,10 +52,14 @@ class ProductServiceTest {
         private final Integer DEFAULT_STOCK = 100;
         private final String NEW_PRODUCT_NAME = "New Product Name";
 
+        // 固定時鐘：軟刪除與庫存異動的時間由 service 傳給 repository，斷言時才能比對到確切的值
+        private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
+        private static final LocalDateTime NOW = LocalDateTime.now(CLOCK);
+
         @BeforeEach
         void setUp() {
                 // 手動建立物件，確保測試不受 Mockito 自動注入行為的靜默錯誤影響
-                productService = new ProductService(productRepository);
+                productService = new ProductService(productRepository, CLOCK);
         }
 
         @Nested
@@ -65,14 +73,14 @@ class ProductServiceTest {
                         Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2));
                         when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
                                         .thenReturn(Set.of(ACTIVE_PRODUCT_ID));
-                        when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 2)).thenReturn(1);
+                        when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 2, NOW)).thenReturn(1);
 
                         // Act
                         productService.reserveStock(items);
 
                         // Assert
-                        verify(productRepository).reserveProduct(ACTIVE_PRODUCT_ID, 2);
-                        verify(productRepository, never()).releaseProduct(any(), any());
+                        verify(productRepository).reserveProduct(ACTIVE_PRODUCT_ID, 2, NOW);
+                        verify(productRepository, never()).releaseProduct(any(), any(), any());
                 }
 
                 @Test
@@ -82,7 +90,7 @@ class ProductServiceTest {
                         Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 999));
                         when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
                                         .thenReturn(Set.of(ACTIVE_PRODUCT_ID));
-                        when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 999)).thenReturn(0);
+                        when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 999, NOW)).thenReturn(0);
 
                         // Act & Assert
                         assertThatThrownBy(() -> productService.reserveStock(items))
@@ -109,14 +117,14 @@ class ProductServiceTest {
                 void releaseStock_ShouldReleaseEachItem() {
                         // Arrange
                         Set<OrderItemRequest> items = Set.of(new OrderItemRequest(ACTIVE_PRODUCT_ID, 2));
-                        when(productRepository.releaseProduct(ACTIVE_PRODUCT_ID, 2)).thenReturn(1);
+                        when(productRepository.releaseProduct(ACTIVE_PRODUCT_ID, 2, NOW)).thenReturn(1);
 
                         // Act
                         productService.releaseStock(items);
 
                         // Assert
-                        verify(productRepository).releaseProduct(ACTIVE_PRODUCT_ID, 2);
-                        verify(productRepository, never()).reserveProduct(any(), any());
+                        verify(productRepository).releaseProduct(ACTIVE_PRODUCT_ID, 2, NOW);
+                        verify(productRepository, never()).reserveProduct(any(), any(), any());
                 }
 
                 @Test
@@ -129,14 +137,14 @@ class ProductServiceTest {
                                         .build();
                         when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
                                         .thenReturn(Set.of(ACTIVE_PRODUCT_ID));
-                        when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 3)).thenReturn(1);
+                        when(productRepository.reserveProduct(ACTIVE_PRODUCT_ID, 3, NOW)).thenReturn(1);
 
                         // Act
                         productService.adjustStock(request);
 
                         // Assert
-                        verify(productRepository).reserveProduct(ACTIVE_PRODUCT_ID, 3);
-                        verify(productRepository, never()).releaseProduct(any(), any());
+                        verify(productRepository).reserveProduct(ACTIVE_PRODUCT_ID, 3, NOW);
+                        verify(productRepository, never()).releaseProduct(any(), any(), any());
                 }
 
                 @Test
@@ -149,14 +157,14 @@ class ProductServiceTest {
                                         .build();
                         when(productRepository.findExistingIds(Set.of(ACTIVE_PRODUCT_ID)))
                                         .thenReturn(Set.of(ACTIVE_PRODUCT_ID));
-                        when(productRepository.releaseProduct(ACTIVE_PRODUCT_ID, 3)).thenReturn(1);
+                        when(productRepository.releaseProduct(ACTIVE_PRODUCT_ID, 3, NOW)).thenReturn(1);
 
                         // Act
                         productService.adjustStock(request);
 
                         // Assert
-                        verify(productRepository).releaseProduct(ACTIVE_PRODUCT_ID, 3);
-                        verify(productRepository, never()).reserveProduct(any(), any());
+                        verify(productRepository).releaseProduct(ACTIVE_PRODUCT_ID, 3, NOW);
+                        verify(productRepository, never()).reserveProduct(any(), any(), any());
                 }
         }
 
@@ -409,13 +417,13 @@ class ProductServiceTest {
                         Product product = createTestProduct(ACTIVE_PRODUCT_ID, "Product", DEFAULT_PRICE, DEFAULT_STOCK);
                         product.setVersion(1);
                         when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(product));
-                        when(productRepository.softDeleteById(ACTIVE_PRODUCT_ID, 1)).thenReturn(1);
+                        when(productRepository.softDeleteById(ACTIVE_PRODUCT_ID, 1, NOW)).thenReturn(1);
 
                         // Act
                         productService.deleteProduct(ACTIVE_PRODUCT_ID);
 
                         // Assert
-                        verify(productRepository).softDeleteById(ACTIVE_PRODUCT_ID, 1);
+                        verify(productRepository).softDeleteById(ACTIVE_PRODUCT_ID, 1, NOW);
                 }
 
                 @Test
@@ -426,13 +434,13 @@ class ProductServiceTest {
                         product.setVersion(1);
                         when(productRepository.findById(ACTIVE_PRODUCT_ID)).thenReturn(Optional.of(product));
                         // 模擬更新失敗 (傳回 0)
-                        when(productRepository.softDeleteById(ACTIVE_PRODUCT_ID, 1)).thenReturn(0);
+                        when(productRepository.softDeleteById(ACTIVE_PRODUCT_ID, 1, NOW)).thenReturn(0);
 
                         // Act & Assert
                         assertThatThrownBy(() -> productService.deleteProduct(ACTIVE_PRODUCT_ID))
                                         .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
 
-                        verify(productRepository).softDeleteById(ACTIVE_PRODUCT_ID, 1);
+                        verify(productRepository).softDeleteById(ACTIVE_PRODUCT_ID, 1, NOW);
                 }
         }
 
@@ -455,7 +463,7 @@ class ProductServiceTest {
                                                         ErrorCode.PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED)
                                         .hasMessageContaining(String.valueOf(ACTIVE_PRODUCT_ID));
 
-                        verify(productRepository, never()).softDeleteById(any(), any());
+                        verify(productRepository, never()).softDeleteById(any(), any(), any());
                 }
 
                 @Test

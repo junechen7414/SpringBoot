@@ -5,6 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -33,9 +37,13 @@ public class OrderTransactionalServiceTest {
 
     private OrderTransactionalService orderTransactionalService;
 
+    // 固定時鐘：軟刪除與庫存異動的時間由 service 傳給 repository，斷言時才能比對到確切的值
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
+    private static final LocalDateTime NOW = LocalDateTime.now(CLOCK);
+
     @BeforeEach
     void setUp() {
-        orderTransactionalService = new OrderTransactionalService(orderRepository);
+        orderTransactionalService = new OrderTransactionalService(orderRepository, CLOCK);
     }
 
     @Test
@@ -44,13 +52,13 @@ public class OrderTransactionalServiceTest {
         // Arrange
         Integer orderId = 1;
         Integer version = 1;
-        when(orderRepository.softDeleteById(orderId, version)).thenReturn(0);
+        when(orderRepository.softDeleteById(orderId, version, NOW)).thenReturn(0);
 
         // Act & Assert
         assertThatThrownBy(() -> orderTransactionalService.deleteOrder(orderId, version))
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
 
-        verify(orderRepository).softDeleteById(orderId, version);
+        verify(orderRepository).softDeleteById(orderId, version, NOW);
     }
 
     @Test

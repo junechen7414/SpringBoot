@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -53,14 +55,17 @@ class SoftDeleteIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
+    /** 刻意用過去的固定時間：DB 的 CURRENT_TIMESTAMP 不可能剛好等於它，能證明寫入的是傳進去的值。 */
+    private static final LocalDateTime NOW = LocalDateTime.of(2020, 1, 2, 3, 4, 5);
+
     @Test
-    @DisplayName("Account：停用後查不到，但資料列仍在且 DELETED／DELETED_AT 已寫入")
+    @DisplayName("Account：停用後查不到，但資料列仍在且 DELETED／DELETED_AT／UPDATED_AT 已寫入")
     @Transactional
     void account_softDeletedRowIsHiddenButKept() {
         Integer keptId = insertAccount("保留帳戶");
         Integer deletedId = insertAccount("停用帳戶");
 
-        assertThat(accountRepository.softDeleteById(deletedId, 0)).as("應更新到 1 列（version 相符）").isEqualTo(1);
+        assertThat(accountRepository.softDeleteById(deletedId, 0, NOW)).as("應更新到 1 列（version 相符）").isEqualTo(1);
 
         assertThat(accountRepository.findById(keptId)).as("未停用的帳戶應查得到").isPresent();
         assertThat(accountRepository.findById(deletedId)).as("停用的帳戶應被 @SQLRestriction 濾掉").isEmpty();
@@ -68,13 +73,13 @@ class SoftDeleteIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("Product：下架後查不到，但資料列仍在且 DELETED／DELETED_AT 已寫入")
+    @DisplayName("Product：下架後查不到，但資料列仍在且 DELETED／DELETED_AT／UPDATED_AT 已寫入")
     @Transactional
     void product_softDeletedRowIsHiddenButKept() {
         Integer keptId = insertProduct("保留商品");
         Integer deletedId = insertProduct("下架商品");
 
-        assertThat(productRepository.softDeleteById(deletedId, 0)).as("應更新到 1 列（version 相符）").isEqualTo(1);
+        assertThat(productRepository.softDeleteById(deletedId, 0, NOW)).as("應更新到 1 列（version 相符）").isEqualTo(1);
 
         assertThat(productRepository.findById(keptId)).as("未下架的商品應查得到").isPresent();
         assertThat(productRepository.findById(deletedId)).as("下架的商品應被 @SQLRestriction 濾掉").isEmpty();
@@ -82,14 +87,14 @@ class SoftDeleteIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("Order：取消後查不到，但資料列仍在且 DELETED／DELETED_AT 已寫入")
+    @DisplayName("Order：取消後查不到，但資料列仍在且 DELETED／DELETED_AT／UPDATED_AT 已寫入")
     @Transactional
     void order_softDeletedRowIsHiddenButKept() {
         Integer accountId = insertAccount("訂單測試帳戶");
         Integer keptId = insertOrder(accountId);
         Integer cancelledId = insertOrder(accountId);
 
-        assertThat(orderRepository.softDeleteById(cancelledId, 0)).as("應更新到 1 列（version 相符）").isEqualTo(1);
+        assertThat(orderRepository.softDeleteById(cancelledId, 0, NOW)).as("應更新到 1 列（version 相符）").isEqualTo(1);
 
         assertThat(orderRepository.findById(keptId)).as("未取消的訂單應查得到").isPresent();
         assertThat(orderRepository.findById(cancelledId)).as("取消的訂單應被 @SQLRestriction 濾掉").isEmpty();
@@ -107,7 +112,7 @@ class SoftDeleteIntegrationTest extends BaseIntegrationTest {
     void prepareOrderDeletion_onCancelledOrder_failsAsNotFound() {
         Integer accountId = insertAccount("重複取消測試帳戶");
         Integer cancelledId = insertOrder(accountId);
-        orderRepository.softDeleteById(cancelledId, 0);
+        orderRepository.softDeleteById(cancelledId, 0, NOW);
 
         assertThatThrownBy(() -> orderTransactionalService.prepareOrderDeletion(cancelledId))
                 .isInstanceOf(BusinessException.class)
@@ -141,14 +146,28 @@ class SoftDeleteIntegrationTest extends BaseIntegrationTest {
         return id;
     }
 
-    /** 以 native query 繞過 {@code @SQLRestriction}，確認被濾掉的列還在，且終止標記確實落地。 */
+    /**
+     * 以 native query 繞過 {@code @SQLRestriction}，確認被濾掉的列還在，且終止標記確實落地：
+     * {@code DELETED_AT} 與 {@code UPDATED_AT} 都是呼叫端傳入的時間。bulk UPDATE 不會觸發
+     * {@code @LastModifiedDate}，兩個欄位都要靠 {@code softDeleteById} 自己寫。
+     */
     private void assertSoftDeletedRow(String table, Integer id) {
         Object[] row = (Object[]) entityManager
-                .createNativeQuery("SELECT DELETED, DELETED_AT FROM " + table + " WHERE ID = :id")
+                .createNativeQuery("SELECT DELETED, DELETED_AT, UPDATED_AT FROM " + table + " WHERE ID = :id")
                 .setParameter("id", id)
                 .getSingleResult();
         // Oracle 的 BOOLEAN 與 H2 回傳的 Java 型別不同（Boolean／數字），比字串形式即可
         assertThat(String.valueOf(row[0])).as(table + ".DELETED").isIn("true", "1");
-        assertThat(row[1]).as(table + ".DELETED_AT").isNotNull();
+        assertThat(toLocalDateTime(row[1])).as(table + ".DELETED_AT").isEqualTo(NOW);
+        assertThat(toLocalDateTime(row[2])).as(table + ".UPDATED_AT").isEqualTo(NOW);
+    }
+
+    /** JDBC driver 對 TIMESTAMP 欄位可能回 {@link Timestamp} 或 {@link LocalDateTime}。 */
+    private static LocalDateTime toLocalDateTime(Object value) {
+        return switch (value) {
+            case Timestamp timestamp -> timestamp.toLocalDateTime();
+            case LocalDateTime localDateTime -> localDateTime;
+            default -> throw new AssertionError("無法辨識的時間型別: " + value.getClass());
+        };
     }
 }

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -143,7 +144,7 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         productRepository.saveAndFlush(product1);
 
         // B 嘗試用舊版本刪除，預期傳回 0
-        int updated = productRepository.softDeleteById(id, version);
+        int updated = productRepository.softDeleteById(id, version, LocalDateTime.now());
         assertEquals(0, updated, "版本不符時應不更新任何資料");
     }
 
@@ -168,9 +169,9 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         Integer version = product.getVersion();
 
         // 另一張訂單在檢查之後預留了庫存
-        assertEquals(1, productRepository.reserveProduct(id, 2));
+        assertEquals(1, productRepository.reserveProduct(id, 2, LocalDateTime.now()));
 
-        int updated = productRepository.softDeleteById(id, version);
+        int updated = productRepository.softDeleteById(id, version, LocalDateTime.now());
         assertEquals(0, updated, "reserve 之後版本已改變，軟刪除不應命中");
     }
 
@@ -190,7 +191,7 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         accountRepository.saveAndFlush(account1);
 
         // B 嘗試用舊版本刪除
-        int updated = accountRepository.softDeleteById(id, version);
+        int updated = accountRepository.softDeleteById(id, version, LocalDateTime.now());
         assertEquals(0, updated);
     }
 
@@ -218,7 +219,7 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         orderRepository.saveAndFlush(order1);
 
         // B 嘗試用舊版本刪除
-        int updated = orderRepository.softDeleteById(id, version);
+        int updated = orderRepository.softDeleteById(id, version, LocalDateTime.now());
         assertEquals(0, updated);
     }
 
@@ -254,7 +255,7 @@ public class OptimisticLockingIntegrationTest extends BaseIntegrationTest {
         assertEquals(false, managed.getSoftDeleteMetadata().isDeleted());
 
         // bulk 軟刪：DB 變 deleted=true
-        int updated = accountRepository.softDeleteById(id, version);
+        int updated = accountRepository.softDeleteById(id, version, LocalDateTime.now());
         assertEquals(1, updated, "版本相符時應更新 1 列");
 
         // clearAutomatically=true → PC 已清空，findById 重打 DB 套用 @SQLRestriction → empty。

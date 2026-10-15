@@ -1,5 +1,7 @@
 package com.ibm.demo.product;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -35,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 @CircuitBreaker(name = "ProductService")
 public class ProductService {
     private final ProductRepository productRepository;
+    private final Clock clock;
 
     // 建構子，注入 Repository，已用lombok註解RequiredArgsConstructor定義。
 
@@ -156,7 +159,8 @@ public class ProductService {
                     "Product with id: " + productId + " still has " + existingProduct.getReserved()
                             + " reserved and cannot be delisted.");
         }
-        int updated = productRepository.softDeleteById(productId, existingProduct.getVersion());
+        int updated = productRepository.softDeleteById(productId, existingProduct.getVersion(),
+                LocalDateTime.now(clock));
         DBAssertion.assertUpdated(updated, Product.class, productId);
         log.info("商品軟刪除成功，商品ID: {}", productId);
     }
@@ -235,7 +239,8 @@ public class ProductService {
         allProductIds.addAll(oldMap.keySet());
         allProductIds.addAll(newMap.keySet());
 
-        // 3. 統一計算差值並處理
+        // 3. 統一計算差值並處理；同一次異動的每個商品都記同一個時間
+        LocalDateTime now = LocalDateTime.now(clock);
         // 差值累積起來，最後只記一行 —— 在迴圈內記會讓一筆訂單噴出好幾行。
         Map<Integer, Integer> appliedDeltas = new HashMap<>();
         for (Integer productId : allProductIds) {
@@ -246,7 +251,7 @@ public class ProductService {
 
             if (diff > 0) {
                 // 需要更多庫存
-                int rowsAffected = productRepository.reserveProduct(productId, diff);
+                int rowsAffected = productRepository.reserveProduct(productId, diff, now);
                 if (rowsAffected == 0) {
                     throw new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH,
                             "商品 ID " + productId + " 庫存不足，無法預留");
@@ -257,7 +262,7 @@ public class ProductService {
                 continue;
             } else if (diff < 0) {
                 // 釋放多餘庫存
-                int rowsAffected = productRepository.releaseProduct(productId, Math.abs(diff));
+                int rowsAffected = productRepository.releaseProduct(productId, Math.abs(diff), now);
                 if (rowsAffected == 0) {
                     throw new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH,
                             "商品 ID " + productId + " 預留的庫存不足，無法釋放");

@@ -1,5 +1,8 @@
 package com.ibm.demo.account;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 @CircuitBreaker(name = "AccountService")
 public class AccountService {
     private final AccountRepository accountRepository;
+    private final Clock clock;
 
     /**
      * @param account_DTO
@@ -126,7 +130,8 @@ public class AccountService {
     @RateLimiter(name = "account-write-with-validation")
     public void deleteAccount(Integer accountId) {
         Account existingAccount = findAccountByIdOrThrow(accountId);
-        int updated = accountRepository.softDeleteById(accountId, existingAccount.getVersion());
+        int updated = accountRepository.softDeleteById(accountId, existingAccount.getVersion(),
+                LocalDateTime.now(clock));
         DBAssertion.assertUpdated(updated, Account.class, accountId);
         log.info("帳戶軟刪除成功，帳戶ID: {}", accountId);
     }
