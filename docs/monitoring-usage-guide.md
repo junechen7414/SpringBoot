@@ -208,8 +208,20 @@ histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket[5
 由內而外三層：
 
 1. `rate(..._bucket[5m])` — `_bucket` 是一組 counter，每個 `le`（less-or-equal）標籤代表「耗時 ≤ le 秒的請求數」。同樣要先 `rate()`。
-2. `sum by (le)` — 把各 uri/method 的同 `le` 加總。**只能保留 `le`**，其他標籤必須加總掉，否則算不出來。想看單一端點就寫 `sum by (le, uri)` 並在外層 `by (uri)`。
+2. `sum by (le)` — 把各 uri/method 的同 `le` 加總。**`le` 一定要留**，而且其他沒列在 `by` 裡的標籤都會被加總掉。想依端點分線就寫 `sum by (le, uri)`，`histogram_quantile` 會對每個 `uri` 各算一條（它本身沒有 `by` 子句，分組全靠內層的 `sum by`）。
 3. `histogram_quantile(0.99, ...)` — 從 bucket 分布**內插估算**分位數。它是估計值，精度取決於 bucket 邊界的疏密。
+
+依端點分線、只看最慢的幾個時，dashboard 的「回應延遲」panel 用的是：
+
+```promql
+topk(5, histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{uri!~"/actuator.*|/swagger-ui.*|/v3/api-docs.*"}[5m]))) >= 0)
+```
+
+- **`topk` 包在最外層**。包在 `_bucket` 上會把一組 histogram 切碎（常缺 `le="+Inf"`），結果是 NaN，線直接消失。
+- **排除 `/actuator`**：`HEALTHCHECK` 每 30 秒打一次 health，不排除的話它會霸佔名額，也會把延遲灌成「很快」。
+- **`>= 0` 濾 NaN**：沒有流量的 uri 分位數是 NaN，`topk` 不會排除 NaN，會拿它們湊滿名額，legend 就多出沒有 mean/max 的空項目。
+- **一個 uri 只打一次不會有線**：series 第一次出現時 counter 就已經是 1，`rate` 算不出增量，要打第二次之後才畫得出來。
+- `topk` 是每個時間點各算一次，前 5 名會換人，所以 legend 可能超過 5 項。
 
 ### 4.5 單位：一律用秒
 

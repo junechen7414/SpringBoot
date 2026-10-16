@@ -87,7 +87,7 @@
       "id": 3,
       "type": "timeseries",
       "title": "回應延遲 p50 / p95 / p99",
-      "description": "黃金訊號之一：延遲。\n\n為什麼不畫平均值：平均會把尖峰藏起來。100 個請求裡 99 個 10ms、1 個 5 秒，平均只有 60ms 看起來很健康，但那一個使用者等了 5 秒。p99 = 「最慢的 1% 有多慢」才是使用者感受。\n\nhistogram_quantile 的三層要一起看（由內而外）：\n1. rate(..._bucket[5m])：_bucket 是一組累積計數器，每個 le 標籤代表「耗時 ≤ le 秒的請求數」。同樣要先 rate() 換算成速率。\n2. sum by (le)：把所有 uri/method 的同 le bucket 加總。只保留 le，其他標籤必須丟掉，否則 histogram_quantile 算不出來。想看單一端點的 p99，就在這裡改成 sum by (le, uri) 並在外層加 by (uri)。\n3. histogram_quantile(0.99, ...)：從 bucket 分布內插估出分位數。它是「估計值」，精度取決於 bucket 邊界疏密。\n\n要有 _bucket 序列，application-dev.yml 必須開 management.metrics.distribution.percentiles-histogram；沒開的話 OTLP 只送 count/sum，這三條線會全空。",
+      "description": "黃金訊號之一：延遲。依 uri 分線，回答「有沒有變慢」之後的下一句「哪個 endpoint 變慢」。\n\n為什麼不畫平均值：平均會把尖峰藏起來。100 個請求裡 99 個 10ms、1 個 5 秒，平均只有 60ms 看起來很健康，但那一個使用者等了 5 秒。p99 = 「最慢的 1% 有多慢」才是使用者感受。\n\n由內而外：\n1. rate(..._bucket{uri!~...}[5m])：_bucket 是一組累積計數器，每個 le 標籤代表「耗時 ≤ le 秒的請求數」，先 rate() 換算成速率。排除 /actuator（HEALTHCHECK 每 30 秒一次，會把 p50 灌成「很快很穩」）與 swagger/api-docs。\n2. sum by (le, uri)：把同 uri 但 method/status/outcome 不同的 bucket 加總。le 一定要留，而且要在 histogram_quantile 之前加總完，否則 bucket 不完整（缺 le=\"+Inf\"）會算出 NaN。\n3. histogram_quantile(q, ...)：從 bucket 分布內插估出分位數。它是「估計值」，精度取決於 bucket 邊界疏密。\n4. >= 0：濾掉 NaN。沒有流量的 uri 每個 bucket 的 rate 都是 0，分位數是 NaN；topk 不會排除 NaN，會拿它們湊滿名額，legend 就會多出沒有 mean/max 的空項目。\n5. topk(5, ...)：每個分位數只留最慢的 5 個 uri。topk 必須包在 histogram_quantile 外面 —— 包在 bucket 上會把一組 histogram 切碎，整條線變 NaN。\n\n判讀注意：\n- topk 是每個時間點各算一次，前 5 名會換人，所以 legend 可能超過 5 項、線會斷斷續續。這是 topk 的行為，不是資料缺漏。\n- 流量很少的 uri（5 分鐘內 1～2 個請求）p99 就等於最慢那一個請求，雜訊大。\n- 某個 uri 的第一個請求不會反映在 rate 上（series 第一次出現時就已經是 1），至少要第二個請求後才有線。\n\n要有 _bucket 序列，application-dev.yml 必須開 management.metrics.distribution.percentiles-histogram；沒開的話只有 le=\"+Inf\"，這三組線會全空。",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
       "fieldConfig": {
@@ -106,20 +106,20 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))",
-          "legendFormat": "p50"
+          "expr": "topk(5, histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*|/swagger-ui.*|/v3/api-docs.*\"}[5m]))) >= 0)",
+          "legendFormat": "p50 {{uri}}"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))",
-          "legendFormat": "p95"
+          "expr": "topk(5, histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*|/swagger-ui.*|/v3/api-docs.*\"}[5m]))) >= 0)",
+          "legendFormat": "p95 {{uri}}"
         },
         {
           "refId": "C",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))",
-          "legendFormat": "p99"
+          "expr": "topk(5, histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*|/swagger-ui.*|/v3/api-docs.*\"}[5m]))) >= 0)",
+          "legendFormat": "p99 {{uri}}"
         }
       ]
     },

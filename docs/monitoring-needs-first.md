@@ -88,9 +88,11 @@ Micrometer 剛好有這個 metric → 畫一個 panel → 以後應該用得到�
 
 **這張表就是你的作業清單。** 以下每一項都是一個小 commit，改完照 guide §7.4 的流程（UI 上調到滿意 → JSON Model → 複製回 `app-overview.json`）：
 
-- [ ] **延遲面板**：選一條路
-  - 改成依 endpoint 分線：`histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket[5m])))`，endpoint 多時再包一層 `topk(5, ...)`
-  - 或保持總覽，但在 `description` 寫明「只回答『有沒有變慢』，要知道哪個 endpoint 請到 Explore 加 `uri`」
+- [x] **延遲面板**：改成依 endpoint 分線，最後的查詢是
+  `topk(5, histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{uri!~"/actuator.*|/swagger-ui.*|/v3/api-docs.*"}[5m]))) >= 0)`。三個容易踩的地方：
+  - **`topk` 要包在 `histogram_quantile` 外面**。包在 `_bucket` 上，每組 label 只剩零星幾個 `le`、常缺 `+Inf`，整條線會變 NaN 而消失。
+  - **要排除 `/actuator`**。`HEALTHCHECK` 每 30 秒打一次 health，舊的 `sum by (le)` 那條線幾乎全是它撐起來的，會讓 p50 看起來「很快很穩」。
+  - **`>= 0` 濾掉 NaN**。沒流量的 uri 分位數是 NaN，`topk` 不會排除 NaN，會拿它們湊滿 5 個名額，legend 會多出沒有 mean/max 的空項目。另外，某個 uri 的第一個請求不會反映在 `rate` 上，至少要打第二次才會有線。
 - [ ] **錯誤率上面那條線**：換成 `sum by (status) (rate(http_server_requests_seconds_count{outcome="CLIENT_ERROR"}[5m]))`，讓 429 自己成一條線，不再跟 400/404 混在一起
 - [ ] **Bulkhead / 斷路器**：移到 dashboard 下半部，或收進一個預設折疊的 row（例如命名為「為什麼」）
 - [ ] **JVM Heap**：換成 GC 停頓。GC 停頓時間直接等於使用者感受到的延遲，能連回 Q2。查詢見 §7 末尾
