@@ -230,12 +230,12 @@ datasource 與 dashboard **不手動在 UI 建**，一律進 git。手動建的�
 |---|---|---|
 | `grafana/provisioning/datasources/prometheus.yml` | `/etc/grafana/provisioning/datasources`（`:ro`） | Prometheus datasource，`uid: prometheus`（**寫死**，dashboard JSON 以此 uid 引用）、`url: http://prometheus:9090` |
 | `grafana/provisioning/datasources/tempo.yml` | `/etc/grafana/provisioning/datasources`（`:ro`） | Tempo datasource，`uid: tempo`（**寫死**，同 prometheus 的理由）、`url: http://tempo:3200`（查詢埠，不是 OTLP 的 4317/4318）。刻意不設 `tracesToMetrics` / `serviceMap` —— 那兩個依賴 span metrics 與 service graph 指標，需要在 Alloy 加 `otelcol.connector.spanmetrics` / `servicegraph` 才有，現在設了只會得到空面板 |
-| `grafana/provisioning/dashboards/default.yml` | `/etc/grafana/provisioning/dashboards`（`:ro`） | dashboard provider，指向 `/etc/grafana/dashboards`，`updateIntervalSeconds: 10` |
+| `grafana/provisioning/dashboards/default.yml` | `/etc/grafana/provisioning/dashboards`（`:ro`） | dashboard provider，指向 `/etc/grafana/dashboards`，`updateIntervalSeconds: 15`（必須 > 10，理由見下方） |
 | `grafana/dashboards/app-overview.json` | `/etc/grafana/dashboards`（`:ro`） | 四個黃金訊號的入門 dashboard（7 panel）。每個 panel 的 `description` 寫該句 PromQL 的推導理由 —— 這份 dashboard 兼作教材，新增 panel 時請維持此慣例 |
 
 改動後的生效方式**不同**：
 
-- 改 `grafana/dashboards/*.json` → provider 每 10 秒重掃，**重新整理瀏覽器**即可
+- 改 `grafana/dashboards/*.json` → provider 每 15 秒輪詢，**重新整理瀏覽器**即可。`updateIntervalSeconds` 不要調到 ≤ 10：那樣會改用 fsnotify，但 podman bind mount 不轉發檔案事件，結果是永遠不重載。見 [`docs/monitoring-usage-guide.md` §7.4](../monitoring-usage-guide.md#74-改動怎麼生效以及-ui-上的改動去了哪裡)
 - 改 `grafana/provisioning/**` → 需 `podman compose restart grafana`
 
 ### Resilience4j 監控指標

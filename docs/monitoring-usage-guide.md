@@ -435,8 +435,28 @@ drwxrwxrwx  2 472  0    plugins      ← 從映像 copy-up，保留 UID 472
 
 | 改什麼 | 怎麼生效 |
 |---|---|
-| `grafana/dashboards/*.json` | provider 每 10 秒重掃，**重新整理瀏覽器**即可 |
+| `grafana/dashboards/*.json` | provider 每 15 秒輪詢一次，存檔後最多等 15 秒，**重新整理瀏覽器**即可 |
 | `grafana/provisioning/**` | 需 `podman compose restart grafana`（啟動時才讀） |
+
+**`updateIntervalSeconds` 必須大於 10。** Grafana 對這個值有兩種行為（[官方文件](https://grafana.com/docs/grafana/latest/administration/provisioning/)）：
+
+- **≤ 10**：不輪詢，改用 fsnotify 監看檔案系統事件。
+- **> 10**：每隔這麼多秒輪詢一次目錄。
+
+本專案的 dashboard 是從 Windows 經 podman machine bind mount 進容器的，**這條路徑不會轉發檔案事件**。所以原本設 `10` 時，Grafana 從來沒收到「檔案變了」的通知：容器裡的檔案已經是新的，等了 20 分鐘 API 還是回舊版，只有重啟才會載入。官方文件也特別提到 Docker bind mount 會有這個問題。
+
+實測（Grafana 13.2.1，2026-10-16）：
+
+| 設定 | 改 dashboard `title` 後 |
+|---|---|
+| `10` | 40 秒內沒有載入，之前的改動 20 分鐘以上也沒有載入 |
+| `15` | 改名和改回各一次，兩次都在 15 秒左右載入 |
+
+想確認 Grafana 現在用的是哪一版，直接查 API，不要盯著畫面猜：
+
+```bash
+curl -s http://localhost:3000/api/dashboards/uid/app-overview   # 看 dashboard.title、meta.updated 與 panels[].targets[].expr
+```
 
 `default.yml` 設了 `allowUiUpdates: true`，所以你**可以放心在 UI 上直接改** —— 改動只寫進 `grafana.db`，**不會**寫回你的 JSON 檔（那是唯讀掛載）。這正是推薦的工作流：在 UI 上拉到滿意 → Dashboard settings → JSON Model → 複製回 `grafana/dashboards/app-overview.json` → commit。
 
@@ -453,7 +473,7 @@ drwxrwxrwx  2 472  0    plugins      ← 從映像 copy-up，保留 UID 472
    - `gridPos` 的 `y` 要接在下方（`w` 最大 24）
    - `datasource` 寫 `{"type": "prometheus", "uid": "prometheus"}`
    - **`description` 請寫「這句 PromQL 為什麼這樣寫」**——這份 dashboard 是要當教材讀的
-4. 存檔後重新整理瀏覽器即可（**不必重啟容器**，機制見 §7.4）。
+4. 存檔後等最多 15 秒，再重新整理瀏覽器即可（**不必重啟容器**，機制見 §7.4）。
 
 值得自己動手加的幾個：`rate(hikaricp_connections_timeout_total[5m])`（連線等到超時的次數）、`resilience4j_ratelimiter_available_permissions`（限流剩餘額度）、`sum by (uri, status) (rate(http_server_requests_seconds_count[5m]))`（哪個端點在回什麼狀態碼）。
 
