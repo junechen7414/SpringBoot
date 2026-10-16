@@ -233,14 +233,14 @@ topk(5, histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_sec
 
 「黃金訊號」出自 Google《Site Reliability Engineering》（2016）第 6 章：面向使用者的服務**如果只能量四個指標**，就先量延遲、流量、錯誤、飽和。它是起點，不是全部 —— 服務層另有 RED method（Rate / Errors / Duration），資源層另有 Brendan Gregg 的 USE method（Utilization / Saturation / Errors），下表飽和度那一列其實就是 USE 的觀點。
 
-> 這張表說的是「**該量什麼**」。至於某個 panel **值不值得留**、它回答的是誰在什麼時刻的問題，見 [`monitoring-needs-first.md`](./monitoring-needs-first.md)（例如下表的 JVM Heap 在那裡被判定為首選換掉）。
+> 這張表說的是「**該量什麼**」。至於某個 panel **值不值得留**、它回答的是誰在什麼時刻的問題，見 [`monitoring-needs-first.md`](./monitoring-needs-first.md)（例如原本的 JVM Heap panel 在那裡被判定為首選換掉，現在已換成 GC 停頓時間）。
 
 | 訊號 | 問題 | 對應 panel |
 |---|---|---|
-| **Latency（延遲）** | 慢嗎？ | 回應延遲 p50 / p95 / p99 |
+| **Latency（延遲）** | 慢嗎？ | 回應延遲 p50 / p95 / p99（依 uri） |
 | **Traffic（流量）** | 多忙？ | 請求速率（依 uri） |
-| **Errors（錯誤）** | 壞多少？ | 錯誤率（分「含 4xx」與「只看 5xx」兩條） |
-| **Saturation（飽和度）** | 還剩多少餘裕？ | Bulkhead 剩餘併發額度、斷路器狀態、Hikari 等待連線數、JVM Heap |
+| **Errors（錯誤）** | 壞多少？ | 錯誤率（5xx 比例一條；4xx 依 status 各一條，429 單獨標紅） |
+| **Saturation（飽和度）** | 還剩多少餘裕？ | Hikari 等待連線數、GC 停頓時間；底部「解釋層」row 的 Bulkhead 剩餘併發額度、斷路器狀態 |
 
 飽和度值得多說一句：它是**最直接具備預警能力**的訊號。連線池排隊、bulkhead 額度見底，通常發生在延遲/錯誤變差**之前**。而本專案的 bulkhead 設 `max-wait-duration: 0ms`（fail-fast 不排隊），滿載時延遲甚至不會變差——請求被很快拒絕掉了。所以只看延遲會漏掉這種情況。
 

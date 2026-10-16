@@ -93,9 +93,11 @@ Micrometer 剛好有這個 metric → 畫一個 panel → 以後應該用得到�
   - **`topk` 要包在 `histogram_quantile` 外面**。包在 `_bucket` 上，每組 label 只剩零星幾個 `le`、常缺 `+Inf`，整條線會變 NaN 而消失。
   - **要排除 `/actuator`**。`HEALTHCHECK` 每 30 秒打一次 health，舊的 `sum by (le)` 那條線幾乎全是它撐起來的，會讓 p50 看起來「很快很穩」。
   - **`>= 0` 濾掉 NaN**。沒流量的 uri 分位數是 NaN，`topk` 不會排除 NaN，會拿它們湊滿 5 個名額，legend 會多出沒有 mean/max 的空項目。另外，某個 uri 的第一個請求不會反映在 `rate` 上，至少要打第二次才會有線。
-- [ ] **錯誤率上面那條線**：換成 `sum by (status) (rate(http_server_requests_seconds_count{outcome="CLIENT_ERROR"}[5m]))`，讓 429 自己成一條線，不再跟 400/404 混在一起
-- [ ] **Bulkhead / 斷路器**：移到 dashboard 下半部，或收進一個預設折疊的 row（例如命名為「為什麼」）
-- [ ] **JVM Heap**：換成 GC 停頓。GC 停頓時間直接等於使用者感受到的延遲，能連回 Q2。查詢見 §7 末尾
+- [x] **錯誤率上面那條線**：換成 `sum by (status) (rate(http_server_requests_seconds_count{outcome="CLIENT_ERROR"}[5m]))`，讓 429 自己成一條線，不再跟 400/404 混在一起。
+  - 這條改畫**每秒次數**，放在右軸；5xx 維持比例，放在左軸。429 要看的是「有沒有出現」，比例會被流量大小扭曲。
+  - 429 用 override 標成紅色粗線。override 是用名稱 `4xx 429` 比對的，改 `legendFormat` 時要一起改。
+- [x] **Bulkhead / 斷路器**：移到最下面，上方加一個 row，標題是「解釋層：為什麼會錯」。row 沒有預設折疊：這兩格本來就在最底下，不會擋到偵測層，折起來反而容易忘記有它們。
+- [x] **JVM Heap**：換成 GC 停頓，查詢見 §7 末尾。虛線閾值是 100ms，跟「下一個動作」那句對得上。放在 Hikari 旁邊，兩格都是「延遲變差的資源面原因」。
 
 ---
 

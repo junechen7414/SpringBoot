@@ -45,7 +45,7 @@
       "id": 2,
       "type": "timeseries",
       "title": "錯誤率",
-      "description": "黃金訊號之一：錯誤。\n\n錯誤率是「錯誤請求數 ÷ 全部請求數」，兩邊都必須先 rate() 再相除。若直接拿兩個累積計數器相除，得到的是「開機至今的平均」——剛剛爆掉的那五分鐘會被幾小時的正常流量稀釋掉，看不出來。\n\noutcome 是 Micrometer 依 HTTP status 自動加的標籤：SUCCESS(2xx) / REDIRECTION(3xx) / CLIENT_ERROR(4xx) / SERVER_ERROR(5xx)。這裡用 outcome!=\"SUCCESS\" 把 4xx 也算進去；若只想看伺服器自己的錯，改成 outcome=\"SERVER_ERROR\"。\n\n沒有任何流量時分母為 0，圖上會斷線（NaN）—— 那代表「沒資料」，不是 0% 錯誤。",
+      "description": "黃金訊號之一：錯誤。兩條線回答兩個不同的問題，刻意拆開。\n\nA「5xx 錯誤率」（比例）：系統自己出錯的比例，這張 dashboard 最重要的一條線。bulkhead 滿載（BULKHEAD_FULL）與斷路器打開（CIRCUIT_OPEN）都回 503，也會落在這條線。\n錯誤率是「錯誤請求數 ÷ 全部請求數」，兩邊都必須先 rate() 再相除。若直接拿兩個累積計數器相除，得到的是「開機至今的平均」—— 剛剛爆掉的那五分鐘會被幾小時的正常流量稀釋掉。沒有流量時分母為 0，圖上斷線（NaN）代表「沒資料」，不是 0% 錯誤。\n\nB「4xx 依 status」（每秒次數，右軸）：原本是 outcome!=\"SUCCESS\" 的比例，但 4xx 大多是正常業務（400 驗證失敗、404 查無資料、409 樂觀鎖衝突），會把真訊號淹掉。拆成每個 status 一條線後，429（RATE_LIMITED，限流拒絕）會自己成一條 —— 它是飽和訊號，只是 HTTP 語意上被歸在 4xx。\n這條畫的是次數不是比例：429 要看的是「有沒有出現、多常出現」，比例會被流量大小扭曲。429 以紅色粗線標出。",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "fieldConfig": {
@@ -62,24 +62,41 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [
+              { "id": "unit", "value": "reqps" },
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "custom.fillOpacity", "value": 0 },
+              { "id": "custom.lineWidth", "value": 1 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "4xx 429" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+              { "id": "custom.lineWidth", "value": 3 }
+            ]
+          }
+        ]
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(http_server_requests_seconds_count{outcome!=\"SUCCESS\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))",
-          "legendFormat": "錯誤率（含 4xx）"
+          "expr": "sum(rate(http_server_requests_seconds_count{outcome=\"SERVER_ERROR\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))",
+          "legendFormat": "5xx 錯誤率"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(http_server_requests_seconds_count{outcome=\"SERVER_ERROR\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))",
-          "legendFormat": "5xx 錯誤率"
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{outcome=\"CLIENT_ERROR\"}[5m]))",
+          "legendFormat": "4xx {{status}}"
         }
       ]
     },
@@ -129,7 +146,7 @@
       "title": "Bulkhead 剩餘併發額度",
       "description": "黃金訊號之一：飽和度。\n\nresilience4j_bulkhead_available_concurrent_calls 是 gauge（當下的瞬時值，不是累積），所以不需要包 rate()。它代表某個 bulkhead 還剩幾個許可；設定值見 application.yml 的 resilience4j.bulkhead.instances。\n\n怎麼讀：這條線貼近 0 且待著不動，代表該路徑已經滿載、新請求正在被 fail-fast 拒絕（本專案 max-wait-duration 為 0ms，不排隊）。此時延遲 panel 不一定會變差 —— 被拒絕的請求很快就回 429/503 —— 這正是要獨立看飽和度的原因。",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -157,7 +174,7 @@
       "title": "斷路器狀態",
       "description": "黃金訊號之一：飽和度（下游健康）。\n\nresilience4j_circuitbreaker_state 的畫法跟一般指標不同：它為每個狀態（closed / open / half_open / disabled / forced_open）各產生一條序列，當下所處的狀態值為 1、其餘為 0。所以要看的是「哪條線跳到 1」，而不是線的高度。\n\nclosed = 正常放行；open = 已熔斷，全部請求直接被拒不呼叫下游；half_open = 試探性放行少量請求看下游好了沒。\n\n本專案設定 ignore-exceptions 包含 BusinessException —— 餘額不足、查無資源這類正常業務拒絕不算失敗，不會把斷路器打開。所以這條線跳到 open 意味著下游真的壞了。",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -186,7 +203,7 @@
       "title": "Hikari 等待連線的執行緒數",
       "description": "黃金訊號之一：飽和度（資源爭用）。\n\nhikaricp_connections_pending 是 gauge：當下有幾個執行緒在排隊等 DB 連線。健康狀態應該長期為 0。\n\n持續 > 0 代表連線池（application-dev.yml 的 maximum-pool-size: 10）不夠用，或有查詢佔著連線太久沒放。這個 panel 通常會比延遲 panel 更早示警 —— 排隊時間會累加進請求延遲，但等到 p99 看得出來時已經有人在等了。\n\n配套可看的還有 hikaricp_connections_active（正在使用中）與 hikaricp_connections_timeout_total（等到超時的次數，這個是累積計數器，要包 rate()）。",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -217,30 +234,52 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "JVM Heap 使用量",
-      "description": "資源面的基本盤。\n\njvm_memory_used_bytes{area=\"heap\"} 是 gauge，依 id 標籤分成各個記憶體區（Eden Space、Old Gen、Survivor Space…）。area=\"nonheap\" 則是 Metaspace 等。\n\n怎麼讀：Eden 呈鋸齒狀是正常的（配置 → 回收 → 再配置）。要注意的是 Old Gen 的「谷底」有沒有一路往上抬 —— 每次 full GC 後都回不到原來的低點，通常是記憶體洩漏的徵兆。單看某個瞬間的高水位並不代表有問題。",
+      "title": "GC 停頓時間",
+      "description": "資源面，但換成使用者感受得到的那一面。原本這格是 JVM Heap 使用量：heap 本來就會被 GC 拉成鋸齒狀，單看「用了 800MB」推不出任何下一步。GC 停頓不一樣 —— 停頓期間所有執行緒都暫停，停多久就直接加進當下每個請求的延遲。\n\n為什麼不用 histogram_quantile：只有 http.server.requests 開了 percentiles-histogram，jvm_gc_pause_seconds_bucket 只有一個 le=\"+Inf\"，對它算分位數會回 NaN。所以改看平均與最大值：\n- 平均每次停頓 = rate(_sum) ÷ rate(_count)，兩邊都要先 rate() 再相除，理由同錯誤率 panel。5 分鐘內沒有任何 GC 時分母為 0，線會斷掉，代表「沒有停頓」而不是壞掉。\n- 最長一次停頓 = jvm_gc_pause_max_seconds。名稱是 _max_seconds 而不是直覺的 _seconds_max（經 Alloy 轉成 Prometheus 命名時單位後綴被移到最後），猜錯名稱 Prometheus 只會回空結果。它每個推送週期（10 秒）重算，那段時間沒發生 GC 就是 0。\n\n下一個動作：最長停頓持續超過虛線（100ms）→ 對照同時段的延遲 panel，確認使用者有感；有感才去調 heap 大小或 GC 參數。",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes",
+          "unit": "s",
           "min": 0,
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never", "stacking": { "mode": "none" } }
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "thresholdsStyle": { "mode": "dashed" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
-          "legendFormat": "{{id}}"
+          "expr": "sum(rate(jvm_gc_pause_seconds_sum[5m])) / sum(rate(jvm_gc_pause_seconds_count[5m]))",
+          "legendFormat": "平均每次停頓"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(jvm_gc_pause_max_seconds)",
+          "legendFormat": "最長一次停頓（最近 10 秒）"
         }
       ]
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "解釋層：為什麼會錯",
+      "description": "上面四格是偵測層，回答「有沒有出事」。這一列是解釋層，回答「為什麼」：bulkhead 滿載或斷路器打開時，503 會先出現在錯誤率 panel 的 5xx 線上，再到這裡確認是哪一個 instance。",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "panels": []
     }
   ]
 }
