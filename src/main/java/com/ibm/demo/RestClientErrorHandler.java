@@ -42,7 +42,7 @@ import com.ibm.demo.exception.SystemException;
  *   <li>其餘 → {@link SystemException}。</li>
  * </ul>
  *
- * <p>409／503 的 detail 一律用本地既有的安全說明，不轉送遠端文字；遠端的 {@code instance}、
+ * <p>409／503 的 detail 一律用 {@link ErrorCode#getFixedDetail()} 的本地安全說明，不轉送遠端文字；遠端的 {@code instance}、
  * {@code errors}、headers 也都不轉送。
  */
 @Component
@@ -81,6 +81,11 @@ public class RestClientErrorHandler {
     /** 進 context 的 remoteCode 只收長得像 {@code ErrorCode} 常數名的字串，免得不可信的 body 原樣進 log。 */
     private static final Pattern CODE_SHAPE = Pattern.compile("[A-Z][A-Z0-9_]{0,63}");
 
+    /** 進 context 的遠端文字最多保留的字元數。 */
+    private static final int PREVIEW_LIMIT = 200;
+
+    private static final Pattern CONTROL_CHARS = Pattern.compile("[\\p{Cntrl}\\p{Cf}\\p{Zl}\\p{Zp}]+");
+
     private final ObjectMapper objectMapper;
 
     public RestClientErrorHandler(ObjectMapper objectMapper) {
@@ -100,57 +105,74 @@ public class RestClientErrorHandler {
     private RuntimeException translate(int status, String body) {
         JsonNode problem = parse(body);
         if (problem == null) {
-            return integrationFailure(status, null, "body 為空或不是可解析的 JSON");
+            return integrationFailure(status, null, body, "body 為空或不是可解析的 JSON");
         }
         if (!problem.isObject()) {
-            return integrationFailure(status, null, "body 不是 JSON object");
+            return integrationFailure(status, null, body, "body 不是 JSON object");
         }
 
         Optional<String> code = text(problem, CODE_PROPERTY);
+        String detail = text(problem, DETAIL_PROPERTY).orElse(null);
         if (code.isEmpty()) {
-            return integrationFailure(status, null, "缺少 code");
+            return integrationFailure(status, null, detail, "缺少 code");
         }
         // errors 存在就不接受（含 errors: null）：那是逐欄位驗證失敗，BusinessException 承載不了陣列，
         // 而且內部 request 的欄位不保證對得上外部欄位。
         if (!problem.path(ERRORS_PROPERTY).isMissingNode()) {
-            return integrationFailure(status, code.get(), "帶有 errors 屬性（遠端驗證失敗）");
+            return integrationFailure(status, code.get(), detail, "帶有 errors 屬性（遠端驗證失敗）");
         }
         if (!statusMatches(problem, status)) {
-            return integrationFailure(status, code.get(), "body.status 與 HTTP status 不一致或型別錯誤");
+            return integrationFailure(status, code.get(), detail, "body.status 與 HTTP status 不一致或型別錯誤");
         }
 
-        Optional<ErrorCode> errorCode = resolve(code.get())
+        Optional<ErrorCode> resolved = resolve(code.get())
                 .filter(TRANSLATABLE::contains)
                 .filter(candidate -> candidate.getStatus().value() == status);
-        if (errorCode.isEmpty()) {
-            return integrationFailure(status, code.get(), "此 status／code 配對不在可轉譯清單內");
+        if (resolved.isEmpty()) {
+            return integrationFailure(status, code.get(), detail, "此 status／code 配對不在可轉譯清單內");
         }
 
-        return switch (errorCode.get()) {
-            case OPTIMISTIC_LOCK_CONFLICT ->
-                new BusinessException(ErrorCode.OPTIMISTIC_LOCK_CONFLICT, GlobalExceptionHandler.OPTIMISTIC_LOCK_DETAIL);
-            case BULKHEAD_FULL ->
-                new DependencyUnavailableException(ErrorCode.BULKHEAD_FULL, GlobalExceptionHandler.BULKHEAD_FULL_DETAIL);
-            case CIRCUIT_OPEN ->
-                new DependencyUnavailableException(ErrorCode.CIRCUIT_OPEN, GlobalExceptionHandler.CIRCUIT_OPEN_DETAIL);
-            // 其餘是已審視可公開的業務說明；缺少或空白時退回本地 title。
-            default -> new BusinessException(errorCode.get(),
-                    text(problem, DETAIL_PROPERTY).orElse(errorCode.get().getTitle()));
-        };
+        ErrorCode errorCode = resolved.get();
+        // 有固定說明的（409／503）一律用本地的，不轉送遠端文字；其餘是已審視可公開的業務說明，
+        // 缺少或空白時退回本地 title。
+        String fixedDetail = errorCode.getFixedDetail();
+        if (errorCode == ErrorCode.BULKHEAD_FULL || errorCode == ErrorCode.CIRCUIT_OPEN) {
+            return new DependencyUnavailableException(errorCode, fixedDetail);
+        }
+        return new BusinessException(errorCode,
+                fixedDetail != null ? fixedDetail : Optional.ofNullable(detail).orElse(errorCode.getTitle()));
     }
 
     /**
-     * 整合異常：遠端回了我們無法確認語意的東西。對外是不透明的 500，排查資訊只進 context（只放狀態、
-     * 長得像 code 的字串與分類失敗原因，<b>不</b>放不可信的 body 或 detail）。
+     * 整合異常：遠端回了我們無法確認語意的東西。對外是不透明的 500，排查資訊只進 context。
+     *
+     * <p>context 放：狀態、長得像 code 的字串、分類失敗原因，以及 {@code remoteDetail} —— 遠端的說明文字
+     * （或無法解析時 body 的開頭），經 {@link #preview} 去掉換行與控制字元並截短。這是不可信輸入，所以
+     * <b>只進 context、不進回應</b>，且不會把完整 body 寫進 log；沒有它，值班的人面對「HTML 的 502」或
+     * 「空 body」時連對方回了什麼都看不到。
      */
-    private SystemException integrationFailure(int status, @Nullable String remoteCode, String reason) {
+    private SystemException integrationFailure(
+            int status, @Nullable String remoteCode, @Nullable String remoteText, String reason) {
         SystemException ex = new SystemException("下游 API 呼叫失敗")
                 .with("remoteStatus", status)
                 .with("reason", reason);
         if (remoteCode != null && CODE_SHAPE.matcher(remoteCode).matches()) {
             ex.with("remoteCode", remoteCode);
         }
+        String preview = preview(remoteText);
+        if (!preview.isEmpty()) {
+            ex.with("remoteDetail", preview);
+        }
         return ex;
+    }
+
+    /** 把不可信文字壓成單行並截短：控制字元（含換行）一律換成空白，避免偽造 log 行。 */
+    static String preview(@Nullable String text) {
+        if (text == null) {
+            return "";
+        }
+        String oneLine = CONTROL_CHARS.matcher(text).replaceAll(" ").strip();
+        return oneLine.length() <= PREVIEW_LIMIT ? oneLine : oneLine.substring(0, PREVIEW_LIMIT) + "…";
     }
 
     /** body.status 可缺席；提供時必須是等於真正 HTTP status 的整數。 */
@@ -173,7 +195,7 @@ public class RestClientErrorHandler {
         return problem.path(property).stringValueOpt().filter(value -> !value.isBlank());
     }
 
-    /** 空 body 或解析失敗回 {@code null}；不記 body 內容（不可信），原因由呼叫端放進 context。 */
+    /** 空 body 或解析失敗回 {@code null}；解析失敗本身不記 log，body 開頭由 {@link #integrationFailure} 截短後放進 context。 */
     private @Nullable JsonNode parse(String body) {
         if (body == null || body.isBlank()) {
             return null;

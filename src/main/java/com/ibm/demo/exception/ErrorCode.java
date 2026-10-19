@@ -3,6 +3,7 @@ package com.ibm.demo.exception;
 import java.net.URI;
 import java.util.Locale;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 
 import lombok.Getter;
@@ -18,6 +19,12 @@ import lombok.Getter;
  *   <li>{@link #getTitle()} —— 這「類」問題的人類可讀摘要，同一個 code 永遠是同一句話。
  *       單次請求的細節屬於 {@code detail}，不放這裡。</li>
  * </ul>
+ *
+ * <p><b>{@link #getFixedDetail()}：基礎設施類錯誤的固定說明。</b>這幾個錯誤的 {@code detail} 不隨請求
+ * 變化（沒有「哪個商品、缺多少」可說），而且刻意不帶內部資訊，所以同一句話放在這裡、由
+ * {@code GlobalExceptionHandler} 產生本地錯誤、{@code RestClientErrorHandler} 轉譯下游錯誤時共用同一個來源，
+ * 兩邊的回應才保證逐字一致，也不必讓翻譯下游錯誤的元件反過來依賴負責組回應的 advice。
+ * 業務錯誤沒有固定說明（回 {@code null}），它們的 {@code detail} 由 throw 點決定。
  *
  * <p><b>為什麼 code 就是 {@code name()}：</b>舊版另外帶一組 {@code SYS_001}／{@code PRODUCT_003}
  * 風格的字串，於是同一個錯誤有兩個名字 —— 測試與程式碼用常數名、對外回應用編號，而編號本身早已
@@ -41,13 +48,13 @@ public enum ErrorCode {
 
     // ---- 基礎設施錯誤：由 GlobalExceptionHandler 從框架／函式庫例外翻譯而來 ----
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "參數驗證失敗"),
-    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "需要認證"),
-    FORBIDDEN(HttpStatus.FORBIDDEN, "權限不足"),
-    OPTIMISTIC_LOCK_CONFLICT(HttpStatus.CONFLICT, "資料版本衝突"),
-    RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "請求過於頻繁"),
-    BULKHEAD_FULL(HttpStatus.SERVICE_UNAVAILABLE, "系統負載過高"),
-    CIRCUIT_OPEN(HttpStatus.SERVICE_UNAVAILABLE, "服務暫時不可用"),
-    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "伺服器內部錯誤");
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "需要認證", "需要有效的認證憑證。"),
+    FORBIDDEN(HttpStatus.FORBIDDEN, "權限不足", "沒有權限執行此操作。"),
+    OPTIMISTIC_LOCK_CONFLICT(HttpStatus.CONFLICT, "資料版本衝突", "資料已被其他使用者修改，請重新整理後再試。"),
+    RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "請求過於頻繁", "請求過於頻繁，請稍後再試。"),
+    BULKHEAD_FULL(HttpStatus.SERVICE_UNAVAILABLE, "系統負載過高", "系統負載過高，請稍後再試。"),
+    CIRCUIT_OPEN(HttpStatus.SERVICE_UNAVAILABLE, "服務暫時不可用", "服務暫時不可用，請稍後再試。"),
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "伺服器內部錯誤", "系統發生未預期的錯誤，請稍後再試。");
 
     /** URN 而非 http(s)：目前沒有錯誤說明文件站，給個假網址反而是誤導。 */
     private static final String TYPE_PREFIX = "urn:problem:";
@@ -55,10 +62,16 @@ public enum ErrorCode {
     private final HttpStatus status;
     private final String title;
     private final URI type;
+    private final @Nullable String fixedDetail;
 
     ErrorCode(HttpStatus status, String title) {
+        this(status, title, null);
+    }
+
+    ErrorCode(HttpStatus status, String title, @Nullable String fixedDetail) {
         this.status = status;
         this.title = title;
+        this.fixedDetail = fixedDetail;
         // name() 在 enum 建構子內可用（name 由 Enum 的建構子先行設定）；typeOf 只讀 TYPE_PREFIX，
         // 而它是編譯期常數會被 inline，因此不受 enum 常數初始化順序影響。
         this.type = typeOf(name());

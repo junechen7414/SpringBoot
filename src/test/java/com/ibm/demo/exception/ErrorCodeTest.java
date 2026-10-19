@@ -45,4 +45,29 @@ class ErrorCodeTest {
     void titleIsPresent(ErrorCode errorCode) {
         assertThat(errorCode.getTitle()).isNotBlank();
     }
+
+    @ParameterizedTest
+    @EnumSource(ErrorCode.class)
+    @DisplayName("固定說明只屬於基礎設施類錯誤（非 4xx 業務錯誤）；有就不得為空白")
+    void fixedDetailBelongsToInfrastructureCodes(ErrorCode errorCode) {
+        if (errorCode.getFixedDetail() != null) {
+            assertThat(errorCode.getFixedDetail()).isNotBlank();
+        }
+        // 業務錯誤的 detail 由 throw 點決定，這裡若有固定說明就會蓋掉它
+        assertThat(errorCode.getFixedDetail() == null)
+                .as("%s 是業務錯誤，不該有固定說明", errorCode)
+                .isEqualTo(isBusinessCode(errorCode));
+    }
+
+    /** 登錄在「業務錯誤」區段的那六個，與 {@code ErrorCode} 的分區註解一致。 */
+    private static boolean isBusinessCode(ErrorCode errorCode) {
+        return switch (errorCode) {
+            case ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED, PRODUCT_ALREADY_EXIST,
+                    PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED, PRODUCT_STOCK_NOT_ENOUGH,
+                    RESOURCE_NOT_FOUND, INVALID_REQUEST -> true;
+            // VALIDATION_FAILED 的 detail 隨欄位錯誤變化，也沒有固定說明
+            case VALIDATION_FAILED -> true;
+            default -> false;
+        };
+    }
 }

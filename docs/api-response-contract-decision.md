@@ -311,10 +311,13 @@ CircuitBreaker 的 `ignore-exceptions` 忽略，一次真的故障就此漏掉�
 - **503 不能塞進 `BusinessException`**（它只收 4xx，且被斷路器忽略），所以新增
   `DependencyUnavailableException`。它不在 `ignore-exceptions` 內，預設就計入 failure，**不需要動
   `application.yml`**；409 走 `BusinessException`，不計入。
-- **公開與診斷的界線**：409／503 的 detail 用本地常數（`GlobalExceptionHandler.*_DETAIL`），不轉送遠端文字、
-  `instance`、`errors`、headers（含 `Retry-After`）。整合異常的 context 只放 `remoteStatus`、長得像
-  `ErrorCode` 常數名的 `remoteCode`、分類失敗的 `reason`，不放不可信的 body 或 detail，原本把整份 body 寫進
-  log 的 WARN 也一併移除。
+- **公開與診斷的界線**：409／503 的 detail 用 `ErrorCode.getFixedDetail()` 的本地固定說明（基礎設施類錯誤
+  才有，本地 handler 與下游轉譯共用同一個來源，翻譯元件也不必反過來依賴 `GlobalExceptionHandler`），不轉送遠端
+  文字、`instance`、`errors`、headers（含 `Retry-After`）。整合異常的 context 放 `remoteStatus`、長得像
+  `ErrorCode` 常數名的 `remoteCode`、分類失敗的 `reason`，以及 `remoteDetail`：遠端的 `detail`（無法解析時是
+  body 開頭），去掉換行與控制字元並截到 200 字。它是不可信輸入，**只進 context、不進回應與例外 message**；
+  原本把整份 body 寫進 log 的 WARN 已移除，但沒有 `remoteDetail` 的話，值班的人面對 proxy 的 HTML 502 或
+  空 body 時看不到對方回了什麼。
 - **代價**：真正的業務錯誤若漏登錄進允許清單，也會收到較籠統的 500。下游是同一應用、同版本的 loopback，
   正常回應應符合共用契約；無法辨識時，明確暴露整合問題比靜默猜測更容易發現。新增可轉譯的 code 必須先審視
   其對外語意，再加進 `RestClientErrorHandler.TRANSLATABLE` 並補測試。
