@@ -1,10 +1,10 @@
 # 01 — 明確轉譯已知下游錯誤，停止猜測未知 400／404
 
-Status: ready-for-agent
+Status: resolved
 
 Spec：[../spec.md](../spec.md)
 
-本 issue 尚未實作。開工前先讀 `docs/agents/03-git-workflow.md`、`.claude/rules/error-handling.md`、`.claude/rules/security.md` 與 spec；依跨 domain 錯誤契約變更評估 branch＋PR 流程。若涉及 resilience 設定、環境或測試啟動，先讀對應專案指引。
+本 issue 已實作，以下為當初的開工指引。開工前先讀 `docs/agents/03-git-workflow.md`、`.claude/rules/error-handling.md`、`.claude/rules/security.md` 與 spec；依跨 domain 錯誤契約變更評估 branch＋PR 流程。若涉及 resilience 設定、環境或測試啟動，先讀對應專案指引。
 
 ## 背景
 

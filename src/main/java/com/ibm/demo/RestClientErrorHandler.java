@@ -2,18 +2,20 @@ package com.ibm.demo;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StreamUtils;
 
-import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.ibm.demo.exception.BusinessException;
+import com.ibm.demo.exception.DependencyUnavailableException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.exception.SystemException;
 
@@ -24,19 +26,25 @@ import com.ibm.demo.exception.SystemException;
  * RFC 9457 {@code application/problem+json}：人類可讀說明在 {@code detail}，機器可讀識別碼在
  * {@code code} extension。
  *
- * <p><b>兩個欄位都要沿用，否則業務碼會在這一跳消失。</b>原本只讀 {@code detail}、{@code ErrorCode}
- * 純粹由 HTTP status 推導，於是 product domain 拋的 {@code PRODUCT_STOCK_NOT_ENOUGH} 經
- * {@code ProductClient} 回到 order domain 後被重建成 {@code INVALID_REQUEST} —— 呼叫端在
- * {@code POST /order} 上只看得到「400 + INVALID_REQUEST」，且它同時代表「訂單內重複商品」
- * （order 本地拋的真正 {@code INVALID_REQUEST}）與「庫存不足」兩件事，只能靠 {@code detail}
- * 字串分辨。沿用下游的 {@code code} 後，跨不跨 client 邊界不再改變對外的錯誤碼。
+ * <p><b>解析寬鬆，語意嚴格。</b>解析寬鬆：讀 JSON tree 而非綁定型別，多的欄位一律無害，也不依賴
+ * {@code ProblemDetailJacksonMixin} 有沒有註冊。語意嚴格：只轉譯「真正 HTTP status 與 {@code code}
+ * 的配對在 {@link #TRANSLATABLE} 內」的回應，其餘一律當整合異常（{@link SystemException}，對外 500），
+ * <b>不</b>再依 400／404 猜業務原因 —— 遠端 404 可能只是 URL 打錯，被猜成「查無資源」不只對外歸責錯，
+ * 還會因為 {@link BusinessException} 被 CircuitBreaker 忽略而讓故障統計漏掉一次真的故障。
  *
- * <p><b>刻意讀 JSON tree 而非反序列化成型別</b>：綁定到 {@code ProblemDetail} 會連帶依賴
- * {@code ProblemDetailJacksonMixin} 有沒有註冊（沒註冊時 {@code code} 這個 extension 欄位會被當成
- * 未知屬性而整包解析失敗），綁定到自訂 record 則多一個必須跟著契約同步的型別。讀 tree 只認欄位名，
- * 多的欄位一律無害。
+ * <p>轉譯結果：
+ * <ul>
+ *   <li>400／404 的既有業務碼 → {@link BusinessException}，沿用遠端 {@code code}，跨不跨 client 邊界
+ *       不改變對外錯誤碼（例如 {@code PRODUCT_STOCK_NOT_ENOUGH} 不會被壓成 {@code INVALID_REQUEST}）。</li>
+ *   <li>409 {@code OPTIMISTIC_LOCK_CONFLICT} → {@link BusinessException}，是預期的並發結果。</li>
+ *   <li>503 {@code BULKHEAD_FULL}／{@code CIRCUIT_OPEN} → {@link DependencyUnavailableException}，
+ *       依賴真的過載，計入故障率。</li>
+ *   <li>其餘 → {@link SystemException}。</li>
+ * </ul>
+ *
+ * <p>409／503 的 detail 一律用本地既有的安全說明，不轉送遠端文字；遠端的 {@code instance}、
+ * {@code errors}、headers 也都不轉送。
  */
-@Slf4j
 @Component
 public class RestClientErrorHandler {
 
@@ -46,8 +54,32 @@ public class RestClientErrorHandler {
     /** {@code GlobalExceptionHandler} 加的 extension：機器可讀的錯誤碼。 */
     private static final String CODE_PROPERTY = "code";
 
-    /** 驗證失敗時逐筆列出欄位錯誤的 extension，本地例外承載不了 —— 見 {@link #remoteErrorCode}。 */
+    /** RFC 9457 的 HTTP status 欄位；可缺席，提供時必須與真正的 HTTP status 一致。 */
+    private static final String STATUS_PROPERTY = "status";
+
+    /** 驗證失敗時逐筆列出欄位錯誤的 extension；本地例外承載不了，見 {@link #translate}。 */
     private static final String ERRORS_PROPERTY = "errors";
+
+    /**
+     * 允許轉譯的 code。是否接受還要再核對 {@code code} 對應的 status 等於真正的 HTTP status，
+     * 因此「HTTP 400 帶 {@code RESOURCE_NOT_FOUND}」不會被接受。
+     *
+     * <p>這是受控 loopback 的共通政策，不是第三方服務的通用代理：<b>不</b>自動放行所有 4xx enum。
+     * 新增可轉譯的 code 必須先審視其對外語意，再加進來並補測試。泛用的 {@code INVALID_REQUEST} 與
+     * {@code VALIDATION_FAILED} 刻意不在內 —— 內部 request 可能是呼叫端服務自己組錯，不能直接歸咎外部輸入。
+     */
+    private static final Set<ErrorCode> TRANSLATABLE = EnumSet.of(
+            ErrorCode.ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED,
+            ErrorCode.PRODUCT_ALREADY_EXIST,
+            ErrorCode.PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED,
+            ErrorCode.PRODUCT_STOCK_NOT_ENOUGH,
+            ErrorCode.RESOURCE_NOT_FOUND,
+            ErrorCode.OPTIMISTIC_LOCK_CONFLICT,
+            ErrorCode.BULKHEAD_FULL,
+            ErrorCode.CIRCUIT_OPEN);
+
+    /** 進 context 的 remoteCode 只收長得像 {@code ErrorCode} 常數名的字串，免得不可信的 body 原樣進 log。 */
+    private static final Pattern CODE_SHAPE = Pattern.compile("[A-Z][A-Z0-9_]{0,63}");
 
     private final ObjectMapper objectMapper;
 
@@ -56,79 +88,92 @@ public class RestClientErrorHandler {
     }
 
     public void handle(ClientHttpResponse response) throws IOException {
-        // 讀取 Body 內容 (確保只讀取一次並轉為 String)
-        String responseBody = StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8);
-        // detail 與 code 出自同一棵 tree，因此只 parse 一次、解析失敗也只記一行 WARN。
-        JsonNode problem = parse(responseBody);
-        // 取不到 detail 就退回 HTTP status text，讓呼叫端至少拿到「400」這種粗略資訊，而不是整條鏈
-        // 因為解析失敗而換成一個更難查的例外。（getStatusText() 會拋 IOException，因此不能寫成
-        // orElseGet 的 Supplier。）
-        String statusText = response.getStatusText();
-        String errorMessage = text(problem, DETAIL_PROPERTY).orElse(statusText);
+        int status = response.getStatusCode().value();
+        String body = StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8);
+        throw translate(status, body);
+    }
 
-        // 4xx 是遠端「業務上拒絕」了這次呼叫，直譯回本地的 BusinessException 交由呼叫端流程處理；
-        // 其餘（5xx、非預期狀態）代表整合鏈壞了，屬於 SystemException —— 遠端狀態與訊息放進 context
-        // 而非 message，因為 500 的 message 不會回給呼叫端，串進去等於丟掉。
-        throw switch (response.getStatusCode()) {
-            case HttpStatus.NOT_FOUND -> new BusinessException(
-                    remoteErrorCode(problem).orElse(ErrorCode.RESOURCE_NOT_FOUND), errorMessage);
-            case HttpStatus.BAD_REQUEST -> new BusinessException(
-                    remoteErrorCode(problem).orElse(ErrorCode.INVALID_REQUEST), errorMessage);
-            default -> new SystemException("下游 API 呼叫失敗")
-                    .with("remoteStatus", response.getStatusCode().value())
-                    .with("remoteMessage", errorMessage);
+    /**
+     * 依 HTTP status 與 body 決定本地例外。每一道檢查失敗都帶著原因落到 {@link #integrationFailure}，
+     * 讓 log 說得出「為什麼沒翻譯」，而不是只剩一個 500。
+     */
+    private RuntimeException translate(int status, String body) {
+        JsonNode problem = parse(body);
+        if (problem == null) {
+            return integrationFailure(status, null, "body 為空或不是可解析的 JSON");
+        }
+        if (!problem.isObject()) {
+            return integrationFailure(status, null, "body 不是 JSON object");
+        }
+
+        Optional<String> code = text(problem, CODE_PROPERTY);
+        if (code.isEmpty()) {
+            return integrationFailure(status, null, "缺少 code");
+        }
+        // errors 存在就不接受（含 errors: null）：那是逐欄位驗證失敗，BusinessException 承載不了陣列，
+        // 而且內部 request 的欄位不保證對得上外部欄位。
+        if (!problem.path(ERRORS_PROPERTY).isMissingNode()) {
+            return integrationFailure(status, code.get(), "帶有 errors 屬性（遠端驗證失敗）");
+        }
+        if (!statusMatches(problem, status)) {
+            return integrationFailure(status, code.get(), "body.status 與 HTTP status 不一致或型別錯誤");
+        }
+
+        Optional<ErrorCode> errorCode = resolve(code.get())
+                .filter(TRANSLATABLE::contains)
+                .filter(candidate -> candidate.getStatus().value() == status);
+        if (errorCode.isEmpty()) {
+            return integrationFailure(status, code.get(), "此 status／code 配對不在可轉譯清單內");
+        }
+
+        return switch (errorCode.get()) {
+            case OPTIMISTIC_LOCK_CONFLICT ->
+                new BusinessException(ErrorCode.OPTIMISTIC_LOCK_CONFLICT, GlobalExceptionHandler.OPTIMISTIC_LOCK_DETAIL);
+            case BULKHEAD_FULL ->
+                new DependencyUnavailableException(ErrorCode.BULKHEAD_FULL, GlobalExceptionHandler.BULKHEAD_FULL_DETAIL);
+            case CIRCUIT_OPEN ->
+                new DependencyUnavailableException(ErrorCode.CIRCUIT_OPEN, GlobalExceptionHandler.CIRCUIT_OPEN_DETAIL);
+            // 其餘是已審視可公開的業務說明；缺少或空白時退回本地 title。
+            default -> new BusinessException(errorCode.get(),
+                    text(problem, DETAIL_PROPERTY).orElse(errorCode.get().getTitle()));
         };
     }
 
     /**
-     * 取出下游回應裡的 {@code code} 並還原成本地的 {@link ErrorCode}；取不到就回
-     * {@link Optional#empty()}，由呼叫端退回以 HTTP status 推導的預設碼。
-     *
-     * <p>三種情況刻意不沿用：
-     * <ul>
-     *   <li><b>認不出這個 code</b> —— body 被反向代理改寫過，或（日後 domain 真的拆成獨立服務時）
-     *       下游版本比本版新。</li>
-     *   <li><b>對應的 status 不是 4xx</b> —— {@link BusinessException} 建構子會拒絕非 4xx 的碼並拋
-     *       {@code IllegalArgumentException}。這裡身處 error handler，二次爆炸會把原始錯誤換成一個
-     *       更難查的 500，所以先過濾掉而不是讓它炸。</li>
-     *   <li><b>下游帶了 {@code errors} 陣列</b> —— 那是逐欄位的驗證失敗，而 {@link BusinessException}
-     *       承載不了那個陣列。沿用碼會讓對外回應宣稱 {@code VALIDATION_FAILED} 卻沒有 {@code errors}，
-     *       違反自家契約；退回 {@code INVALID_REQUEST} 至少形狀是誠實的（語意仍在 {@code detail} 裡）。</li>
-     * </ul>
+     * 整合異常：遠端回了我們無法確認語意的東西。對外是不透明的 500，排查資訊只進 context（只放狀態、
+     * 長得像 code 的字串與分類失敗原因，<b>不</b>放不可信的 body 或 detail）。
      */
-    private Optional<ErrorCode> remoteErrorCode(@Nullable JsonNode problem) {
-        if (problem == null || !problem.path(ERRORS_PROPERTY).isMissingNode()) {
-            return Optional.empty();
+    private SystemException integrationFailure(int status, @Nullable String remoteCode, String reason) {
+        SystemException ex = new SystemException("下游 API 呼叫失敗")
+                .with("remoteStatus", status)
+                .with("reason", reason);
+        if (remoteCode != null && CODE_SHAPE.matcher(remoteCode).matches()) {
+            ex.with("remoteCode", remoteCode);
         }
-        return text(problem, CODE_PROPERTY)
-                .flatMap(RestClientErrorHandler::resolve)
-                .filter(errorCode -> errorCode.getStatus().is4xxClientError());
+        return ex;
     }
 
-    /** {@code valueOf} 對認不出的 code 拋例外，而「認不出」在這裡是預期情況而非錯誤，故收成空值。 */
+    /** body.status 可缺席；提供時必須是等於真正 HTTP status 的整數。 */
+    private static boolean statusMatches(JsonNode problem, int httpStatus) {
+        JsonNode bodyStatus = problem.path(STATUS_PROPERTY);
+        return bodyStatus.isMissingNode() || (bodyStatus.isIntegralNumber() && bodyStatus.intValue() == httpStatus);
+    }
+
+    /** {@code valueOf} 對認不出的 code 拋例外，而「認不出」在這裡是預期情況，故收成空值。 */
     private static Optional<ErrorCode> resolve(String code) {
         try {
             return Optional.of(ErrorCode.valueOf(code));
         } catch (IllegalArgumentException e) {
-            log.warn("下游錯誤回應帶了本版不認識的 code，改用 HTTP status 推導；code={}", code);
             return Optional.empty();
         }
     }
 
     /** 把 tree 上一個字串欄位取成 {@link Optional}，空白值視同缺席。 */
-    private Optional<String> text(@Nullable JsonNode problem, String property) {
-        return (problem == null)
-                ? Optional.empty()
-                : problem.path(property).stringValueOpt().filter(value -> !value.isBlank());
+    private static Optional<String> text(JsonNode problem, String property) {
+        return problem.path(property).stringValueOpt().filter(value -> !value.isBlank());
     }
 
-    /**
-     * 把下游錯誤回應 parse 成 JSON tree；空 body 或解析失敗回 {@code null}，呼叫端一律退回以 HTTP
-     * status 推導的預設值。
-     *
-     * <p>原本這裡完全靜默：下游改了錯誤格式時，症狀只會是「錯誤訊息忽然變成 status text」，
-     * 而 log 裡查無此事。改用 WARN 記錄，才不必靠猜。
-     */
+    /** 空 body 或解析失敗回 {@code null}；不記 body 內容（不可信），原因由呼叫端放進 context。 */
     private @Nullable JsonNode parse(String body) {
         if (body == null || body.isBlank()) {
             return null;
@@ -136,7 +181,6 @@ public class RestClientErrorHandler {
         try {
             return objectMapper.readTree(body);
         } catch (Exception e) {
-            log.warn("下游錯誤回應無法解析為 JSON，改用 HTTP status text；body={}", body, e);
             return null;
         }
     }

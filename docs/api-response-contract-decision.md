@@ -290,6 +290,35 @@ domain 後被重建成 `INVALID_REQUEST`，`POST /order` 的 400 因此同時代
 錯誤換成更難查的 500）、以及帶 `errors` 陣列的驗證失敗（`BusinessException` 承載不了那個陣列，沿用碼
 會讓對外回應宣稱 `VALIDATION_FAILED` 卻沒有 `errors`，違反 Phase 4 自己定的契約）。
 
+**再追加（解析寬鬆，語意嚴格；取代上面「退回 status 推導的預設碼」的 fallback）**：上一版遇到認不出的
+`code`、缺 `code`、空 body 時，仍按 HTTP 400／404 猜成 `INVALID_REQUEST`／`RESOURCE_NOT_FOUND`。這個猜測有
+兩個問題：遠端 404 可能只是 URL 打錯，被猜成「查無資源」不只對外歸責錯；而 `BusinessException` 被
+CircuitBreaker 的 `ignore-exceptions` 忽略，一次真的故障就此漏掉統計。同時，409／503 這類已知語意一律被
+壓成 500。現在改成只轉譯**能確認且適合對外表達**的配對：
+
+| 下游真正 HTTP status ＋ code | 對外結果 |
+|---|---|
+| 400 ＋ `ACCOUNT_STILL_HAS_ORDER_CAN_NOT_BE_DELETED`／`PRODUCT_ALREADY_EXIST`／`PRODUCT_STILL_HAS_RESERVATION_CAN_NOT_BE_DELETED`／`PRODUCT_STOCK_NOT_ENOUGH` | 400，保留同 code 與遠端 detail |
+| 404 ＋ `RESOURCE_NOT_FOUND` | 404，保留同 code 與遠端 detail |
+| 409 ＋ `OPTIMISTIC_LOCK_CONFLICT` | 409，本地安全說明 |
+| 503 ＋ `BULKHEAD_FULL`／`CIRCUIT_OPEN` | 503，本地安全說明（`DependencyUnavailableException`） |
+| 其餘（未知／缺 code、空或非 object body、`code` 與 HTTP status 矛盾、泛用 `INVALID_REQUEST`、`VALIDATION_FAILED`／帶 `errors`、401／403／405／415／429 與其他 5xx） | 500／`INTERNAL_ERROR`（`SystemException`） |
+
+- **配對而非「是 4xx 就接受」**：`code` 對應的 status 必須等於真正的 HTTP status，所以 HTTP 400 帶
+  `RESOURCE_NOT_FOUND` 不會再被重建成對外 404。`body.status` 可缺席，提供時必須是等於 HTTP status 的整數。
+- **`errors` 屬性存在即不接受**，包含 `errors: null`。泛用 `INVALID_REQUEST` 與 `VALIDATION_FAILED` 刻意不在
+  允許清單：內部 request 可能是呼叫端服務自己組錯，不能直接歸咎外部輸入。
+- **503 不能塞進 `BusinessException`**（它只收 4xx，且被斷路器忽略），所以新增
+  `DependencyUnavailableException`。它不在 `ignore-exceptions` 內，預設就計入 failure，**不需要動
+  `application.yml`**；409 走 `BusinessException`，不計入。
+- **公開與診斷的界線**：409／503 的 detail 用本地常數（`GlobalExceptionHandler.*_DETAIL`），不轉送遠端文字、
+  `instance`、`errors`、headers（含 `Retry-After`）。整合異常的 context 只放 `remoteStatus`、長得像
+  `ErrorCode` 常數名的 `remoteCode`、分類失敗的 `reason`，不放不可信的 body 或 detail，原本把整份 body 寫進
+  log 的 WARN 也一併移除。
+- **代價**：真正的業務錯誤若漏登錄進允許清單，也會收到較籠統的 500。下游是同一應用、同版本的 loopback，
+  正常回應應符合共用契約；無法辨識時，明確暴露整合問題比靜默猜測更容易發現。新增可轉譯的 code 必須先審視
+  其對外語意，再加進 `RestClientErrorHandler.TRANSLATABLE` 並補測試。
+
 > **判斷取捨**：這件事正是下面第 2 點所說的「需要跨 domain 傳遞 `code`」觸發條件，但遷移到
 > `DefaultResponseErrorHandler` **仍然延後** —— 因為第 1 點（converter 設定漂移）完全沒變，而從既有的
 > tree 上多讀一個字串欄位只花一行。遷移的回報是「完整反序列化能力」，而我們要的仍只是兩個字串欄位。
@@ -302,14 +331,17 @@ domain 後被重建成 `INVALID_REQUEST`，`POST /order` 的 400 因此同時代
 2. ~~目前只需要 `detail` 一個欄位~~ 現在也讀 `code`（見上方追加段落），但兩者都是字串欄位，
    `getResponseBodyAs(ProblemDetail.class)` 的完整反序列化能力仍然用不到 —— 何況 `code` 是 extension，
    綁 `ProblemDetail` 反而要處理 mixin 有無註冊的問題，讀 tree 沒有這個包袱。
-3. 現行行為已被 9 個案例釘住（除 body 不可解析 / 合法 JSON 但缺 `detail` / 空 body 三種退化路徑外，
-   原本的 400 案例改為斷言「沿用下游業務碼」，另加認不出的 code / 非 4xx code / 帶 `errors` 三條退回
-   預設碼的路徑），所以這個遷移可以是純內部替換，不必與對外契約變更綁在同一次上線。
+3. 現行行為已被 `RestClientErrorHandlerTest` 的轉譯矩陣（正向、負向與邊界）釘住，所以這個遷移可以是純
+   內部替換，不必與對外契約變更綁在同一次上線。
 
-**尚未覆蓋**：整合測試是 `@SpringBootTest` 的 MOCK web environment，loopback 自呼叫不會真的走上 HTTP，
-`OrderCreateCascadeIntegrationTest` 這類測試也是直接呼叫 `OrderTransactionalService`。因此「業務碼跨得過
-這一跳」目前只由 `RestClientErrorHandlerTest` 的單元測試守住，端到端（`POST /order` 真的收到
-`PRODUCT_STOCK_NOT_ENOUGH`）靠下游 E2E。要在本 repo 補，需要 `RANDOM_PORT` + 真實憑證的新測試基底。
+**測試覆蓋**：整合測試是 `@SpringBootTest` 的 MOCK web environment，loopback 自呼叫不會真的走上 HTTP，
+`OrderCreateCascadeIntegrationTest` 這類測試也是直接呼叫 `OrderTransactionalService`，所以完整的
+`POST /order` 端到端仍靠下游 E2E。但「下游錯誤 → 最終對外回應」這一段由
+`downstream/DownstreamErrorTranslationTest` 守住：它用 `@WebMvcTest` 加一個本機 HTTP stub，經過正式的
+`RestClientConfig`（連線池、Basic 憑證、status handler）→ 轉譯 → `GlobalExceptionHandler`，斷言最終
+status、`application/problem+json`、`code`／`type`、不洩漏遠端內容，並讀正式 `application.yml` 的
+CircuitBreaker 設定驗證計數（業務拒絕與 409 不進統計，503、未知 400／404 與其他整合失敗計入 failure）。
+它不需要 Oracle，也不需要 `RANDOM_PORT` 的完整基底。
 
 ### Phase 4 —— validation ✅ 已完成
 
