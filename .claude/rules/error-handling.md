@@ -12,3 +12,4 @@ paths:
 - `exception/ApiErrorResponse` 只是給 springdoc 看的 schema 宣告，**不參與執行期序列化**；RFC 9457 六個欄位標 `required`，但 `code` **刻意不列 enum**（值域 50+ 個，列出來沒人會看，見該處註解）。
 - handler 繼承 `ResponseEntityExceptionHandler`（框架自己拋的那批例外它已處理好），我們只覆寫兩個驗證 `handleXxx`、為自訂例外加 `@ExceptionHandler`，並覆寫 `handleExceptionInternal(...)` 做共同處理 —— 補 `code`／`type`、記唯一那行 log，**等級由最終 HTTP status 決定**（500 → ERROR 帶 stack trace，其餘 → WARN）。
 - 自訂 handler 也把 body 交給 `handleExceptionInternal(...)`，不自己 `new ResponseEntity`。
+- 三種自訂例外各有分工：`BusinessException`（4xx，斷路器忽略）、`DependencyUnavailableException`（只收 503，下游滿載／熔斷，斷路器計入 failure）、`SystemException`（不透明 500）。503 不能塞進 `BusinessException`。`RestClientErrorHandler` 的轉譯矩陣見 `docs/api-response-contract-decision.md` Phase 3；409／503 的安全說明是 `GlobalExceptionHandler` 的 `*_DETAIL` 常數，本地原生與下游轉譯共用。

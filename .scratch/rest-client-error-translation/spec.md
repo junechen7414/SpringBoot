@@ -2,7 +2,7 @@
 
 ## 狀態與目的
 
-本文件記錄已確認的改善方向，**程式尚未實作**。
+本文件記錄已確認的改善方向。**已實作**（分支 `refactor/explicit-downstream-error-translation`），現況見 `docs/api-response-contract-decision.md` Phase 3。
 
 實作 issue：[01 — 明確轉譯已知下游錯誤，停止猜測未知 400／404](issues/01-refine-downstream-error-translation.md)。
 

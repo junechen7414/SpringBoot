@@ -33,6 +33,7 @@ import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.exc.InvalidFormatException;
 import com.ibm.demo.exception.BusinessException;
+import com.ibm.demo.exception.DependencyUnavailableException;
 import com.ibm.demo.exception.ErrorCode;
 import com.ibm.demo.exception.SystemException;
 import com.ibm.demo.exception.ValidationError;
@@ -94,20 +95,38 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** {@code ProblemDetail} 未指定 type 時的預設值；Spring 不會序列化它，等同「沒有 type」。 */
     private static final String DEFAULT_TYPE = "about:blank";
 
+    /**
+     * 本地固定的安全說明。{@code RestClientErrorHandler} 轉譯下游 409／503 時也用這幾句而不轉送遠端
+     * 文字，因此放成常數，本地原生與下游轉譯而來的回應才保證逐字一致。
+     */
+    public static final String OPTIMISTIC_LOCK_DETAIL = "資料已被其他使用者修改，請重新整理後再試。";
+    public static final String BULKHEAD_FULL_DETAIL = "系統負載過高，請稍後再試。";
+    public static final String CIRCUIT_OPEN_DETAIL = "服務暫時不可用，請稍後再試。";
+
     @ExceptionHandler(BusinessException.class)
     public @Nullable ResponseEntity<Object> handleBusinessException(BusinessException ex, WebRequest request) {
         // errorCode 由 BusinessException 建構子保證非 null 且必為 4xx，此處無須防禦性分支。
         return respond(ex, ex.getErrorCode(), ex.getMessage(), request);
     }
 
+    /**
+     * 下游依賴回報滿載／熔斷（503）。與 {@link BusinessException} 同樣把 {@code errorCode} 與 detail
+     * 交給共同出口，差別只在型別：它不是「呼叫端做錯事」，CircuitBreaker 因此會把它計為 failure。
+     */
+    @ExceptionHandler(DependencyUnavailableException.class)
+    public @Nullable ResponseEntity<Object> handleDependencyUnavailable(
+            DependencyUnavailableException ex, WebRequest request) {
+        return respond(ex, ex.getErrorCode(), ex.getMessage(), request);
+    }
+
     @ExceptionHandler(BulkheadFullException.class)
     public @Nullable ResponseEntity<Object> handleBulkheadFull(BulkheadFullException ex, WebRequest request) {
-        return respond(ex, ErrorCode.BULKHEAD_FULL, "系統負載過高，請稍後再試。", request);
+        return respond(ex, ErrorCode.BULKHEAD_FULL, BULKHEAD_FULL_DETAIL, request);
     }
 
     @ExceptionHandler(CallNotPermittedException.class)
     public @Nullable ResponseEntity<Object> handleCallNotPermitted(CallNotPermittedException ex, WebRequest request) {
-        return respond(ex, ErrorCode.CIRCUIT_OPEN, "服務暫時不可用，請稍後再試。", request);
+        return respond(ex, ErrorCode.CIRCUIT_OPEN, CIRCUIT_OPEN_DETAIL, request);
     }
 
     @ExceptionHandler(RequestNotPermitted.class)
@@ -119,7 +138,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public @Nullable ResponseEntity<Object> handleOptimisticLockingFailure(
             ObjectOptimisticLockingFailureException ex, WebRequest request) {
-        return respond(ex, ErrorCode.OPTIMISTIC_LOCK_CONFLICT, "資料已被其他使用者修改，請重新整理後再試。", request);
+        return respond(ex, ErrorCode.OPTIMISTIC_LOCK_CONFLICT, OPTIMISTIC_LOCK_DETAIL, request);
     }
 
     /**
