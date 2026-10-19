@@ -95,14 +95,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** {@code ProblemDetail} 未指定 type 時的預設值；Spring 不會序列化它，等同「沒有 type」。 */
     private static final String DEFAULT_TYPE = "about:blank";
 
-    /**
-     * 本地固定的安全說明。{@code RestClientErrorHandler} 轉譯下游 409／503 時也用這幾句而不轉送遠端
-     * 文字，因此放成常數，本地原生與下游轉譯而來的回應才保證逐字一致。
-     */
-    public static final String OPTIMISTIC_LOCK_DETAIL = "資料已被其他使用者修改，請重新整理後再試。";
-    public static final String BULKHEAD_FULL_DETAIL = "系統負載過高，請稍後再試。";
-    public static final String CIRCUIT_OPEN_DETAIL = "服務暫時不可用，請稍後再試。";
-
     @ExceptionHandler(BusinessException.class)
     public @Nullable ResponseEntity<Object> handleBusinessException(BusinessException ex, WebRequest request) {
         // errorCode 由 BusinessException 建構子保證非 null 且必為 4xx，此處無須防禦性分支。
@@ -121,24 +113,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(BulkheadFullException.class)
     public @Nullable ResponseEntity<Object> handleBulkheadFull(BulkheadFullException ex, WebRequest request) {
-        return respond(ex, ErrorCode.BULKHEAD_FULL, BULKHEAD_FULL_DETAIL, request);
+        return respond(ex, ErrorCode.BULKHEAD_FULL, ErrorCode.BULKHEAD_FULL.getFixedDetail(), request);
     }
 
     @ExceptionHandler(CallNotPermittedException.class)
     public @Nullable ResponseEntity<Object> handleCallNotPermitted(CallNotPermittedException ex, WebRequest request) {
-        return respond(ex, ErrorCode.CIRCUIT_OPEN, CIRCUIT_OPEN_DETAIL, request);
+        return respond(ex, ErrorCode.CIRCUIT_OPEN, ErrorCode.CIRCUIT_OPEN.getFixedDetail(), request);
     }
 
     @ExceptionHandler(RequestNotPermitted.class)
     public @Nullable ResponseEntity<Object> handleRateLimiter(RequestNotPermitted ex, WebRequest request) {
-        return respond(ex, ErrorCode.RATE_LIMITED, "請求過於頻繁，請稍後再試。", request);
+        return respond(ex, ErrorCode.RATE_LIMITED, ErrorCode.RATE_LIMITED.getFixedDetail(), request);
     }
 
     // 處理樂觀鎖衝突例外
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public @Nullable ResponseEntity<Object> handleOptimisticLockingFailure(
             ObjectOptimisticLockingFailureException ex, WebRequest request) {
-        return respond(ex, ErrorCode.OPTIMISTIC_LOCK_CONFLICT, OPTIMISTIC_LOCK_DETAIL, request);
+        return respond(ex, ErrorCode.OPTIMISTIC_LOCK_CONFLICT, ErrorCode.OPTIMISTIC_LOCK_CONFLICT.getFixedDetail(), request);
     }
 
     /**
@@ -150,7 +142,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @ExceptionHandler(AuthenticationException.class)
     public @Nullable ResponseEntity<Object> handleAuthentication(AuthenticationException ex, WebRequest request) {
-        return respond(ex, ErrorCode.UNAUTHORIZED, "需要有效的認證憑證。", request);
+        return respond(ex, ErrorCode.UNAUTHORIZED, ErrorCode.UNAUTHORIZED.getFixedDetail(), request);
     }
 
     /**
@@ -162,7 +154,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @ExceptionHandler(AccessDeniedException.class)
     public @Nullable ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
-        return respond(ex, ErrorCode.FORBIDDEN, "沒有權限執行此操作。", request);
+        return respond(ex, ErrorCode.FORBIDDEN, ErrorCode.FORBIDDEN.getFixedDetail(), request);
     }
 
     /**
@@ -182,7 +174,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public @Nullable ResponseEntity<Object> handleUnexpected(Exception ex, WebRequest request) {
-        return respond(ex, ErrorCode.INTERNAL_ERROR, "系統發生未預期的錯誤，請稍後再試。", request);
+        return respond(ex, ErrorCode.INTERNAL_ERROR, ErrorCode.INTERNAL_ERROR.getFixedDetail(), request);
     }
 
     /**
