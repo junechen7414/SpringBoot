@@ -104,6 +104,50 @@ rootless 跑 Oracle 不會有權限問題：`init-scripts` 是從 `/mnt/c` 的 9
 >
 > 刪掉就好，不必加進 `.gitignore` —— 忽略它只會讓下次出現時無聲無息。
 
+### Podman Desktop 看不到某個容器，或 `podman ps` 與 GUI 對不起來？
+
+先分清楚**這裡只有一台 machine，卻有兩個互相獨立的儲存區**，這是最容易誤判的來源：
+
+```bash
+podman machine list                     # 只會有一台 podman-machine-default
+podman system connection list           # 可能有兩條：podman-machine-default 與 podman-machine-default-root
+```
+
+兩條連線連到的是**同一台 VM**（同一個 `127.0.0.1:<埠>`），差別只在以哪個 Linux 使用者進去：
+
+| | `podman-machine-default` | `podman-machine-default-root` |
+|---|---|---|
+| 使用者 | `user`（rootless） | `root` |
+| 儲存根目錄 | `/home/user/.local/share/containers/storage` | `/var/lib/containers/storage` |
+| 容器、映像、volume | 你的專案在這裡 | **與左邊完全不共用** |
+| Podman Desktop、Testcontainers 用的 `\\.\pipe\podman-machine-default` | **看得到** | **看不到** |
+
+所以「`podman --connection ...-root ps -a` 查得到、GUI 卻沒有」不是 GUI 壞了，是它們看的本來就是不同儲存區。要確認某個 pipe 背後是哪一個，不要猜，直接問它的 `/info`（`DockerRootDir` 就是儲存根目錄）：
+
+```powershell
+$p = New-Object System.IO.Pipes.NamedPipeClientStream('.', 'podman-machine-default', 'InOut')
+$p.Connect(5000)
+$b = [Text.Encoding]::ASCII.GetBytes("GET /info HTTP/1.0`r`nHost: d`r`n`r`n"); $p.Write($b,0,$b.Length); $p.Flush()
+(New-Object IO.StreamReader($p)).ReadToEnd() -split "`r`n`r`n",2 | Select-Object -Last 1 | ConvertFrom-Json | Select-Object DockerRootDir
+```
+
+**`-root` 那條連線是 `podman machine init` 的固定產物，選 rootless 不能阻止它被建立。** 依 podman 文件，`init` 會把系統連線同時加到 VM 內 root 與 user 兩個帳號，句子沒有「僅限 rootful」的條件；`--rootful` 只決定「預設用哪一條」，不決定建不建。實證：本專案這台 machine 是以 rootless 建立的（`Rootful=false`），`-root` 連線仍然存在。
+
+- **它只會在重新執行 `podman machine init`（重建 machine）時再出現**，平常的 `machine stop/start` 不會。這一點是依 init 的行為推得的；「版本升級會不會補回」沒有查證，不要當成已知。
+- 補回來時儲存是空的，不會再冒出舊容器，唯一的影響是連線清單多一條。
+- 想清乾淨：先清 root 儲存，**最後才**移除連線（連線沒了就碰不到那一邊）。每一條指令都明寫 `--connection`，避免誤動到 rootless：
+
+  ```bash
+  podman --connection podman-machine-default-root ps -a                 # 先看有什麼
+  podman --connection podman-machine-default-root rm <容器>             # 只刪 root 儲存裡的
+  podman --connection podman-machine-default-root system prune -a -f    # 清掉 root 儲存的未使用映像
+  podman system connection rm podman-machine-default-root              # 最後才移除連線設定
+  ```
+
+  清理前先確認 root 儲存的 volume 是 0 個（`podman --connection ...-root volume ls`），那樣就沒有無法重新取得的資料。2026-10-20 實測：root 儲存只剩一個 6 週前的 `minio` 容器與一批映像，清掉後回收 18.28 GB，rootless 的 8 個容器與 5 個 volume 前後完全一致。
+
+> **容器顯示全停時，先分清是「GUI 看錯」還是「容器真的被停掉」。** `podman ps` 看到 `Up` 而 GUI 顯示停止，才是顯示問題；`podman ps -a` 也是 `Exited`，那就是容器真的停了，容器與 volume 都還在，`podman compose up -d`（不加 `--build`、不加 `down -v`）即可恢復。
+
 ### 參考資源
 
 - **專案筆記**: `筆記.md` - 詳細的技術筆記與實作細節
