@@ -1,6 +1,6 @@
 # 01 — 指標改由 Alloy scrape `/actuator/prometheus`
 
-Status: ready-for-agent
+Status: resolved
 
 Spec：[../spec.md](../spec.md)
 
@@ -52,12 +52,16 @@ guide §9.3 的 exemplar 三環鏈，在換成 scrape 之後會多出新的環�
 
 ## 驗收條件
 
-- [ ] 未帶憑證：`curl localhost:8787/actuator/prometheus` → 401；帶 `internal` 憑證 → 200，內容含 `http_server_requests_seconds_bucket`
+- [x] 未帶憑證：`curl localhost:8787/actuator/prometheus` → 401；帶 `internal` 憑證 → 200，內容含 `http_server_requests_seconds_bucket`
 - [ ] Prometheus 查得到 `up{job="<job_name>"} == 1`；`podman compose stop app` 之後一個 scrape 週期內變成 `0`
-- [ ] Prometheus 裡沒有重複的 series：`count by (__name__) ({__name__="http_server_requests_seconds_count", job=""})` 為空，代表 OTLP 指標匯出確實關閉了
+  - `up == 1` 已驗證。停掉 app 後實測**約 17 秒**變 0，scrape 間隔是 10 秒，所以超過「一個週期」的字面要求（多出來的是一次 scrape 失敗的判定與輪詢間隔），語意上達成，字面上沒有，不打勾。
+- [x] Prometheus 裡沒有重複的 series：`count by (__name__) ({__name__="http_server_requests_seconds_count", job=""})` 為空，代表 OTLP 指標匯出確實關閉了
 - [ ] Grafana App Overview 七個 panel 都有資料
-- [ ] `query_exemplars`（guide §9.3 的指令）回傳的結果含 `trace_id`
-- [ ] Tempo 照樣收得到 trace（guide §9.1），證明追蹤鏈沒受影響
-- [ ] `./gradlew test "-Djunit.platform.exclude.tags=SanityTest"` 全綠
+  - 6 格在平常流量下有資料。錯誤率那格的 5xx 線平常沒有 series，是刻意製造 4xx／5xx（停掉資料庫）才看到線；4xx 三條線我靠 Grafana 資料來源 API 證實有資料，沒有在畫面上完整看到（截圖被側欄遮住或逾時）。不打勾。
+- [x] `query_exemplars`（guide §9.3 的指令）回傳的結果含 `trace_id`
+- [x] Tempo 照樣收得到 trace（guide §9.1），證明追蹤鏈沒受影響
+- [x] `./gradlew test "-Djunit.platform.exclude.tags=SanityTest"` 全綠（272 個測試）
 
 ## Comments
+
+- 2026-10-20：已實作並以 PR #81 rebase 合併。兩條驗收條件（`up` 在一個週期內變 0、七個 panel 都有資料）依上面註記沒有打勾。另外實測了 GC「最長停頓」的視窗約 2 分鐘（見 `docs/monitoring-needs-first.md`）。
