@@ -220,7 +220,9 @@ max(jvm_gc_pause_seconds_max)
 
 注意第二句的名稱是 `jvm_gc_pause_seconds_max`。這個名字**在 OTLP push 時代是另一個**：當時經 Alloy 轉成 Prometheus 命名，單位後綴被移到最後，叫 `jvm_gc_pause_max_seconds`。改成 scrape 之後由 Prometheus registry 直接命名，變回 `jvm_gc_pause_seconds_max`，dashboard 的這個 panel 也因此改過一次。同一個指標在兩種匯出方式下名字不同，而猜錯名稱時 Prometheus 不報錯，只回空結果 —— 所以 AI 給的名稱也一樣要先在 Prometheus 的 metric 瀏覽器確認過。
 
-這個值是 Micrometer 的滾動視窗最大值（`TimeWindowMax`），視窗輪替後沒有新的 GC 就會掉回 `0`。OTLP 時代它跟著 10 秒的推送週期重算；現在的視窗長度由 registry 的 `step` 與 distribution 的 `expiry` 決定，**本專案沒有實測過它多久會掉回 0**（只觀察到一次 24ms 的停頓發生後，90 秒內讀值都維持 0.024），所以不要拿「最近 N 秒」的說法解讀這條線。
+這個值是 Micrometer 的滾動視窗最大值（`TimeWindowMax`）。OTLP 時代它跟著 10 秒的推送週期重算；現在實測**一次尖峰約撐 2 分鐘才會消失**：兩次測量（尖峰 0.015 與 0.022，之後完全沒有流量，每秒讀一次 `/actuator/prometheus`）分別在零點後 118.2 秒與 115.4 秒掉下來。零點是「第一次讀到該尖峰」的時間，GC 實際發生得更早，所以真正的壽命只會比這兩個數字長一點，不會短。
+
+掉下來之後的值不是 `0`，而是視窗內剩下的較小停頓（實測 0.004～0.005）；只有視窗內完全沒有 GC 才會是 `0`。這個數字只在本機、G1、沒有其他負載的條件下量過，**我沒有查清楚它為什麼是約 2 分鐘**（registry 的 `step` 預設是 1 分鐘，照直覺視窗應該更短），所以只把它當經驗值用，不要拿它推論別的環境。
 
 「下一個動作」測試：停頓持續超過 100ms → 對照同時段的延遲面板，確認使用者有感；有感才去調 heap 或 GC。
 

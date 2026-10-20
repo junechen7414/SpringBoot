@@ -235,7 +235,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "GC 停頓時間",
-      "description": "資源面，但換成使用者感受得到的那一面。原本這格是 JVM Heap 使用量：heap 本來就會被 GC 拉成鋸齒狀，單看「用了 800MB」推不出任何下一步。GC 停頓不一樣 —— 停頓期間所有執行緒都暫停，停多久就直接加進當下每個請求的延遲。\n\n為什麼不用 histogram_quantile：只有 http.server.requests 開了 percentiles-histogram，jvm_gc_pause_seconds_bucket 只有一個 le=\"+Inf\"，對它算分位數會回 NaN。所以改看平均與最大值：\n- 平均每次停頓 = rate(_sum) ÷ rate(_count)，兩邊都要先 rate() 再相除，理由同錯誤率 panel。5 分鐘內沒有任何 GC 時分母為 0，線會斷掉，代表「沒有停頓」而不是壞掉。\n- 最長一次停頓 = jvm_gc_pause_max_seconds。名稱是 _max_seconds 而不是直覺的 _seconds_max（經 Alloy 轉成 Prometheus 命名時單位後綴被移到最後），猜錯名稱 Prometheus 只會回空結果。它是 Micrometer 的滾動視窗最大值，視窗輪替後沒有新的 GC 才會掉回 0；視窗長度不是固定的 10 秒（那是 OTLP 推送週期時代的行為）。\n\n下一個動作：最長停頓持續超過虛線（100ms）→ 對照同時段的延遲 panel，確認使用者有感；有感才去調 heap 大小或 GC 參數。",
+      "description": "資源面，但換成使用者感受得到的那一面。原本這格是 JVM Heap 使用量：heap 本來就會被 GC 拉成鋸齒狀，單看「用了 800MB」推不出任何下一步。GC 停頓不一樣 —— 停頓期間所有執行緒都暫停，停多久就直接加進當下每個請求的延遲。\n\n為什麼不用 histogram_quantile：只有 http.server.requests 開了 percentiles-histogram，jvm_gc_pause_seconds_bucket 只有一個 le=\"+Inf\"，對它算分位數會回 NaN。所以改看平均與最大值：\n- 平均每次停頓 = rate(_sum) ÷ rate(_count)，兩邊都要先 rate() 再相除，理由同錯誤率 panel。5 分鐘內沒有任何 GC 時分母為 0，線會斷掉，代表「沒有停頓」而不是壞掉。\n- 最長一次停頓 = jvm_gc_pause_max_seconds。名稱是 _max_seconds 而不是直覺的 _seconds_max（經 Alloy 轉成 Prometheus 命名時單位後綴被移到最後），猜錯名稱 Prometheus 只會回空結果。它是 Micrometer 的滾動視窗最大值，實測一次尖峰約撐 2 分鐘才消失（本機兩次量到 118 秒與 115 秒），之後掉到視窗內剩下的較小停頓，視窗內完全沒有 GC 才是 0。不再是 OTLP 時代每 10 秒重算一次。\n\n下一個動作：最長停頓持續超過虛線（100ms）→ 對照同時段的延遲 panel，確認使用者有感；有感才去調 heap 大小或 GC 參數。",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "fieldConfig": {
@@ -268,7 +268,7 @@
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "max(jvm_gc_pause_seconds_max)",
-          "legendFormat": "最長一次停頓（滾動視窗）"
+          "legendFormat": "最長一次停頓（約 2 分鐘視窗）"
         }
       ]
     },

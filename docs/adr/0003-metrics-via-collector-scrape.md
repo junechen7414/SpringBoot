@@ -32,7 +32,7 @@
 
 - **`up` 回來了。** 之後加告警，第一條規則直接是 `up{job="demo-app"} == 0`。
 - **憑證要在兩邊對上。** `INTERNAL_PASSWORD` 要同時進 app 與 alloy，`docker-compose.yml` 兩邊都從 `.env` 取同一個值。不一致時 `up == 0`、Alloy 收到 401。
-- **指標名稱由 Prometheus registry 決定**，與 OTLP 轉譯時不同。實際遇到的一個：GC 最長停頓從 `jvm_gc_pause_max_seconds` 變成 `jvm_gc_pause_seconds_max`，dashboard 的 GC panel 因此改過一次。該值的滾動視窗長度也不再是 OTLP 時代固定的 10 秒。
+- **指標名稱由 Prometheus registry 決定**，與 OTLP 轉譯時不同。實際遇到的一個：GC 最長停頓從 `jvm_gc_pause_max_seconds` 變成 `jvm_gc_pause_seconds_max`，dashboard 的 GC panel 因此改過一次。該值的滾動視窗也不再是 OTLP 時代的 10 秒：實測一次尖峰約撐 2 分鐘才消失（兩次量到 118 秒與 115 秒，條件見 `docs/monitoring-needs-first.md` §6.1 之後的 GC 段落）。
 - **OTLP 時代的三個旋鈕消失**：`base-time-unit`（Prometheus registry 固定用秒）、`aggregation-temporality`（固定累積值）、`OTLP_METRICS_ENABLED`（沒有指標推送可關）。如果有人重新打開 OTLP 指標匯出，這三個坑會一起回來。
 - **exemplar 多了新的環節，缺任何一環都不報錯、只是沒有小菱形。** Prometheus registry 只在 OpenMetrics 格式的回應裡帶 exemplar，所以 `prometheus.scrape` 要協商 OpenMetrics，`prometheus.remote_write` 要 `send_exemplars = true`。實測 `query_exemplars` 回得到帶 `trace_id` 的結果，Tempo 的 trace 也照樣收得到。
 - **依賴不齊的靜默失敗在指標側變得可偵測**：沒有 `micrometer-registry-prometheus` 時端點回 404、`up == 0`，不再是「所有 panel 全空但看起來一切正常」。追蹤側沒有等價的訊號，仍是同一種靜默失敗（`docs/monitoring-usage-guide.md` §6.1）。
