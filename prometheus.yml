@@ -1,7 +1,9 @@
 global:
   scrape_interval: 10s
 
-# 本專案不 scrape 任何 target：指標由 app --OTLP--> Alloy --remote_write--> 這裡。
+# 這裡刻意不設 scrape_configs：Prometheus 自己不去抓 app，而是 Alloy 去 scrape app 之後 remote_write
+# 進來（見 config.alloy 的 prometheus.scrape "app"）。`up{job="demo-app"}` 因此是 Alloy 產生並寫入的。
+# 原因是 app 的 /actuator/prometheus 需要 Basic 認證，帳密集中放在 Alloy 一處。
 #
 # 「接收 remote_write」是靠 docker-compose.yml 裡的 --web.enable-remote-write-receiver
 # 這個 CLI flag 開啟的，不是靠設定檔。設定檔的 remote_write: 語意相反 —— 那是叫

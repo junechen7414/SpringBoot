@@ -90,6 +90,11 @@ dependencies {
 	// 要求 OtelTracer、OpenTelemetry、OtlpHttpSpanExporter、SdkTracerProvider 同時在
 	// classpath，四個來自三個不同的 artifact，手列很容易只中三條而毫無徵兆。
 	implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+	// 指標改由 Alloy scrape /actuator/prometheus（見 docs/adr/0003-metrics-via-collector-scrape.md）。
+	// 上面那個 starter 仍會把 micrometer-registry-otlp 帶進 classpath（追蹤鏈需要這個 starter，所以
+	// 不能移除），但 OTLP 指標匯出在 application*.yml 已關閉：兩個 registry 同時匯出，同一個指標會在
+	// Prometheus 出現兩組 series，sum by (uri) 會靜默地算成兩倍。
+	implementation 'io.micrometer:micrometer-registry-prometheus'
 	implementation 'io.micrometer:micrometer-java21'
 
 	// ---- 開發工具 ----

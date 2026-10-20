@@ -36,11 +36,15 @@ import lombok.RequiredArgsConstructor;
  * {@code docs/security-external-idp-migration.md}。
  *
  * Security 是 servlet filter chain，只攔截「進入本應用的 HTTP 請求」，因此：
- * - Oracle/Hikari 連線、往外推的 OTLP metrics、容器間網路都不經過此 chain，不受影響。
+ * - Oracle/Hikari 連線、往外推的 OTLP traces、容器間網路都不經過此 chain，不受影響。
+ *   （Alloy scrape {@code /actuator/prometheus} 則是 <b>inbound</b>，會經過此 chain，見下方說明。）
  * - actuator health 與 Swagger 文件端點是 inbound HTTP，預設會被擋，故在下方明確 permitAll。
  *   （health 是給 Dockerfile HEALTHCHECK 的 wget 探針用——它也走這條 filter chain，不放行就會 401。）
  *
- * 監控走 OTLP push（app → Alloy），沒有需要放行的 actuator scrape 端點。
+ * 指標由 Alloy 來 scrape {@code /actuator/prometheus}，追蹤仍是 OTLP push（app → Alloy）。
+ * {@code /actuator/prometheus} <b>刻意不放行</b>：scraper 是我們自己寫的設定，Alloy 的 basic_auth
+ * 帶 {@code internal} 帳號憑證即可；放行 health 的理由（Dockerfile HEALTHCHECK 的 wget 不方便帶憑證）
+ * 在這裡不成立。理由與替代方案見 {@code docs/adr/0003-metrics-via-collector-scrape.md}。
  *
  * 使用者以 in-memory 定義（帳密走 env），不建立 DB 使用者表 —— DB schema 零改動。
  */

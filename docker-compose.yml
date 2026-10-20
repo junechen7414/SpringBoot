@@ -13,8 +13,13 @@ services:
       # in application-dev.yml (defaults to localhost when ORACLE_DB_HOST is unset).
       - ORACLE_DB_HOST=oracle-db
       # 同上：OTLP 目標的主機名在容器內是 alloy，本機 IDE/bootRun 時
-      # application-dev.yml 會退回 localhost。
+      # application-dev.yml 會退回 localhost。現在只有追蹤用它（指標改由 alloy 來 scrape）。
       - ALLOY_HOST=alloy
+      # internal 機器帳號：alloy scrape /actuator/prometheus 要帶的憑證，與 *Client loopback 自呼叫是同一組。
+      # app 與 alloy 必須拿到同一個值，所以兩邊都從 compose 的 ${...} 取，預設值與 application.yml 一致，
+      # 沒有 .env 時整套仍然對得上。
+      - INTERNAL_USERNAME=${INTERNAL_USERNAME:-internal}
+      - INTERNAL_PASSWORD=${INTERNAL_PASSWORD:-local-internal-secret}
       - SPRING_DATASOURCE_USERNAME=${ORACLE_DEV_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${ORACLE_DEV_PASSWORD}
     networks:
@@ -102,9 +107,14 @@ services:
       - alloy-data:/var/lib/alloy/data
     # Run Alloy with specified storage path and configuration file
     command: run --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+    environment:
+      # config.alloy 的 prometheus.scrape 用 sys.env 讀這兩個，帶 Basic 憑證去 scrape app。
+      # 與 app 服務注入的是同一組值（刻意不寫死在 compose 裡，照 .env 的慣例）。
+      - INTERNAL_USERNAME=${INTERNAL_USERNAME:-internal}
+      - INTERNAL_PASSWORD=${INTERNAL_PASSWORD:-local-internal-secret}
     ports:
-      - "4318:4318" # Port for receiving OTLP data
-    # Alloy sends data to Prometheus
+      - "4318:4318" # Port for receiving OTLP traces（指標不走這裡，由 alloy 去 scrape app）
+    # Alloy scrapes app (metrics) and receives OTLP from app (traces); it writes to Prometheus and Tempo
     networks:
       - backend-net
       - monitor-net
@@ -177,7 +187,8 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
 networks:
-  # Network separation: app only pushes data to alloy, no direct access to prometheus
+  # Network separation: alloy is the only monitoring component that reaches app (it scrapes metrics
+  # from it, and app pushes traces to it); no direct access between app and prometheus
   backend-net:
     driver: bridge
   # Internal communication between monitoring tools

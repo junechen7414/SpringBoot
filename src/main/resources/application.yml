@@ -88,9 +88,9 @@ management:
   endpoints:
     web:
       exposure:
-        # 不含 prometheus：classpath 只有 micrometer-registry-otlp，沒有 prometheus
-        # registry，/actuator/prometheus 不會 materialize（列了也只是誤導）。
-        include: health,info,metrics
+        # prometheus 給 Alloy scrape 用。它刻意不在 SecurityConfig 放行：scraper 帶 internal 帳號的
+        # Basic 憑證（見 config.alloy），而這個端點會暴露整份 API 的 uri 樣板與連線池狀態。
+        include: health,info,metrics,prometheus
   otlp:
     metrics:
       export:

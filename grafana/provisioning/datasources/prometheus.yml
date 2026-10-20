@@ -19,18 +19,20 @@ datasources:
     # 佈建的 datasource 在 UI 上唯讀；要改請改這個檔案再重啟 grafana 容器。
     editable: false
     jsonData:
-      # 與 application-dev.yml 的 management.otlp.metrics.export.step 對齊，
+      # 與 config.alloy 的 prometheus.scrape "app" 的 scrape_interval 對齊，
       # Grafana 才知道資料點的最小間隔，$__rate_interval 也才算得準。
       timeInterval: 10s
       # 讓指標圖上的 exemplar 小菱形可以直接點進 Tempo 的那條 trace。
-      # 這條鏈要三個地方同時成立，缺一個都是「沒有小菱形」而不會報錯：
-      #   1. 應用要產生 exemplar —— OtlpExemplarsAutoConfiguration 在有 Tracer bean
-      #      時自動生效（見 docs/agents/09-monitoring.md）
-      #   2. Prometheus 要存 exemplar —— docker-compose.yml 的
+      # 這條鏈要五個環節同時成立，缺一個都是「沒有小菱形」而不會報錯
+      # （完整的表見 docs/agents/09-monitoring.md）：
+      #   1. 應用要產生 exemplar，且 Prometheus registry 只在 OpenMetrics 格式的回應裡才帶
+      #   2. Alloy 抓取時要協商 OpenMetrics —— config.alloy 的 scrape_protocols
+      #   3. Alloy 送出時要帶 exemplar —— config.alloy 的 send_exemplars = true
+      #   4. Prometheus 要存 exemplar —— docker-compose.yml 的
       #      --enable-feature=exemplar-storage
-      #   3. 這裡要告訴 Grafana「trace id 在哪個 label、要跳去哪個 datasource」
-      # name 是 exemplar 上的 label 名，由 Alloy 的 otelcol.exporter.prometheus
-      # 從 OTel exemplar 轉出來，固定叫 trace_id（不是 traceID／traceId）。
+      #   5. 這裡要告訴 Grafana「trace id 在哪個 label、要跳去哪個 datasource」
+      # name 是 exemplar 上的 label 名，由 Micrometer 寫在 exemplar 裡，
+      # 固定叫 trace_id（不是 traceID／traceId）。
       exemplarTraceIdDestinations:
         - name: trace_id
           # 對應 tempo.yml 裡寫死的 uid。

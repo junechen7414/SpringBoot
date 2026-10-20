@@ -33,7 +33,7 @@
 │  │  docker-compose.test.yml 啟動：                                │   │
 │  │  ┌──────────────┐  ┌──────────────┐                         │   │
 │  │  │ spring-boot  │  │  oracle-db   │   (沒有 alloy，              │   │
-│  │  │ app (e2e)    │──│  (真實Oracle) │    OTLP 匯出預設關閉)         │   │
+│  │  │ app (e2e)    │──│  (真實Oracle) │    沒人 scrape、不推 trace)    │   │
 │  │  │ Port: 8787   │  │  Port: 1521  │                         │   │
 │  │  └──────────────┘  └──────────────┘                         │   │
 │  │                                                              │   │
@@ -103,8 +103,8 @@
 **Docker Compose 架構（在 Playwright Repo）：**
 - `app` - Spring Boot 應用（使用 GHCR image，profile 設為 `e2e`）
 - `oracle-db` - Oracle 資料庫（container-registry.oracle.com/database/free:latest）
-- **沒有 alloy**：下游堆疊只有上述兩個服務，因此 `application-e2e.yml` 的 OTLP 匯出預設關閉
-  （`OTLP_METRICS_ENABLED=false`），避免每個 step 噴一次 DNS 解析失敗
+- **沒有 alloy**：下游堆疊只有上述兩個服務。指標由 Alloy 來 scrape app，沒有 alloy 就沒有人來抓，
+  app 不會有任何連線嘗試；追蹤的 OTLP exporter 在 `application-e2e.yml` 沒設 endpoint，也不會建立
 
 > **配置分工**：`application-e2e.yml` 只放與環境無關的設定（Flyway、`ddl-auto`、metrics tags）；
 > DB 主機／帳密、是否接監控堆疊等部署端參數一律由下游 compose 的環境變數提供，不寫進映像。
