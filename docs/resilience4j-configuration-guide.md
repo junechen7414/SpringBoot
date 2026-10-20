@@ -1726,7 +1726,7 @@ logging:
 
 #### 檢查指標
 ```bash
-# Actuator 指標（本專案走 OTLP push，沒有 /actuator/prometheus；時間序列改到 Prometheus 查）
+# Actuator 指標（/actuator/prometheus 存在但需要 internal 帳號的 Basic 認證，由 Alloy scrape；時間序列改到 Prometheus 查）
 curl -u api:local-api-secret http://localhost:8787/actuator/metrics/resilience4j.bulkhead.available.concurrent.calls
 ```
 

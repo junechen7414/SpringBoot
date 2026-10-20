@@ -130,9 +130,17 @@ Micrometer 剛好有這個 metric → 畫一個 panel → 以後應該用得到�
 
 ### 6.1 分不出「沒有錯誤」和「沒有資料」
 
-本專案是 OTLP **push**，不是 scrape（guide §2.1），所以 Prometheus 裡**沒有 `up` 這個 series**。後果是：app 掛掉時，各個 panel 會先緩緩下降、約 5 分鐘後變成一片空白 —— 看起來跟「一切正常、剛好沒流量」沒有兩樣。你不會看到任何紅色訊號。
+本專案的指標現在由 Alloy **scrape** `/actuator/prometheus`（guide §2、ADR 0003），所以 Prometheus 裡**有 `up{job="demo-app"}`**。「資料不見了」只要一句話：
 
-偵測「資料不見了」要自己寫，而且兩種寫法各自只涵蓋一段時間：
+```promql
+up{job="demo-app"} == 0
+```
+
+實測（`podman compose stop app`）：約 17 秒內 `up` 從 `1` 變 `0`（scrape 間隔 10 秒，加上一次 scrape 的失敗判定）。這比下面 push 模式的做法快得多，也不需要拍閾值。
+
+> **以下是 push 時代的做法**。指標改走 scrape 之前，Prometheus 裡沒有 `up`，app 掛掉時各個 panel 會先緩緩下降、約 5 分鐘後變成一片空白 —— 看起來跟「一切正常、剛好沒流量」沒有兩樣。保留這一段，因為（1）它的實測表仍然說明了 Prometheus 的 staleness 行為，（2）追蹤鏈仍然是 push，同樣的「分不出沒資料」問題在那條鏈上還在，（3）它是「語法正確、答案靜默是錯的」的好例子。
+
+push 模式下偵測「資料不見了」要自己寫，而且兩種寫法各自只涵蓋一段時間：
 
 ```promql
 # (a) 多久沒收到新資料（秒）
@@ -162,7 +170,7 @@ absent(http_server_requests_seconds_count{application="demo"})
 
 Dashboard 是給「**已經知道有事**」的人看的。自己一個人維護，沒有人在盯螢幕 —— 所以缺的不是更多 panel，而是一條規則。
 
-**第一條規則不該是錯誤率，而是 6.1 的「資料不見了」**：錯誤率告警在 app 掛掉時反而是安靜的（沒有資料就沒有錯誤），只有「資料不見了」這條會在最糟的情況下叫醒你。
+**第一條規則不該是錯誤率，而是 6.1 的「資料不見了」**，現在可以直接寫成 `up{job="demo-app"} == 0`：錯誤率告警在 app 掛掉時反而是安靜的（沒有資料就沒有錯誤），只有「資料不見了」這條會在最糟的情況下叫醒你。
 
 告警仍是 guide §10 的延後項目，本文件只說明方向與理由，不實作。
 
@@ -179,7 +187,7 @@ Dashboard 是給「**已經知道有事**」的人看的。自己一個人維護
 | counter / gauge 搞錯 | 對 gauge 包 `rate()`，得到毫無意義的數字，但圖照樣畫得出來 | guide §4.1 |
 | histogram bucket 太粗 | `histogram_quantile` 回一個看起來很精確的值，其實只是 bucket 邊界內插出來的 | guide §4.4 |
 | 聚合掉了需要的維度 | 「p99 = 800ms」不屬於任何一個 endpoint | §4 的延遲面板 |
-| rate 時間窗太短 | 窗小於推送間隔的 2 倍時，圖上出現斷斷續續的空洞 | 本專案 `step: 10s`，窗至少 `[30s]`；現有面板用 `[5m]`，安全 |
+| rate 時間窗太短 | 窗小於 scrape 間隔的 2 倍時，圖上出現斷斷續續的空洞 | 本專案 scrape 間隔 10 秒（`config.alloy`），窗至少 `[30s]`；現有面板用 `[5m]`，安全 |
 
 `[本專案]` 第二個陷阱在這裡有個更隱蔽的版本：**只有 `http.server.requests` 開了 histogram bucket**（`application-dev.yml` 的 `percentiles-histogram`，約 70 個 `le` 邊界）。可是在 Prometheus 裡，其他 timer（`jvm_gc_pause_seconds`、`hikaricp_connections_acquire_seconds`、`spring_data_repository_invocations_seconds`……）**也都查得到 `_bucket`** —— 只是每個都只有一個 `le="+Inf"`。對它們寫 `histogram_quantile` 不會報錯，而是回傳 `NaN`，圖上一片空白，很容易誤以為是「沒流量」。
 
@@ -191,7 +199,7 @@ Dashboard 是給「**已經知道有事**」的人看的。自己一個人維護
 我有一個 Prometheus metric：<名稱>
 - 型別：<counter / gauge / histogram>
 - labels：<列出來，例如 uri, method, status, outcome>
-- 推送間隔：10 秒
+- scrape 間隔：10 秒
 我要回答的問題是：<七問中的哪一個，用自己的話講>
 請給我 PromQL。然後另外告訴我：這個查詢在什麼情況下會「不報錯但算錯」？
 ```
@@ -206,11 +214,13 @@ GC 停頓正是上面那種「只有 `+Inf`」的 timer，所以不能用 `histo
 # 每次 GC 平均停多久（秒）
 sum(rate(jvm_gc_pause_seconds_sum[5m])) / sum(rate(jvm_gc_pause_seconds_count[5m]))
 
-# 最近一次推送週期內最長的一次停頓（秒）
-max(jvm_gc_pause_max_seconds)
+# 滾動視窗內最長的一次停頓（秒）
+max(jvm_gc_pause_seconds_max)
 ```
 
-注意第二句的名稱是 `jvm_gc_pause_max_seconds`，**不是**直覺會猜的 `jvm_gc_pause_seconds_max` —— 經 Alloy 轉成 Prometheus 命名時，單位後綴被移到最後。猜錯名稱時 Prometheus 不報錯，只回空結果；AI 給的名稱也一樣要先在 Prometheus 的 metric 瀏覽器確認過。這個值每個推送週期（10 秒）重新計算，那段時間沒發生 GC 就是 `0`。
+注意第二句的名稱是 `jvm_gc_pause_seconds_max`。這個名字**在 OTLP push 時代是另一個**：當時經 Alloy 轉成 Prometheus 命名，單位後綴被移到最後，叫 `jvm_gc_pause_max_seconds`。改成 scrape 之後由 Prometheus registry 直接命名，變回 `jvm_gc_pause_seconds_max`，dashboard 的這個 panel 也因此改過一次。同一個指標在兩種匯出方式下名字不同，而猜錯名稱時 Prometheus 不報錯，只回空結果 —— 所以 AI 給的名稱也一樣要先在 Prometheus 的 metric 瀏覽器確認過。
+
+這個值是 Micrometer 的滾動視窗最大值（`TimeWindowMax`），視窗輪替後沒有新的 GC 就會掉回 `0`。OTLP 時代它跟著 10 秒的推送週期重算；現在的視窗長度由 registry 的 `step` 與 distribution 的 `expiry` 決定，**本專案沒有實測過它多久會掉回 0**（只觀察到一次 24ms 的停頓發生後，90 秒內讀值都維持 0.024），所以不要拿「最近 N 秒」的說法解讀這條線。
 
 「下一個動作」測試：停頓持續超過 100ms → 對照同時段的延遲面板，確認使用者有感；有感才去調 heap 或 GC。
 

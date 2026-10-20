@@ -102,7 +102,7 @@ docker compose up -d
 此命令會啟動：
 - **Spring Boot App** (http://localhost:8787)
 - **Oracle Database** (localhost:1521)
-- **Grafana Alloy** (收集指標與 trace，應用唯一的匯出目標)
+- **Grafana Alloy** (指標：它去 scrape app 的 `/actuator/prometheus`；追蹤：app 以 OTLP 推給它，埠 4318)
 - **Prometheus** (http://localhost:9090)
 - **Tempo** (http://localhost:3200，trace 儲存與查詢；OTLP 的 4317/4318 刻意不對宿主發佈)
 - **Grafana** (http://localhost:3000)
@@ -131,7 +131,8 @@ ORACLE_DEV_USERNAME=your_username
 ORACLE_DEV_PASSWORD=your_password
 
 # HTTP Basic 認證（Spring Security）。本地 bootRun 未設定時，application.yml 有 dev 友善預設值；
-# 正式/共享環境務必覆蓋。api-*：一般 API 呼叫端；internal-*：內部 *Client loopback 自呼叫服務帳號。
+# 正式/共享環境務必覆蓋。api-*：一般 API 呼叫端；internal-*：內部 *Client loopback 自呼叫服務帳號，
+# 同時也是 Alloy scrape /actuator/prometheus 用的憑證（compose 把它同時注入 app 與 alloy，兩邊必須是同一個值）。
 # 這兩組是機器帳號，密碼以 {noop} 逐字比對、不做雜湊（理由見 SecurityConfig 註解）。
 API_USERNAME=api
 API_PASSWORD=change_me_api
@@ -142,6 +143,7 @@ INTERNAL_PASSWORD=change_me_internal
 > **呼叫受保護的 API**：加了 Spring Security 後，除了 `actuator health`（`/actuator/health/**`）與 springdoc 文件端點外，
 > 其餘端點都需要 HTTP Basic 認證，例如 `curl -u api:<密碼> http://localhost:8787/account/1`。
 > 內部 `*Client` 的 loopback 自呼叫由 `RestClientConfig` 自動帶入 `internal` 帳號憑證，無須手動處理。
+> `/actuator/prometheus` 也**不放行**：直接看 app 的指標要帶 `internal` 憑證，`curl -u internal:<密碼> http://localhost:8787/actuator/prometheus`。
 
 ### 測試執行
 

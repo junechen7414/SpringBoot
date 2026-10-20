@@ -2,16 +2,21 @@
 
 ### 收集鏈路
 
-指標與追蹤是**兩條獨立的鏈**，只共用 app 到 Alloy 這一段（同一個 OTLP/HTTP 4318 端點，
-由 Alloy 的 `output` 分流到不同下游）：
+指標與追蹤是**兩條獨立的鏈，而且方向不同**：指標由 Alloy 來 **scrape** app，追蹤由 app 把 span
+**推**給 Alloy。兩條只共用 Alloy 這個集中處理點：
 
 ```
-指標  Spring Boot App --OTLP/HTTP--> Alloy --remote_write--> Prometheus --> Grafana
-追蹤  Spring Boot App --OTLP/HTTP--> Alloy --OTLP/gRPC-----> Tempo      --> Grafana
+指標  Spring Boot App <--scrape(pull)-- Alloy --remote_write(push)--> Prometheus --> Grafana
+      (/actuator/prometheus，Basic 認證)
+追蹤  Spring Boot App --OTLP/HTTP(push)--> Alloy --OTLP/gRPC(push)--> Tempo      --> Grafana
 ```
 
 「獨立」的實際意義：關掉一條不影響另一條，某一條沒資料也**不能**用來推論另一條的狀態。
-app 只認得 Alloy 一個出口 —— Prometheus 與 Tempo 的 receiver 埠都刻意不對宿主發佈。
+Prometheus 與 Tempo 的 receiver 埠都刻意不對宿主發佈。
+
+指標原本也是 OTLP push，後來改成 Alloy scrape，為的是拿回 `up{job, instance}` 與
+`curl /actuator/prometheus` 這種除錯方式。決策與理由見
+[ADR 0003](../adr/0003-metrics-via-collector-scrape.md)。
 
 > 操作面（怎麼起堆疊、怎麼看圖、PromQL 怎麼寫、圖是空的怎麼查）見 **[`docs/monitoring-usage-guide.md`](../monitoring-usage-guide.md)**。本文件只描述鏈路結構與端點契約。
 
@@ -28,8 +33,9 @@ app 只認得 Alloy 一個出口 —— Prometheus 與 Tempo 的 receiver 埠都
 
 這個切分同時解釋了兩件事：
 
-- **為什麼中間那層可以整套換掉而不影響應用**：應用只知道 `${ALLOY_HOST}:4318` 這一個出口
-  （名字把實作洩進了部署契約，`OTLP_HOST` 的更名待議）。
+- **為什麼中間那層可以整套換掉而不影響應用**：應用對外只有兩個介面 —— 追蹤推到 `${ALLOY_HOST}:4318`
+  （名字把實作洩進了部署契約，`OTLP_HOST` 的更名待議），指標開在 `/actuator/prometheus` 讓人來抓。
+  換後端只是換誰來抓、誰來收。
 - **為什麼中間那層值得手刻**：把 Alloy / Prometheus / Tempo / Grafana 分開跑，每一跳都能單獨
   curl。本專案三次靜默失敗（指標斷線 54 天、Tempo 3.x 設定不相容、exemplar 三環鏈）都是在
   跳點分離的情況下才查得出來。
@@ -66,9 +72,10 @@ socket**，podman 供得起 —— 本 repo 的 Oracle 整合測試容器就是�
 
 - **健康檢查**: `/actuator/health`（亦為映像內建 `HEALTHCHECK` 的探測目標，下游 E2E repo 依賴此健康狀態判斷就緒；契約細節見 [02-setup.md](./02-setup.md#映像內建-healthcheck重要契約)）
 - **指標**: `/actuator/metrics`
-- **Prometheus scrape 端點**: 無。本專案只引入 `micrometer-registry-otlp`（由 `spring-boot-starter-opentelemetry` 帶入，見 `build.gradle`），未引入 `micrometer-registry-prometheus`，故 `/actuator/prometheus` 端點不存在（無 registry 就不會 materialize，實際回 404；因此 `application.yml` 的 `exposure.include` 也刻意不列 prometheus）。指標一律走 **OTLP push**（app → Alloy），非 Prometheus 主動 scrape。
-- Prometheus 這一端也不 scrape 任何 target：`prometheus.yml` 的 `scrape_configs` 為空，它是**被推**的一方。接收 remote_write 靠的是 `docker-compose.yml` 裡的 `--web.enable-remote-write-receiver` CLI flag，**不是**設定檔裡的 `remote_write:` 區塊（那個區塊語意相反，是把資料推出去）。
-- **此選擇的代價**：沒有 scrape 就沒有 Prometheus 自動產生的 `up` 時間序列，因此「app 掛了」與「網路斷了」「Alloy 掛了」「依賴不齊靜默不推」在查詢層面無法區分（都是沒資料）。要偵測服務存活只能用 `absent()` / `time() - timestamp(...)`。設計告警規則前先讀 [`docs/monitoring-usage-guide.md` §2.1](../monitoring-usage-guide.md#21-push-與-scrape-的取捨這個代價值不值得)。
+- **Prometheus scrape 端點**: `/actuator/prometheus`，由 `micrometer-registry-prometheus` 提供（`build.gradle`），並列在 `application.yml` 的 `exposure.include`。**需要 Basic 認證，刻意不在 `SecurityConfig` 放行**：Alloy 的 `basic_auth` 帶 `internal` 帳號的憑證來抓。health 會放行是因為 Dockerfile `HEALTHCHECK` 的 `wget` 是下游 E2E 依賴的契約，這個理由不適用於 scraper。直接看 app 的指標：`curl -u internal:<密碼> http://localhost:8787/actuator/prometheus`。
+- **兩個 registry 不能同時匯出**：`micrometer-registry-otlp` 仍在 classpath（`spring-boot-starter-opentelemetry` 帶入，追蹤鏈需要這個 starter，不能移除），但 `management.otlp.metrics.export.enabled` 必須維持 `false`。兩條線同時進 Prometheus，同一個指標會出現兩組 series（scrape 那組帶 `job`/`instance`，OTLP 那組沒有），`sum by (uri)` 會**靜默地算成兩倍**，不報錯。檢查：`http_server_requests_seconds_count{job=""}` 應該是空的。
+- Prometheus 這一端不 scrape 任何 target：`prometheus.yml` 的 `scrape_configs` 為空，由 Alloy 去抓再 remote_write 進來（`up{job="demo-app"}` 是 Alloy 寫入的）。接收 remote_write 靠的是 `docker-compose.yml` 裡的 `--web.enable-remote-write-receiver` CLI flag，**不是**設定檔裡的 `remote_write:` 區塊（那個區塊語意相反，是把資料推出去）。
+- **存活偵測**: `up{job="demo-app"} == 0`。這是改成 scrape 的主要動機；push 時代只能用 `absent()` / `time() - timestamp(...)`。取捨的完整比較見 [`docs/monitoring-usage-guide.md` §2.1](../monitoring-usage-guide.md#21-曾經是全程-push現在指標改走第三條路)。
 
 ### 健康檢查（HEALTHCHECK）的運作機制
 
@@ -99,17 +106,21 @@ wget 的請求跟外部請求走**同一條** servlet filter chain。若 `/actua
 ### 匯出的依賴前提（**動 `build.gradle` 前必讀**）
 
 這一區的失敗模式只有一種，而且是最難查的一種：**依賴少一個就完全不匯出，且沒有任何錯誤
-訊息**。指標那條路曾為此中斷 54 天 —— 因為 `/actuator/metrics` 照樣正常回應（那是 composite
+訊息**。指標那條路（OTLP push 時代）曾為此中斷 54 天 —— 因為 `/actuator/metrics` 照樣正常回應（那是 composite
 registry 裡的 `SimpleMeterRegistry` 在撐），從端點完全看不出異常。
+
+指標改走 scrape 之後，這個坑在指標側變得**可偵測**：沒有 `micrometer-registry-prometheus` 時
+`/actuator/prometheus` 回 404、`up == 0`。追蹤側沒有等價的訊號，仍是同一種靜默失敗。
 
 Boot 4 把 actuator 拆成多個模組，湊齊這組 artifact 的難度比 Boot 3 高得多：
 
 | 鏈路 | autoconfiguration | `@ConditionalOnClass` 要求的類別（來自幾個 artifact） |
 |---|---|---|
-| 指標 | `OtlpMetricsExportAutoConfiguration` | `OtlpMeterRegistry`、`OpenTelemetryProperties` —— **2** 個 artifact |
+| 指標（scrape） | `PrometheusMetricsExportAutoConfiguration` | `micrometer-registry-prometheus`（`build.gradle` 明列），失敗時 `/actuator/prometheus` 回 404 |
+| 指標（OTLP，**已關閉匯出**） | `OtlpMetricsExportAutoConfiguration` | `OtlpMeterRegistry`、`OpenTelemetryProperties` —— **2** 個 artifact；仍在 classpath 但 `enabled: false` |
 | 追蹤 | `OtlpTracingAutoConfiguration` | `OtelTracer`、`OpenTelemetry`、`OtlpHttpSpanExporter`、`SdkTracerProvider` —— 4 個類別散在 **3** 個 artifact |
 
-所以本專案**不逐條列 artifact**，改為引入單一 starter：
+所以本專案**不逐條列 artifact**，追蹤相關的一律引入單一 starter：
 
 ```gradle
 implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
@@ -128,24 +139,27 @@ autoconfiguration 在這裡，不在 `spring-boot-actuator-autoconfigure`）、`
 ./gradlew dependencies --configuration runtimeClasspath
 ```
 
-診斷階梯見 [`docs/monitoring-usage-guide.md` §6.1](../monitoring-usage-guide.md#61-最惡毒的一種什麼都沒推而且沒有任何錯誤訊息)。
+診斷階梯見 [`docs/monitoring-usage-guide.md` §6.1](../monitoring-usage-guide.md#61-最惡毒的一種什麼都沒有而且沒有任何錯誤訊息)。
 
-### 指標匯出設定（改動前務必了解）
+### 指標設定（改動前務必了解）
 
-設定在 `application-dev.yml`（base `application.yml` 的 `management.otlp.metrics.export.enabled` 預設 **false**，只有 dev profile 打開，讓 `integration-test` / `openapi` 不會嘗試推送；`e2e` 預設也是關的，下游若補上 alloy 服務可用 `OTLP_METRICS_ENABLED=true` 打開）。
+指標由 Alloy scrape，app 這一側沒有「推送」要設定，只有「端點開著、格式對」。
 
 | 設定 | 值 | 為什麼不能省 |
 |---|---|---|
-| `management.otlp.metrics.export.base-time-unit` | `seconds` | Micrometer OTLP **預設 milliseconds** → 指標名會變成 `..._milliseconds_...`、值為毫秒，與 Prometheus 慣例、所有 PromQL 範例、Grafana 的 `s` 單位全部不合 |
-| `management.metrics.distribution.percentiles-histogram` | `http.server.requests: true` | 不開的話 OTLP 只送 `count`/`sum`、**沒有 `_bucket`** → `histogram_quantile()` 一律回空值，p99 查不到 |
-| `management.otlp.metrics.export.aggregation-temporality` | **不設**（預設 `cumulative`） | Prometheus 的 `rate()` 依賴單調遞增的累積計數；改成 `delta` 會讓所有 `rate()` 查詢失效 |
+| `management.endpoints.web.exposure.include`（`application.yml`） | 含 `prometheus` | 沒列的話端點不暴露，Alloy 抓到 404 |
+| `management.otlp.metrics.export.enabled`（`application.yml`） | **`false`，不要在任何 profile 打開** | 兩個 registry 同時匯出，Prometheus 會有兩組 series，`sum by (uri)` 靜默地算成兩倍 |
+| `management.metrics.distribution.percentiles-histogram`（`application-dev.yml`） | `http.server.requests: true` | 不開的話 `/actuator/prometheus` 只有 `count`/`sum`、**沒有 `_bucket`** → `histogram_quantile()` 一律回空值，p99 查不到 |
 
-環境變數（皆為選填，不設就用 `application-dev.yml` 的預設）：
+**已不需要的設定**（OTLP push 時代的旋鈕，改成 scrape 後消失）：`base-time-unit: seconds`（Prometheus registry 固定用秒）、`aggregation-temporality`（固定累積值）、`OTLP_METRICS_ENABLED` 環境變數（沒有指標推送可關）。如果有人重新打開 OTLP 指標匯出，這三個坑會一起回來。
+
+環境變數：
 
 | 變數 | 預設 | 用途 |
 |---|---|---|
-| `ALLOY_HOST` | `localhost` | OTLP 目標主機名。`docker-compose.yml` 為 `app` 注入 `alloy`；本機 IDE/`bootRun` 省略即可。與 `ORACLE_DB_HOST` 同一慣例 —— **只有主機名因執行環境而異**，URL 格式寫在設定檔 |
-| `OTLP_METRICS_ENABLED` | `true` | 設 `false` 可在本機不起監控堆疊時關掉推送，避免每個 `step`（10s）噴一次連線失敗 |
+| `INTERNAL_USERNAME` / `INTERNAL_PASSWORD` | `internal` / `local-internal-secret` | Alloy scrape 的 Basic 憑證，與 `*Client` loopback 同一組。`docker-compose.yml` 同時注入 app 與 alloy，**兩邊必須是同一個值**，不一致時 `up == 0`（401） |
+
+指標名稱現在由 Prometheus registry 決定，與 OTLP 轉譯時不同（例如 GC 最長停頓：`jvm_gc_pause_max_seconds` → `jvm_gc_pause_seconds_max`）。寫 PromQL 前先查真名。
 
 ### 追蹤（tracing）設定（改動前務必了解）
 
@@ -154,18 +168,14 @@ endpoint 上」。
 
 | 設定 | 值 | 為什麼 |
 |---|---|---|
-| `management.opentelemetry.tracing.export.otlp.endpoint` | `http://${ALLOY_HOST:localhost}:4318/v1/traces` | 與指標同一個 Alloy、同一個 4318 埠，只有 path 不同 |
+| `management.opentelemetry.tracing.export.otlp.endpoint` | `http://${ALLOY_HOST:localhost}:4318/v1/traces` | Alloy 的 OTLP 4318 埠。指標已改走 scrape，現在只有追蹤用這個埠 |
 | `management.tracing.sampling.probability` | `1.0` | **預設是 0.1**。單機 demo 上 10% 採樣會變成「打了 API 卻查不到 trace」的常態，很容易誤判成鏈路沒接通。正式環境請往下調 —— trace 量與儲存成本成正比 |
 | `management.tracing.export.otlp.enabled` | `${OTLP_TRACING_ENABLED:true}` | 本機不起監控堆疊時設 `false`，免得 batch span processor 每 5 秒噴一次連線失敗。由 `@ConditionalOnEnabledTracingExport` 消化 |
 
 #### 三個容易踩的點
 
-**1. 屬性名不對稱。** 指標與追蹤的 namespace 長得不一樣，靠記憶類推一定寫錯：
-
-| | 屬性 |
-|---|---|
-| 指標端點 | `management.otlp.metrics.export.url` |
-| 追蹤端點 | `management.opentelemetry.tracing.export.otlp.endpoint` |
+**1. 追蹤的屬性名很長，靠記憶類推一定寫錯。** 追蹤端點是 `management.opentelemetry.tracing.export.otlp.endpoint`；
+OTLP 指標端點（`management.otlp.metrics.export.url`，已不使用）的 namespace 長得完全不同。
 
 **2. Boot 3.x 的舊屬性名在 Boot 4 是 `deprecation level: error`。** 寫舊名**不是**靜默失效，
 而是**直接啟動失敗**（這點與依賴缺失的失敗模式恰好相反）：
@@ -180,15 +190,15 @@ endpoint 上」。
 `@ConditionalOnProperty(...export.otlp.endpoint)`，而 `$Exporters` 是
 `@ConditionalOnBean(OtlpTracingConnectionDetails)`。**不設 endpoint → 沒有 exporter bean →
 不會嘗試連線、也不會有錯誤**。因此 `integration-test`／`openapi`／`e2e` 都不必寫
-`enabled: false`（指標那條路需要，因為 registry 的條件不看 URL）。`@SpringBootTest` 另有一層
-保護：Boot 預設不在測試中自動配置匯出元件。
+`enabled: false`（OTLP 指標那條路需要，因為 registry 的條件不看 URL，所以 base `application.yml`
+把它關著）。`@SpringBootTest` 另有一層保護：Boot 預設不在測試中自動配置匯出元件。
 
 環境變數：
 
 | 變數 | 預設 | 用途 |
 |---|---|---|
-| `ALLOY_HOST` | `localhost` | 與指標**共用**同一個變數，不另設一個 |
-| `OTLP_TRACING_ENABLED` | `true` | 與 `OTLP_METRICS_ENABLED` 用途相同但彼此獨立 |
+| `ALLOY_HOST` | `localhost` | OTLP 追蹤目標主機名。`docker-compose.yml` 為 `app` 注入 `alloy`；本機 IDE/`bootRun` 省略即可。與 `ORACLE_DB_HOST` 同一慣例 —— **只有主機名因執行環境而異**，URL 格式寫在設定檔。**現在只剩追蹤在用**（指標由 Alloy 來抓） |
+| `OTLP_TRACING_ENABLED` | `true` | 設 `false` 可在本機不起監控堆疊時關掉追蹤匯出 |
 
 #### 兩個副作用（都是預期行為）
 
@@ -196,20 +206,23 @@ endpoint 上」。
   插入 `[demo,traceId,spanId]`（`demo` 來自 `spring.application.name`）。沒有 trace context 時
   那格是空白（例如啟動與 shutdown hook 的訊息）。本專案沒有自訂 `logging.pattern.*`，所以是
   Boot 的預設格式在生效 —— 看到 log 變寬不是壞掉。
-- **OTLP 指標會開始帶 exemplars。** `OtlpExemplarsAutoConfiguration` 是
-  `@ConditionalOnBean(io.micrometer.tracing.Tracer)`，一旦有 Tracer 就生效
-  （`management.tracing.exemplars.include` 預設 `sampled-traces`）。但**應用端產生只是三分之一**
-  —— 要在 Grafana 的指標圖上點小菱形跳進 trace，這三處必須同時成立，缺任何一處都**不會報錯**，
-  症狀一律是「沒有小菱形」：
+- **指標會開始帶 exemplars。** 一旦有 `io.micrometer.tracing.Tracer` bean，Micrometer 就會在
+  指標樣本上掛 trace 資訊（`management.tracing.exemplars.include` 預設 `sampled-traces`）。但
+  **應用端產生只是五分之一** —— 要在 Grafana 的指標圖上點小菱形跳進 trace，這五個環節必須同時成立，
+  缺任何一個都**不會報錯**，症狀一律是「沒有小菱形」：
 
   | 環節 | 設定 | 缺了會怎樣 |
   |---|---|---|
-  | 應用產生 | 有 Tracer bean 即自動生效（無需設定） | OTLP 指標裡沒有 exemplar |
+  | 應用產生 | 有 Tracer bean 即自動生效（無需設定）；但 Prometheus registry **只在 OpenMetrics 格式的回應裡**帶 exemplar（請求要帶 `Accept: application/openmetrics-text`） | 純文字格式的回應沒有 exemplar |
+  | Alloy 抓取 | `config.alloy` 的 `prometheus.scrape` 要協商 OpenMetrics（`scrape_protocols` 以 `OpenMetricsText1.0.0` 優先） | 以純文字抓，exemplar 在這一步消失 |
+  | Alloy 送出 | `config.alloy` 的 `prometheus.remote_write` endpoint 設 `send_exemplars = true`（Alloy 預設已是 true，明寫是為了讓這條鏈上的每一環都看得見） | 抓到了但沒送出去 |
   | Prometheus 儲存 | `docker-compose.yml` 的 `--enable-feature=exemplar-storage` | remote write 收下後直接丟掉，`/api/v1/query_exemplars` 永遠回空陣列 |
   | Grafana 連結 | `grafana/provisioning/datasources/prometheus.yml` 的 `exemplarTraceIdDestinations`（`name: trace_id`、`datasourceUid: tempo`） | exemplar 有存但 Grafana 不知道要跳去哪 |
 
-  label 名是 `trace_id`／`span_id`（由 Alloy 的 `otelcol.exporter.prometheus` 從 OTel exemplar
-  轉出），不是 `traceID` 或 `traceId`；寫錯同樣是靜默失效。驗證方式：
+  label 名是 `trace_id`／`span_id`，不是 `traceID` 或 `traceId`；寫錯同樣是靜默失效。驗證方式分兩段，
+  可以先分辨是 app 沒產生還是後面斷了：
+  `curl -u internal:<密碼> -H 'Accept: application/openmetrics-text' http://localhost:8787/actuator/prometheus | grep trace_id`
+  —— 有 `# {span_id="…",trace_id="…"}` 就是 app 這一環正常；再用
   `curl --get 'http://localhost:9090/api/v1/query_exemplars' --data-urlencode 'query=http_server_requests_seconds_bucket' --data-urlencode 'start=...' --data-urlencode 'end=...'`
   —— 回傳的 `labels` 裡要看得到 `trace_id`。
 

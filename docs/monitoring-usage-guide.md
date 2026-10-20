@@ -29,75 +29,85 @@
 
 ---
 
-## 2. 本專案的管線：push，不是 scrape
+## 2. 本專案的管線：指標用 scrape、追蹤用 push
 
 ```
-Spring Boot App          Grafana Alloy              Prometheus            Grafana
-(micrometer-otlp)  --->  (otelcol receiver)  --->   (TSDB)        <---    (查詢並畫圖)
-    每 10s 主動推          轉譯格式後 remote_write      被動接收              PromQL
-       OTLP/HTTP :4318         :9090/api/v1/write      :9090               :3000
+指標  Spring Boot App  <--- scrape(pull) ---  Grafana Alloy  --- remote_write(push) --->  Prometheus   <--- PromQL ---  Grafana
+      /actuator/prometheus  每 10s 主動抓       prometheus.scrape                        :9090/api/v1/write   :9090          :3000
+      (Basic 認證，internal 帳號)
+
+追蹤  Spring Boot App  --- OTLP/HTTP push --->  Grafana Alloy  --- OTLP/gRPC push --->  Tempo
+                            :4318                                                          :4317
 ```
 
-這張圖只畫**指標**那條鏈。追蹤共用第一段（同一個 4318 端點），但在 Alloy 之後轉向 Tempo —— 見 §9。
+指標與追蹤是**兩條獨立的鏈**，方向也不同：指標由 Alloy 來**抓** app，追蹤由 app 把 span **推**給 Alloy。這張圖畫的是指標那條；追蹤見 §9。
+
+> **這一節的歷史**：本專案原本指標也是全程 push（app 以 OTLP 推給 Alloy），2.1 記錄了當時的取捨與代價。現在改成第三條路，決策與理由見 [`docs/adr/0003-metrics-via-collector-scrape.md`](./adr/0003-metrics-via-collector-scrape.md)。
 
 四段各自的責任與「壞掉時的症狀」：
 
 | Hop | 誰對誰做什麼 | 壞掉的症狀 |
 |---|---|---|
-| 1. app → Alloy | app 每 `step`（10s）把指標 **POST** 到 `http://${ALLOY_HOST}:4318/v1/metrics` | app log 出現連線失敗；Prometheus 查不到任何 `http_server_*` |
-| 2. Alloy 內部 | `otelcol.receiver.otlp` 收下 → `otelcol.exporter.prometheus` 轉成 Prometheus 命名（`.` → `_`，補單位後綴）→ `prometheus.remote_write` 推出去 | Prometheus 有連線但指標名跟你查的不一樣（見 §6 決策樹第 2 步） |
-| 3. Alloy → Prometheus | remote_write 推進 `http://prometheus:9090/api/v1/write` | Prometheus 完全沒資料 |
+| 1. Alloy → app | Alloy 的 `prometheus.scrape "app"` 每 10s 對 `app:8787/actuator/prometheus` 發 GET，帶 `internal` 帳號的 Basic 憑證 | `up{job="demo-app"} == 0`；`curl` 該端點可以直接看到 app 認為自己的指標 |
+| 2. Alloy 內部 | scrape 到的樣本直接交給 `prometheus.remote_write`，**沒有格式轉譯**（OTLP 時代那一步已不存在） | 一般不會壞；exemplar 在這裡要靠 `send_exemplars` 和 OpenMetrics 協商，缺了不報錯（見 §9.3） |
+| 3. Alloy → Prometheus | remote_write 推進 `http://prometheus:9090/api/v1/write` | Prometheus 完全沒資料，但 `up` 也沒有 |
 | 4. Grafana → Prometheus | Grafana 拿 PromQL 去查 `http://prometheus:9090` | Prometheus UI 查得到、Grafana panel 卻空白 → datasource 設定問題 |
 
-### 為什麼是 push 而不是 scrape（很多教材預設 scrape，會對不上）
+### 為什麼 Prometheus 自己不 scrape
 
-多數 Prometheus 教材的模型是：Prometheus 定時去每個 app 的 `/actuator/prometheus` **抓**（scrape）。本專案**不是**這樣：
+多數教材是 Prometheus 直接去抓 app。本專案改成**讓 Alloy 去抓**，Prometheus 的 `scrape_configs` 仍然是空的、仍然只被動接收 remote_write：
 
-- `build.gradle` 的 `spring-boot-starter-opentelemetry` 帶進來的是 `micrometer-registry-otlp`，**沒有** `micrometer-registry-prometheus`。沒有那個 registry，`/actuator/prometheus` 端點就不會存在（實際打會回 **404**）。這是刻意的，不是漏掉。
-- 因此 `prometheus.yml` 的 `scrape_configs` 是**空的**，Prometheus 在這條鏈裡是**被推**的一方。
+- `/actuator/prometheus` 需要 Basic 認證（刻意不放行，理由見 ADR 0003），憑證集中放在 Alloy 一處，Prometheus 不必知道。
+- 對後端仍然是 push，保住集中處理點（relabel、fan-out）與網路方向。
 
 **踩過的坑**：讓 Prometheus 能「接收」remote_write，靠的是 `docker-compose.yml` 裡的 CLI flag `--web.enable-remote-write-receiver`，**不是**設定檔裡的 `remote_write:` 區塊。那個區塊語意剛好相反——它是叫 Prometheus 把自己的資料推**出去**給別的後端。舊版 `prometheus.yml` 曾經把自己的位址填進去（等於推給自己），註解還寫成「開啟接收功能」，兩者都是錯的。
 
-### 2.1 push 與 scrape 的取捨（這個代價值不值得）
+### 2.1 曾經是全程 push，現在指標改走第三條路
 
-上面說了「本專案是 push」，但沒說為什麼要付代價。這一節把帳算清楚 —— 因為**這條鏈的每個排錯難點都源自這個選擇**，理解它比記住指令重要。
+原本的設計是「app → Alloy → Prometheus 全程 push」。這一節保留當時的取捨表，因為它同時是**為什麼改**的證據，也是理解 push 與 scrape 差別的教材。
 
-兩條路徑攤開比較：
+三條路攤開比較：
 
 ```
-本專案：  app --OTLP push--> Alloy --remote_write push--> Prometheus     （全程 push）
+曾經：    app --OTLP push--> Alloy --remote_write push--> Prometheus     （全程 push）
 傳統：    Prometheus --HTTP GET--> app:8787/actuator/prometheus          （Prometheus 主動拉）
+現在：    Alloy --HTTP GET--> app:8787/actuator/prometheus, Alloy --remote_write--> Prometheus
+                                                                        （collector 去 scrape，再 push 給後端）
 ```
 
-**push 換到了什麼**
+**全程 push 換到了什麼**（現在指標改走 scrape 後，這幾項哪些還在，標在右欄）
 
-| 好處 | 說明 |
-|---|---|
-| 不需要 service discovery | Prometheus 不必知道 app 在哪，反過來由 app 知道 collector 在哪（就是 `ALLOY_HOST`）。對**短命 workload** 是生死級差別 —— 活 20 秒的 batch job / CI 容器，10 秒 scrape 間隔可能整段錯過 |
-| 網路方向對了 | push 是 outbound。scrape 要求監控端能主動連進**每一個** app 實例；跨 NAT、跨網段、跨雲、只開出不開進的防火牆環境下，那是行政問題不是技術問題 |
-| 中間多一層可插拔的處理點 | relabel、砍高基數 label、補 resource attribute、同時 fan-out 到多個後端 —— 全在 Alloy 做，**app 一行都不用改**。換後端不動應用程式，這是 collector 模式最實際的價值 |
-| 三根柱子共用一條線 | OTLP 同一個協定送 metrics/traces/logs，resource attributes 一致。tracing（§9）走的就是同一個 4318 端點，trace 與 metric 的 label 對得上 |
-| app 不必裸露指標端點 | 也就沒有「要不要讓 Prometheus 過 Basic Auth」這個問題 |
+| 好處 | 說明 | 現在 |
+|---|---|---|
+| 不需要 service discovery | Prometheus 不必知道 app 在哪，反過來由 app 知道 collector 在哪。對**短命 workload** 是生死級差別 —— 活 20 秒的 batch job，10 秒 scrape 間隔可能整段錯過 | 放棄。本專案 compose 內寫死一個 target，不需要 discovery；真有短命 workload 才需要回頭考慮 |
+| 網路方向對了 | push 是 outbound。scrape 要求監控端能主動連進**每一個** app 實例；跨 NAT、跨網段的環境下是行政問題 | 部分放棄。Alloy 要連得到 app；但對後端（Prometheus）仍是 push |
+| 中間多一層可插拔的處理點 | relabel、砍高基數 label、同時 fan-out 到多個後端 —— 全在 Alloy 做，app 一行都不用改 | **保留**。Alloy 還在，scrape 的樣本一樣經過它 |
+| 三根柱子共用一條線 | OTLP 同一個協定送 metrics/traces/logs，resource attributes 一致 | 放棄指標這一半；追蹤仍走 OTLP，trace 與指標的 label 靠 exemplar 的 `trace_id` 對上 |
+| app 不必裸露指標端點 | 也就沒有「要不要讓 Prometheus 過 Basic Auth」這個問題 | 放棄。端點必須存在，改用 Basic 認證（不放行）處理 |
 
-**push 付出了什麼**（這些是真痛，不是為了對稱而列）
+**全程 push 付出的代價**（這就是改的動機，右欄是改完之後的結果）
 
-| 代價 | 說明 |
-|---|---|
-| **失去 `up`** | 最大的損失。scrape 模式下 Prometheus 每抓一次就自動生一條 `up{job=...}`，app 掛了 → `up == 0`，這是最可靠的告警基礎。push 模式下「app 掛了」「網路斷了」「Alloy 掛了」「依賴沒裝所以根本沒推」在圖上**長得一模一樣**：都是沒資料。要偵測只能寫 `absent(...)` 或 `time() - timestamp(...) > 60` 這類彆扭查詢，閾值還得自己拍 |
-| 除錯直觀性差一級 | scrape 模式 `curl http://app:8787/actuator/prometheus` 就看到 app 這一刻的全部指標，一眼定位。push 模式你**看不到 app 認為自己的指標是什麼**，只能沿鏈路一段段猜。§6 那棵決策樹之所以需要那麼多步，就是這個代價的帳單 |
-| 鏈越長，靜默失敗的位置越多 | §6.1 那個坑（少一個 artifact → 沒有 `OtlpMeterRegistry` bean → 靜默斷了 54 天）在 pull 模式下藏不住：端點回 404 或空白，太明顯 |
-| 背壓方向反了 | pull 模式是 Prometheus 決定抓多快，它忙就慢慢抓，app 不受影響。push 模式是 app 決定推多快，後端撐不住只能靠 Alloy 的 queue/WAL 頂著，滿了就**丟資料** |
-| 多一個要自己顧的元件 | Alloy 自己會不會掛、WAL 會不會塞爆磁碟、它自己的指標誰在看 —— 監控系統也需要被監控 |
-| 多一層格式轉換 = 多一個能設錯的地方 | 就是 [`09-monitoring.md` 的設定表](./agents/09-monitoring.md#指標匯出設定改動前務必了解)那三列：`base-time-unit` 錯 → 指標名帶 `_milliseconds`、單位全錯；`percentiles-histogram` 沒開 → 沒有 `_bucket`、p99 永遠空；`aggregation-temporality` 改 delta → 所有 `rate()` 失效。pull 模式下 exporter 吐什麼就是什麼 |
-| 指標名會被改寫 | `.` → `_`、加單位/型別後綴，跟 app 裡宣告的名字不同 —— 所以寫 dashboard 前**必須先去 Prometheus 問真名**（§6 決策樹第 2 步）。pull 模式所見即所得 |
+| 代價 | 說明 | 現在 |
+|---|---|---|
+| **失去 `up`** | 最大的損失。app 掛了、網路斷了、Alloy 掛了、依賴沒裝所以根本沒推，在圖上**長得一模一樣**：都是沒資料 | **拿回來了**。`up{job="demo-app"} == 0` 一句話；實測 app 停掉後約 17 秒內變 0 |
+| 除錯直觀性差一級 | push 模式你看不到 app 認為自己的指標是什麼，只能沿鏈路一段段猜 | **拿回來了**。`curl -u internal:... localhost:8787/actuator/prometheus` 一眼定位 |
+| 鏈越長，靜默失敗的位置越多 | 少一個 artifact → 沒有 `OtlpMeterRegistry` bean → 靜默斷了 54 天（§6.1） | 大幅改善。端點回 404 或空白，太明顯，藏不住 |
+| 背壓方向反了 | push 模式是 app 決定推多快，後端撐不住只能靠 Alloy 的 queue/WAL 頂著，滿了就丟資料 | **拿回來了**（對 app 這一段）。Alloy 決定抓多快 |
+| 多一個要自己顧的元件 | Alloy 自己會不會掛、WAL 會不會塞爆磁碟 | 不變。Alloy 還在 |
+| 多一層格式轉換 = 多一個能設錯的地方 | `base-time-unit` 錯 → 指標名帶 `_milliseconds`；`aggregation-temporality` 改 delta → 所有 `rate()` 失效 | **消失**。Prometheus registry 固定用秒、固定累積值，沒有這幾個旋鈕 |
+| 指標名會被改寫 | `.` → `_`、加單位/型別後綴，跟 app 裡宣告的名字不同 | 規則改變但仍要先查真名。`jvm_gc_pause_max_seconds`（OTLP 轉譯）變成 `jvm_gc_pause_seconds_max`（Prometheus registry），dashboard 的 GC panel 就因此改過一次 |
+
+**新增的代價**（改成 scrape 才有的）
+
+- **兩個 registry 不能同時匯出**：同一個指標會在 Prometheus 出現兩組 series（scrape 那組帶 `job`/`instance`，OTLP 那組沒有），`sum by (uri)` 會**靜默地算成兩倍**，不會報錯。所以 OTLP 指標匯出在 `application*.yml` 是關的；`micrometer-registry-otlp` 仍在 classpath（追蹤用的 starter 帶進來）但不匯出。
+- **exemplar 多一環**：Prometheus registry 只在 OpenMetrics 格式的回應裡帶 exemplar，所以 `prometheus.scrape` 要協商 OpenMetrics，`remote_write` 要 `send_exemplars`，缺一環都不報錯、只是沒有小菱形（§9.3）。
+- **端點需要認證**：`/actuator/prometheus` 不放行，憑證要在 app 與 Alloy 兩邊拿到同一個值（`INTERNAL_PASSWORD`，compose 同時注入）。
 
 **實務上怎麼選**
 
-兩者不對立，主流是混搭：k8s 內用 pull（現成的 service discovery、白送的 `up`），k8s 外／短命／跨網段用 OTLP push。
+兩者不對立，主流是混搭：k8s 內用 pull（現成的 service discovery、白送的 `up`），k8s 外／短命／跨網段用 OTLP push。本專案現在是**指標 pull、追蹤 push**的混搭，也是實務上常見的形態。
 
-還有第三條路，很多團隊實際落在這裡：**讓 collector 自己去 scrape，再 remote_write 出去**（Alloy 的 `prometheus.scrape` 元件）—— 對 app 是 pull（保住 `up`、保住 `curl` 除錯），對後端是 push（保住集中處理與網路方向）。想清楚的話這通常是最好的組合。
-
-本專案選 push 的理由是簡單（compose 內一條線、不用 service discovery）加上教學價值（OTLP 是現在的通用語）。**具體少掉的就是 `up`** —— 所以之後要加告警的話（§10），第一條規則不會是「錯誤率 > 5%」，而是「資料不見了」。
+之後要加告警的話（§10），第一條規則現在可以直接寫成 `up == 0`。
 
 ---
 
@@ -138,7 +148,7 @@ try { Invoke-RestMethod -Uri 'http://localhost:8787/account/999999' -Headers $au
 
 注意路徑**沒有** `/api` 前綴。帳密 `api` / `local-api-secret` 是 `application.yml` 的本機預設值（正式環境以 env 覆蓋）。
 
-推送間隔是 10 秒，所以**打完請求最多等 10～20 秒**指標才會出現在 Prometheus。
+Alloy 每 10 秒 scrape 一次，所以**打完請求最多等 10～20 秒**指標才會出現在 Prometheus。
 
 ### 步驟 3：先在 Prometheus UI 確認資料真的進去了
 
@@ -150,7 +160,15 @@ try { Invoke-RestMethod -Uri 'http://localhost:8787/account/999999' -Headers $au
 (Invoke-RestMethod 'http://localhost:9090/api/v1/label/__name__/values').data | Where-Object { $_ -like 'http_server*' }
 ```
 
-應該看到 `http_server_requests_seconds_count` / `_sum` / `_bucket`。**若後綴跟這裡寫的不一樣，以實際查到的為準**（Alloy 的命名轉譯會依指標單位與型別補後綴），並照 §8 修正 dashboard 的 PromQL。
+應該看到 `http_server_requests_seconds_count` / `_sum` / `_bucket`。**若後綴跟這裡寫的不一樣，以實際查到的為準**，並照 §8 修正 dashboard 的 PromQL。名稱現在由 Prometheus registry 決定（單位後綴固定在中間，例如 `jvm_gc_pause_seconds_max`），不再經過 Alloy 的 OTLP 轉譯。
+
+再確認 scrape 本身是活的（這是 push 時代做不到的一步）：
+
+```powershell
+(Invoke-RestMethod 'http://localhost:9090/api/v1/query?query=up').data.result
+```
+
+`up{job="demo-app"}` 的值是 `1` 就代表 Alloy 抓得到 app。
 
 然後在 Prometheus 的 Graph 頁貼這句，確認 histogram bucket 真的有送出來：
 
@@ -225,7 +243,9 @@ topk(5, histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_sec
 
 ### 4.5 單位：一律用秒
 
-指標名裡的 `_seconds` 不是裝飾，是 Prometheus 生態的慣例。`application-dev.yml` 明確設了 `base-time-unit: seconds`；Micrometer OTLP 的**預設是 milliseconds**，不設的話指標名會變成 `..._milliseconds_...`、值是毫秒，導致所有教材上的 PromQL 都對不上、Grafana 的 `s` 單位也會顯示錯（把 200ms 畫成 200 秒）。
+指標名裡的 `_seconds` 不是裝飾，是 Prometheus 生態的慣例。Prometheus registry 固定以秒為單位，不需要設定任何東西。
+
+這是 OTLP push 時代留下來的教訓：Micrometer OTLP 的**預設是 milliseconds**，當時 `application-dev.yml` 必須明確設 `base-time-unit: seconds`，否則指標名會變成 `..._milliseconds_...`、值是毫秒，導致所有教材上的 PromQL 都對不上、Grafana 的 `s` 單位也會顯示錯（把 200ms 畫成 200 秒）。改成 scrape 之後這個旋鈕消失了，但如果有人重新打開 OTLP 指標匯出，這個坑會跟著回來。
 
 ---
 
@@ -255,7 +275,7 @@ Grafana panel 空白
 │
 ├─1. 有產生流量嗎？時間範圍對嗎？
 │     指標要有請求才會動；右上角時間範圍預設 now-30m，若你十分鐘前打的請求
-│     卻把範圍設成 now-5m 就會看不到。推送間隔 10s，打完請求要等一下。
+│     卻把範圍設成 now-5m 就會看不到。scrape 間隔 10s，打完請求要等一下。
 │
 ├─2. Prometheus 自己查得到嗎？→ http://localhost:9090
 │   │
@@ -267,20 +287,27 @@ Grafana panel 空白
 │   │
 │   └─ 查不到 → 資料沒進 Prometheus，往下查
 │
-├─3. app 有推出去嗎？（hop 1）
-│     podman compose logs app | Select-String -Pattern 'otlp|4318|metrics'
-│     · 連線失敗 → ALLOY_HOST 沒設對。容器內必須是 alloy（compose 已注入）；
-│       本機 bootRun 會退回 localhost，此時要嘛把 alloy 的 4318 對外開著，
-│       要嘛用 OTLP_METRICS_ENABLED=false 關掉推送以免每 10 秒噴一次錯
-│     · 完全沒訊息 → 確認跑的是 dev profile（只有 dev 開 export.enabled，
-│       base 的 application.yml 預設是 false，讓測試與 openapi profile 不推送）
-│     · profile 對、設定也對，但 log 乾淨到沒有任何 OTLP 字樣 → 看 §6.1，
-│       很可能是 OtlpMeterRegistry bean 根本沒被建出來（依賴不齊，靜默失敗）
+├─3. up{job="demo-app"} 是多少？（hop 1，這一步取代了 push 時代最難的猜謎）
+│   │
+│   ├─ up == 1 → Alloy 抓得到 app，問題在 hop 3（Alloy → Prometheus）
+│   │    · podman compose logs alloy，找 remote_write 的錯誤
+│   │    · 確認 config.alloy 的 prometheus.remote_write 指向 http://prometheus:9090/...
+│   │    · 確認 prometheus 容器的 command 有 --web.enable-remote-write-receiver
+│   │
+│   ├─ up == 0 → Alloy 抓不到 app。先繞過整條鏈，直接問 app：
+│   │      curl -u internal:<INTERNAL_PASSWORD> http://localhost:8787/actuator/prometheus
+│   │    · 401 → app 與 alloy 的 INTERNAL_PASSWORD 不一致（compose 兩邊都該從 .env 取）
+│   │    · 404 → 沒有 prometheus registry：看 §6.1
+│   │    · 連不上 → app 沒起來，或 Alloy 與 app 不在同一個網路（都該在 backend-net）
+│   │    · 200 → app 沒問題，改查 Alloy 到 app 的網路與 basic_auth 設定
+│   │
+│   └─ 沒有 up 這條 series → Alloy 的 prometheus.scrape 沒跑起來，或 remote_write 整條斷了
+│         podman compose logs alloy
 │
-├─4. Alloy 有轉出去嗎？（hop 2、3）
-│     podman compose logs alloy
-│     · 確認 config.alloy 的 prometheus.remote_write 指向 http://prometheus:9090/...
-│     · 確認 prometheus 容器的 command 有 --web.enable-remote-write-receiver
+├─4. 有兩組一模一樣的 series，數字是預期的兩倍？
+│     查有沒有 job 空白的那組：http_server_requests_seconds_count{job=""}
+│     有 = OTLP 指標匯出被打開了（scrape 那組帶 job/instance，OTLP 那組沒有）。
+│     management.otlp.metrics.export.enabled 必須維持 false，見 ADR 0003。
 │
 └─5. 只有 p99 那個 panel 是空的，其他都正常？
       典型症狀 = 有 count/sum 但沒有 _bucket 序列。
@@ -289,11 +316,13 @@ Grafana panel 空白
       http.server.requests 開啟。沒開的話 histogram_quantile() 一定回空值。
 ```
 
-**最常見的三個原因**（都不在 Java 程式碼裡，前兩個在 `application-dev.yml`，第三個在 `build.gradle`）：`percentiles-histogram` 沒開（p99 永遠空）、`base-time-unit` 沒設成 seconds（指標名帶 `_milliseconds`、查名字全部對不上）、以及下面這個 —— **少一個依賴，整條鏈路靜默不推送**。
+**最常見的原因**（都不在 Java 程式碼裡）：`percentiles-histogram` 沒開（p99 永遠空，在 `application-dev.yml`）、`INTERNAL_PASSWORD` 在 app 與 alloy 兩邊不一致（`up == 0`，401），以及 —— **少一個依賴，端點整個不存在**（`build.gradle`，見下一節）。
 
-### 6.1 最惡毒的一種：什麼都沒推，而且沒有任何錯誤訊息
+### 6.1 最惡毒的一種：什麼都沒有，而且沒有任何錯誤訊息
 
-這個坑真實發生過，而且**斷了 54 天沒人發現**。症狀是所有 panel 全空、Prometheus 一筆資料都沒有，但：
+> **這一節的歷史**：這個坑發生在指標還是 OTLP push 的時代，**斷了 54 天沒人發現**。改成 scrape 之後它的形狀變了：依賴不齊現在會讓 `/actuator/prometheus` 回 **404**，而且 `up == 0`，不再是「所有 panel 全空但看起來一切正常」。下面保留原本的機制，因為追蹤鏈（`OtlpTracingAutoConfiguration`）仍然是同一種靜默失敗。
+
+原本的症狀是所有 panel 全空、Prometheus 一筆資料都沒有，但：
 
 - app 啟動 log **乾淨無誤**，沒有任何 OTLP 相關警告
 - `/actuator/health` 回 200、`/actuator/metrics` 也回 200 並列出一堆指標名
@@ -309,6 +338,8 @@ Grafana panel 空白
 
 classpath 上只有前者時，條件不成立 → 沒有 `OtlpMeterRegistry` bean → 連負責推送的執行緒都不會被建出來 → **不推送也不報錯**。Spring Boot 不會為「條件沒過的 auto-configuration」印警告，這是設計如此（不然每次啟動會噴上百行）。
 
+**現在的對照（scrape 模型）**：`/actuator/prometheus` 端點要 `micrometer-registry-prometheus` 在 classpath 才會 materialize。少了它，端點回 404，Alloy 抓不到 → `up == 0`。比 push 時代好查得多，因為失敗有一個明確的訊號（`up`）和一個可以直接 `curl` 的現場。
+
 **診斷階梯**（每一步都在縮小範圍，而且都不需要改設定或重啟）：
 
 ```powershell
@@ -322,23 +353,23 @@ classpath 上只有前者時，條件不成立 → 沒有 `OtlpMeterRegistry` be
 ```
 
 ```bash
-# 2. Alloy 到底有沒有收到東西？看 remote_write 的 WAL 有沒有長大。
+# 2. 先問 app 自己（scrape 模型下最有用的一步）：它認為自己的指標是什麼？
+curl -u internal:<INTERNAL_PASSWORD> http://localhost:8787/actuator/prometheus | head
+# 404 = 沒有 prometheus registry；401 = 憑證不對；200 但 Prometheus 沒有 = 問題在 Alloy 之後
+
+# 3. Alloy 到底有沒有寫出東西？看 remote_write 的 WAL 有沒有長大。
 #    （Alloy 映像沒有 curl/wget，它自己的 :12345 也只綁 127.0.0.1，所以看檔案。）
 podman exec grafana-alloy sh -c 'ls -la /var/lib/alloy/data/prometheus.remote_write.local/wal/'
-# segment 全是 0 bytes = Alloy 沒收到任何樣本 → 問題在 app 端（hop 1）
+# segment 全是 0 bytes = Alloy 沒寫出任何樣本 → 回頭查 scrape（up）
 
-# 3. app 裡有沒有 OTLP 的推送執行緒？沒有執行緒就等於沒有 registry bean。
+# 4. 追蹤鏈仍是 OTLP push，同一種靜默失敗仍可能發生：app 裡有沒有 OTLP 的推送執行緒？
 podman exec spring-boot-app sh -c 'for f in /proc/1/task/*/comm; do cat $f; done' | sort -u
 
-# 4. 確認 @ConditionalOnClass 到底要求什麼（答案在 jar 裡，不必翻網路文件）
+# 5. 確認 @ConditionalOnClass 到底要求什麼（答案在 jar 裡，不必翻網路文件）
 podman exec spring-boot-app sh -c 'unzip -p app.jar META-INF/spring-autoconfigure-metadata.properties' | grep -i otlp
 ```
 
-修法就是把缺的模組補進 `build.gradle`（已修，見該檔可觀測性段落的註解）：
-
-```gradle
-implementation 'org.springframework.boot:spring-boot-opentelemetry'
-```
+修法就是把缺的模組補進 `build.gradle`（已修，見該檔可觀測性段落的註解）。
 
 **可帶走的教訓**：條件式 auto-configuration 沒生效是**靜默**的。凡是「該有資料卻完全沒有、又沒有錯誤訊息」的可觀測性問題，先懷疑依賴不齊、再懷疑設定寫錯 —— 順序不要顛倒，因為設定寫錯通常會有錯誤訊息，依賴不齊不會。
 
@@ -539,13 +570,19 @@ Invoke-RestMethod 'http://localhost:3200/api/echo'
   traceId 貼進 Explore 的 **TraceID** 就能看整條鏈。沒有 trace context 的訊息（啟動、shutdown
   hook）那格是空白 —— 正常。
 - **從指標跳（exemplars）**：延遲圖的資料點上會有可點擊的小菱形，一點就跳到當時那筆 trace ——
-  「這根長條是哪個請求造成的」不必再用時間去猜。這條路要**三個地方同時成立**，而缺任何一個都
+  「這根長條是哪個請求造成的」不必再用時間去猜。這條路要**五個環節同時成立**，而缺任何一個都
   不會報錯，症狀一律是「沒有小菱形」：
-  1. 應用產生 exemplar —— `OtlpExemplarsAutoConfiguration` 在有 `Tracer` bean 時自動生效，
-     這一項確實是免費的。
-  2. Prometheus 存下 exemplar —— `docker-compose.yml` 裡 prometheus 的
+  1. 應用產生 exemplar —— 有 `Tracer` bean 時 Micrometer 自動掛上，這一項確實是免費的。
+     **但 scrape 模型多了一個條件**：Prometheus registry 只會在 **OpenMetrics** 格式的回應裡帶
+     exemplar（請求要帶 `Accept: application/openmetrics-text`）。純文字格式沒有 exemplar。
+  2. Alloy 抓得到 —— `config.alloy` 的 `prometheus.scrape` 要協商 OpenMetrics
+     （`scrape_protocols` 以 `OpenMetricsText1.0.0` 優先）。以純文字抓，exemplar 在這一步消失。
+     這一項是 scrape 換掉 OTLP 之後**新增**的環節。
+  3. Alloy 送得出去 —— `prometheus.remote_write` 的 endpoint 要 `send_exemplars = true`
+     （Alloy 預設已是 true，明寫是為了讓這條鏈上的每一環都看得見）。這一項也是新增的。
+  4. Prometheus 存下 exemplar —— `docker-compose.yml` 裡 prometheus 的
      `--enable-feature=exemplar-storage`。**預設是關的**，remote write 收下後直接丟掉。
-  3. Grafana 知道要跳去哪 —— `grafana/provisioning/datasources/prometheus.yml` 的
+  5. Grafana 知道要跳去哪 —— `grafana/provisioning/datasources/prometheus.yml` 的
      `exemplarTraceIdDestinations`（`name: trace_id`、`datasourceUid: tempo`）。
 
   想確認 exemplar 真的存進去了（繞過 UI）：
@@ -556,7 +593,15 @@ Invoke-RestMethod 'http://localhost:3200/api/echo'
   Invoke-RestMethod "http://localhost:9090/api/v1/query_exemplars?query=http_server_requests_seconds_bucket&start=$s&end=$e"
   ```
 
-  回傳的 `labels` 應該看得到 `trace_id` 與 `span_id`。空陣列＝第 2 項沒開。
+  回傳的 `labels` 應該看得到 `trace_id` 與 `span_id`。空陣列＝第 4 項沒開，或第 1～3 項其中一環斷了。
+  要分辨是 app 沒產生還是 Alloy 沒收，直接問 app（繞過整條鏈）：
+
+  ```bash
+  curl -u internal:<INTERNAL_PASSWORD> -H 'Accept: application/openmetrics-text' \
+       http://localhost:8787/actuator/prometheus | grep trace_id | head -3
+  ```
+
+  有 `# {span_id="...",trace_id="..."}` 就是第 1 環正常。
 
 ### 9.4 查不到 trace 的排錯順序
 
@@ -610,7 +655,7 @@ span metrics 與 service graph 指標，得在 Alloy 加 `otelcol.connector.span
 | **`@Timed` 業務層指標** | `http.server.requests` 與 `resilience4j.*` 已覆蓋大部分需求；等真的有「想知道扣庫存那段花多久」的需求再加 | 用業務語彙命名的指標（如 `order.create`）。需先開 `management.observations.annotations.enabled`（Spring Boot 預設 `false`） |
 | **span metrics / service graph** | 要在 Alloy 加 `otelcol.connector.spanmetrics` / `servicegraph`；這兩個會把 span 量轉成指標量，成本結構要先想清楚 | Grafana 的 Service Graph（服務依賴圖）與 RED 指標自動產生；`tempo.yml` datasource 的 `tracesToMetrics` / `serviceMap` 才有意義（§9.5） |
 | **結構化日誌 + Loki** | 要先把 `accountId`/`orderId` 放進 MDC 而非訊息字串 | 用欄位查日誌。trace id 已經在每行 log 裡了（§9.3），接上 Loki 之後就能從 log 直接跳 trace，不必手動複製 id |
-| **告警規則** | 有 dashboard 才知道正常長什麼樣，才定得出閾值 | 錯誤率 > 5% 持續 5 分鐘就通知，不必盯著螢幕。**第一條規則不該是錯誤率，而是「資料不見了」** —— push 模式沒有 `up`，理由見 §2.1 |
+| **告警規則** | 有 dashboard 才知道正常長什麼樣，才定得出閾值 | 錯誤率 > 5% 持續 5 分鐘就通知，不必盯著螢幕。**第一條規則不該是錯誤率，而是「資料不見了」**，現在可以直接寫成 `up{job="demo-app"} == 0`（指標改走 scrape 之後才有，理由見 §2.1） |
 
 ---
 
@@ -633,8 +678,12 @@ Prometheus/Tempo/Grafana 各自對應。差別只在**跳點藏起來了** —�
 Testcontainers 提供 `LgtmStackContainer` 包裝它，Boot 提供三個
 `ConnectionDetailsFactory` 自動把三條匯出的 endpoint 注進應用。也就是說
 `management.otlp.metrics.export.url` 與
-`management.opentelemetry.tracing.export.otlp.endpoint`（§2 那兩個名字不對稱的屬性）
+`management.opentelemetry.tracing.export.otlp.endpoint`（名字不對稱的兩個屬性）
 **都不用寫**，容器起來後由 Boot 填。
+
+> **注意：這一節描述的是 OTLP push 模型。** 本專案的指標現在改由 Alloy scrape（§2），
+> `management.otlp.metrics.export.url` 已經不使用。LGTM 這條路走的是 OTLP 推送，若真要採用，
+> 指標那條會回到 push，等於推翻 ADR 0003，得重新權衡。
 
 ### 11.2 完整做法（三段，可直接貼）
 
@@ -757,5 +806,6 @@ receiver 一致）。**常數才是對的**，別照 javadoc 接線。要拿 URL
 - [`docs/monitoring-needs-first.md`](./monitoring-needs-first.md) — 從需求反推監控：七個時刻、現有 panel 的去留審查、兩個缺口
 - [`docs/agents/09-monitoring.md`](./agents/09-monitoring.md) — 鏈路與端點的架構描述、HEALTHCHECK 運作機制
 - [`docs/resilience4j-configuration-guide.md`](./resilience4j-configuration-guide.md) — 飽和度 panel 背後的 bulkhead / 斷路器 / 限流設定
+- [`docs/adr/0003-metrics-via-collector-scrape.md`](./adr/0003-metrics-via-collector-scrape.md) — 指標為什麼從全程 push 改成 Alloy scrape
 - `config.alloy`、`prometheus.yml`、`tempo.yaml`、`docker-compose.yml` — 管線本體
 - `grafana/` — datasource 與 dashboard 佈建檔

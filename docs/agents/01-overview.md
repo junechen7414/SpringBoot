@@ -22,7 +22,7 @@
 5. **併發控制**: Resilience4j Bulkhead fail-fast
 6. **統一分頁**: 列表一律回 `PageResponse<T>`，沒有非分頁列表端點
 7. **環境隔離**: Spring Profiles（dev, integration-test, e2e, openapi）
-8. **監控鏈路**: 指標 App → Alloy → Prometheus；追蹤 App → Alloy → Tempo；兩條只共用 App → Alloy
+8. **監控鏈路**: 指標 Alloy 去 scrape App 的 `/actuator/prometheus`，再 remote_write 給 Prometheus；追蹤 App 以 OTLP 推給 Alloy，再轉給 Tempo；兩條鏈方向不同，只共用 Alloy 這個集中處理點
 
 ### 業務領域
 

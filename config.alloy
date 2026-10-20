@@ -1,30 +1,63 @@
-// Prometheus 配置文件，定義了 Prometheus 的全局設置和抓取配置，以及 Grafana Alloy 的配置，將 Grafana Alloy 收集的數據發送到 Prometheus 中。
+// Grafana Alloy：本專案監控堆疊的集中處理點。兩條鏈在這裡分流，方向也不同：
+//
+//   指標  app <--scrape(pull)-- Alloy --remote_write(push)--> Prometheus
+//   追蹤  app --OTLP/HTTP(push)--> Alloy --OTLP/gRPC(push)--> Tempo
+//
+// 指標走 pull 是為了拿回 Prometheus 的 `up{job, instance}`：app 掛了、網路斷了、Alloy 掛了在查詢上
+// 不再全都長成「沒資料」。決策與理由見 docs/adr/0003-metrics-via-collector-scrape.md。
+// 追蹤鏈沒有等價物，維持 push。
+
+// ---- 共用出口：把資料寫進 Prometheus ----
+// Prometheus 靠 --web.enable-remote-write-receiver 接收（見 docker-compose.yml），不靠設定檔。
 prometheus.remote_write "local" {
   endpoint {
     url = "http://prometheus:9090/api/v1/write"
+    // exemplar 三環鏈的第三環：scrape 到的 exemplar 要靠這裡才會被寫進 Prometheus。
+    // 預設就是 true，明寫是因為這條鏈缺任何一環都「不報錯、只是沒有小菱形」。
+    send_exemplars = true
   }
 }
-// Grafana Alloy 配置文件，定義了 Grafana Alloy 的接收器和導出器，將 Grafana Alloy 收集的數據發送到 Prometheus 中。
+
+// ---- Metrics：Alloy 去 scrape app ----
+prometheus.scrape "app" {
+  // dashboard 與日後的告警會依賴這個值（up{job="demo-app"}），所以明確設定而不用元件名稱預設。
+  job_name = "demo-app"
+  // 寫死一個 target：本機堆疊不需要 service discovery。app 與 alloy 在同一個 backend-net。
+  targets      = [{"__address__" = "app:8787"}]
+  metrics_path = "/actuator/prometheus"
+  // 與 Prometheus 先前的全域設定同一個粒度。Alloy 預設是 60s，會讓 dashboard 的 [5m] rate 變粗。
+  scrape_interval = "10s"
+  scrape_timeout  = "5s"
+
+  // 這個端點刻意不放行（見 SecurityConfig），用 internal 機器帳號的 Basic 憑證。
+  // 帳密與 app 用同一個來源（docker-compose.yml 同時注入給 app 與 alloy）。
+  basic_auth {
+    username = sys.env("INTERNAL_USERNAME")
+    password = sys.env("INTERNAL_PASSWORD")
+  }
+
+  // exemplar 三環鏈的第二環：Prometheus registry 只在 OpenMetrics 格式的回應裡帶 exemplar，
+  // 所以必須以 OpenMetrics 協商。Alloy 的預設值已經是 OpenMetricsText1.0.0 優先，明寫是同樣的理由：
+  // 少了這一環不會報錯，exemplars 只是靜默消失。
+  scrape_protocols = ["OpenMetricsText1.0.0", "OpenMetricsText0.0.1", "PrometheusText1.0.0", "PrometheusText0.0.4"]
+
+  forward_to = [prometheus.remote_write.local.receiver]
+}
+
+// ---- Traces：app --OTLP--> 這裡 --OTLP/gRPC--> Tempo ----
+// 4318 receiver 現在只剩 traces。指標已改走上面的 scrape，不再經過這個 receiver。
 otelcol.receiver.otlp "default" {
   http {
     endpoint = "0.0.0.0:4318"
   }
   output {
-    metrics = [otelcol.exporter.prometheus.default.input]
-    traces  = [otelcol.processor.batch.traces.input]
+    traces = [otelcol.processor.batch.traces.input]
   }
 }
-// 將 Grafana Alloy 收集的數據發送到 Prometheus 中，使用 Prometheus 的遠程寫入功能，將數據發送到 Prometheus 的接收器中。
-otelcol.exporter.prometheus "default" {
-  forward_to = [prometheus.remote_write.local.receiver]
-}
 
-// ---- Traces：app --OTLP--> 這裡 --OTLP/gRPC--> Tempo ----
-// 與指標共用上面同一個 4318 receiver，只是分流到不同的 output。
 otelcol.processor.batch "traces" {
   // span 的產生是突發性的（一個請求可能一次噴十幾個），逐筆送會讓 Tempo 收到大量
-  // 小 request。指標那條路沒有這個問題（Micrometer 自己按 step 批次推），所以只有
-  // traces 需要 batch processor。
+  // 小 request。
   output {
     traces = [otelcol.exporter.otlp.tempo.input]
   }

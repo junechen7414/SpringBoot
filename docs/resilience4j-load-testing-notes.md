@@ -107,7 +107,7 @@ GET http://localhost:8787/actuator/metrics/resilience4j.ratelimiter.available.pe
 
 #### Grafana（透過 Prometheus）
 
-本專案的 metrics 以 OTLP push 經 Alloy 寫進 Prometheus，**沒有** `/actuator/prometheus` 端點（打了會回 404，見 `docs/monitoring-usage-guide.md` §2.1）。在 Grafana 的 Explore 或 Prometheus UI（http://localhost:9090）可使用以下 PromQL 查詢：
+本專案的 metrics 由 Alloy scrape `/actuator/prometheus` 後寫進 Prometheus。該端點需要 `internal` 帳號的 Basic 認證，未帶憑證會回 401（見 `docs/monitoring-usage-guide.md` §2）。在 Grafana 的 Explore 或 Prometheus UI（http://localhost:9090）可使用以下 PromQL 查詢：
 
 ```promql
 # 查看 product-read 的可用 permit 變化趨勢
