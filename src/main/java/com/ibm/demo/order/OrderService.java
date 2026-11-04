@@ -1,6 +1,7 @@
 package com.ibm.demo.order;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -44,18 +45,6 @@ public class OrderService {
         private final ProductClient productClient;
         private final OrderTransactionalService orderTransactionalService;
 
-        /**
-         * 注入Repository和Client，已用lombok註解RequiredArgsConstructor定義建構子。
-         * 
-         * @param orderRepository           訂單資料庫存取介面
-         * @param accountClient             帳戶服務的Client，用於驗證帳戶狀態
-         * @param productClient             商品服務的Client，用於驗證商品庫存和獲取商品資訊
-         * @param orderTransactionalService 隔離 DB 交易邊界的訂單寫入／讀取快照服務
-         */
-
-        /**
-         * @param createOrderRequest
-         */
         @Bulkhead(name = "order-write")
         @RateLimiter(name = "order-write")
         public Integer createOrder(CreateOrderRequest createOrderRequest) {
@@ -75,27 +64,15 @@ public class OrderService {
                 try {
                         return orderTransactionalService.createOrder(createOrderRequest);
                 } catch (Exception e) {
-                        // 補償: 釋放已預留的庫存
-                        try {
-                                productClient.releaseStock(new StockChangeRequest(uniqueItems));
-                        } catch (Exception compensationEx) {
-                                log.error("建立訂單失敗後，補償歸還庫存也失敗，需人工介入處理。" +
-                                                "帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",
-                                                createOrderRequest.accountId(),
-                                                uniqueItems.stream()
-                                                                .map(item -> String.format("商品%d(數量%d)",
-                                                                                item.productId(), item.quantity()))
-                                                                .collect(Collectors.joining(", ")),
-                                                e.getMessage(),
-                                                compensationEx.getMessage(),
-                                                compensationEx);
-                        }
+                        runCompensation(
+                                        () -> productClient.releaseStock(new StockChangeRequest(uniqueItems)),
+                                        e,
+                                        "建立訂單失敗後，補償歸還庫存也失敗",
+                                        "帳戶ID: " + accountId + ", 商品清單: " + describeItems(uniqueItems));
                         throw e;
                 }
         }
 
-        @Bulkhead(name = "order-read")
-        @RateLimiter(name = "order-read")
         /**
          * 分頁獲取指定帳戶的訂單列表。
          *
@@ -103,20 +80,17 @@ public class OrderService {
          * @param pageable  分頁參數
          * @return 包含訂單列表資訊的分頁回應
          */
+        @Bulkhead(name = "order-read")
+        @RateLimiter(name = "order-read")
         public PageResponse<GetOrderListResponse> getOrderListByAccountId(Integer accountId, Pageable pageable) {
-                // 1. 交易內載入訂單並萃取為純快照（明細於 session 內載入，避免交易外碰 lazy）
+                // 交易內載入並萃取為純快照（明細於 session 內載入，避免交易外碰 lazy）；之後的遠端呼叫都在交易外
                 Page<OrderView> orderViews = orderTransactionalService.loadOrderViews(accountId, pageable);
 
-                // 2. 一次性批量查詢當頁所有商品（遠端呼叫在交易外）
-                Set<Integer> allProductIds = orderViews.getContent().stream()
+                List<OrderItemRequest> allItems = orderViews.getContent().stream()
                                 .flatMap(v -> v.items().stream())
-                                .map(OrderItemRequest::productId)
-                                .collect(Collectors.toSet());
-                Map<Integer, GetProductDetailResponse> productMap = allProductIds.isEmpty()
-                                ? Collections.emptyMap()
-                                : batchGetProductDetails(allProductIds);
+                                .toList();
+                Map<Integer, GetProductDetailResponse> productMap = fetchProductsOf(allItems);
 
-                // 3. 計算每個訂單的總金額並轉換為 DTO
                 Page<GetOrderListResponse> responsePage = orderViews.map(v -> GetOrderListResponse.builder()
                                 .orderId(v.orderId())
                                 .totalAmount(calculateTotalAmount(v.items(), productMap))
@@ -125,47 +99,22 @@ public class OrderService {
                 return PageResponse.from(responsePage);
         }
 
-        /**
-         * @param orderId
-         * @return GetOrderDetailResponse
-         */
         @Bulkhead(name = "order-read")
         @RateLimiter(name = "order-read")
         public GetOrderDetailResponse getOrderDetailByOrderId(Integer orderId) {
-                // 1. 交易內載入訂單與明細，萃取為純快照（找不到直接噴 404）
+                // 交易內載入並萃取為純快照（找不到直接噴 404）；之後的遠端呼叫都在交易外
                 OrderView view = orderTransactionalService.loadOrderView(orderId);
 
-                // 2. 批量獲取商品資訊（先收集 ID 再一次查詢，避免 N+1；遠端呼叫在交易外）
-                Set<Integer> productIds = view.items().stream()
-                                .map(OrderItemRequest::productId)
-                                .collect(Collectors.toSet());
-                Map<Integer, GetProductDetailResponse> productMap = batchGetProductDetails(productIds);
+                // 總金額與明細共用同一份 productMap，不重複遠端查詢
+                Map<Integer, GetProductDetailResponse> productMap = fetchProductsOf(view.items());
 
-                // 3. 組裝明細 DTO
-                List<OrderLineResponse> itemDTOs = view.items().stream()
-                                .map(item -> {
-                                        GetProductDetailResponse product = productMap.get(item.productId());
-                                        return OrderLineResponse.builder()
-                                                        .productId(item.productId())
-                                                        .productName(product.name())
-                                                        .quantity(item.quantity())
-                                                        .productPrice(product.price())
-                                                        .build();
-                                })
-                                .collect(Collectors.toList());
-
-                // 4. 回傳結果（總金額沿用同一份 productMap，不重複遠端查詢）
                 return GetOrderDetailResponse.builder()
                                 .accountId(view.accountId())
                                 .totalAmount(calculateTotalAmount(view.items(), productMap))
-                                .items(itemDTOs)
+                                .items(toOrderLines(view.items(), productMap))
                                 .build();
         }
 
-        /**
-         * @param orderId 要更新的訂單 ID（由 URI 指定，不在 request body 內）
-         * @param request 更新內容
-         */
         @Bulkhead(name = "order-write")
         @RateLimiter(name = "order-write")
         public void updateOrder(Integer orderId, UpdateOrderRequest request) {
@@ -188,40 +137,24 @@ public class OrderService {
                 try {
                         orderTransactionalService.updateOrder(orderId, request);
                 } catch (Exception e) {
-                        // 補償: 將庫存調整回原狀 (from 與 to 互換)
-                        try {
-                                productClient.adjustStock(AdjustStockRequest.builder()
-                                                .from(uniqueItems)
-                                                .to(originalItems)
-                                                .build());
-                        } catch (Exception compensationEx) {
-                                log.error("更新訂單失敗後，補償反轉庫存也失敗，需人工介入處理。" +
-                                                "訂單ID: {}, 帳戶ID: {}, 原商品清單: {}, 新商品清單: {}, 原始異常: {}, 補償異常: {}",
-                                                orderId,
-                                                view.accountId(),
-                                                originalItems.stream()
-                                                                .map(item -> String.format("商品%d(數量%d)",
-                                                                                item.productId(), item.quantity()))
-                                                                .collect(Collectors.joining(", ")),
-                                                uniqueItems.stream()
-                                                                .map(item -> String.format("商品%d(數量%d)",
-                                                                                item.productId(), item.quantity()))
-                                                                .collect(Collectors.joining(", ")),
-                                                e.getMessage(),
-                                                compensationEx.getMessage(),
-                                                compensationEx);
-                        }
+                        // 庫存調整回原狀：from 與 to 互換
+                        runCompensation(
+                                        () -> productClient.adjustStock(AdjustStockRequest.builder()
+                                                        .from(uniqueItems)
+                                                        .to(originalItems)
+                                                        .build()),
+                                        e,
+                                        "更新訂單失敗後，補償反轉庫存也失敗",
+                                        "訂單ID: " + orderId + ", 帳戶ID: " + view.accountId()
+                                                        + ", 原商品清單: " + describeItems(originalItems)
+                                                        + ", 新商品清單: " + describeItems(uniqueItems));
                         throw e;
                 }
         }
 
-        /**
-         * @param orderId
-         */
         @Bulkhead(name = "order-write")
         @RateLimiter(name = "order-write")
         public void deleteOrder(Integer orderId) {
-
                 // 1. 交易內載入並驗證狀態，把後續所需資料萃取為純 DTO（避免 lazy 洩漏到交易外、不依賴 OSIV）
                 OrderDeletionPlan plan = orderTransactionalService.prepareOrderDeletion(orderId);
 
@@ -232,30 +165,64 @@ public class OrderService {
                 try {
                         orderTransactionalService.deleteOrder(orderId, plan.version());
                 } catch (Exception e) {
-                        // 補償: 重新預留已歸還的庫存
-                        try {
-                                productClient.reserveStock(new StockChangeRequest(plan.items()));
-                        } catch (Exception compensationEx) {
-                                log.error("刪除訂單失敗後，補償重新扣回庫存也失敗，需人工介入處理。" +
-                                                "訂單ID: {}, 帳戶ID: {}, 商品清單: {}, 原始異常: {}, 補償異常: {}",
-                                                orderId,
-                                                plan.accountId(),
-                                                plan.items().stream()
-                                                                .map(item -> String.format("商品%d(數量%d)",
-                                                                                item.productId(), item.quantity()))
-                                                                .collect(Collectors.joining(", ")),
-                                                e.getMessage(),
-                                                compensationEx.getMessage(),
-                                                compensationEx);
-                        }
+                        runCompensation(
+                                        () -> productClient.reserveStock(new StockChangeRequest(plan.items())),
+                                        e,
+                                        "刪除訂單失敗後，補償重新扣回庫存也失敗",
+                                        "訂單ID: " + orderId + ", 帳戶ID: " + plan.accountId()
+                                                        + ", 商品清單: " + describeItems(plan.items()));
                         throw e;
                 }
         }
 
         /**
-         * @param productIds
-         * @return Map<Integer, GetProductDetailResponse>
+         * 執行補償動作；補償本身也失敗時只記錄 ERROR 要求人工介入，不蓋掉原始異常。
+         * 呼叫端在此之後仍須 {@code throw} 原始異常，讓外層看到的是真正的失敗原因。
+         *
+         * @param compensation   要反轉先前遠端庫存變動的動作
+         * @param cause          觸發補償的原始異常
+         * @param failureMessage 補償失敗時的訊息開頭（說明是哪個流程）
+         * @param context        人工介入時需要的識別資訊（訂單、帳戶、商品清單）
          */
+        private void runCompensation(Runnable compensation, Exception cause, String failureMessage, String context) {
+                try {
+                        compensation.run();
+                } catch (Exception compensationEx) {
+                        log.error("{}，需人工介入處理。{}, 原始異常: {}, 補償異常: {}",
+                                        failureMessage, context, cause.getMessage(), compensationEx.getMessage(),
+                                        compensationEx);
+                }
+        }
+
+        private String describeItems(Collection<OrderItemRequest> items) {
+                return items.stream()
+                                .map(item -> String.format("商品%d(數量%d)", item.productId(), item.quantity()))
+                                .collect(Collectors.joining(", "));
+        }
+
+        /** 先收集不重複的商品 ID 再一次查詢（避免 N+1）。 */
+        private Map<Integer, GetProductDetailResponse> fetchProductsOf(Collection<OrderItemRequest> items) {
+                Set<Integer> productIds = items.stream()
+                                .map(OrderItemRequest::productId)
+                                .collect(Collectors.toSet());
+                return batchGetProductDetails(productIds);
+        }
+
+        private List<OrderLineResponse> toOrderLines(List<OrderItemRequest> items,
+                        Map<Integer, GetProductDetailResponse> productMap) {
+                return items.stream()
+                                .map(item -> {
+                                        GetProductDetailResponse product = productMap.get(item.productId());
+                                        return OrderLineResponse.builder()
+                                                        .productId(item.productId())
+                                                        .productName(product.name())
+                                                        .quantity(item.quantity())
+                                                        .productPrice(product.price())
+                                                        .build();
+                                })
+                                .toList();
+        }
+
         private Map<Integer, GetProductDetailResponse> batchGetProductDetails(Set<Integer> productIds) {
                 if (productIds == null || productIds.isEmpty()) {
                         return Collections.emptyMap();
