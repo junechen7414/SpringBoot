@@ -38,7 +38,7 @@
 | Server | 用途 | command | 所需環境變數 |
 |--------|------|---------|-------------|
 | `github` | GitHub 操作（PR / issue / label 等） | 見下方差異 | `GITHUB_PAT` 或 `GITHUB_PERSONAL_ACCESS_TOKEN` |
-| `playwright` | 瀏覽器自動化（extension 模式：接管已開啟的 Chrome / Edge，沿用既有登入狀態） | `npx @playwright/mcp@latest --extension`（Claude 見下方差異） | 無 |
+| `playwright` | 瀏覽器自動化（CDP 模式：連到本機專用 Edge，沿用該 profile 的登入狀態；啟用 annotation／錄影） | `npx -y @playwright/mcp@latest --cdp-endpoint http://localhost:9222 --caps=devtools`（Claude 見下方差異） | 無 |
 
 四份 MCP 設定檔須同步維護：`.mcp.json`（Claude，`type: http`/`stdio`）、`.bob/mcp.json`（同格式）、`.vscode/mcp.json`（`servers` + `inputs`）、`.agents/mcp_config.json`（額外帶 `disabled` / `autoApprove`）。
 
@@ -50,7 +50,12 @@
 - **`playwright`**
   - Claude：`cmd /c npx ...` —— Claude Code 在原生 Windows 無法直接 spawn `npx`（它是 `.cmd`），須以 `cmd /c` 包住。
   - BOB / VS Code / agy：直接 `npx ...`。
-  - 使用前須在 Chrome / Edge 安裝 Playwright 擴充（Playwright MCP Bridge）；agent 首次連線時由擴充跳窗讓使用者選擇要交出控制的分頁。它以**使用者本人的登入身分**操作瀏覽器，建議用只登入必要網站的專用 profile（可加 `--profile-dir-name` 指定）。
+  - 四份設定都連到 `http://localhost:9222` 的 CDP endpoint，不使用 `--extension`，因此不需要安裝 Playwright 擴充。使用前先啟動帶 `--remote-debugging-port=9222` 與獨立 `--user-data-dir` 的專用 Edge；Chromium 136+ 不允許對預設 profile 開啟 remote debugging。以 `http://localhost:9222/json/version` 確認 endpoint 可達。
+  - `--caps=devtools` 開啟 `browser_annotate`（圈選與註解回饋）、`browser_start_video`／`browser_stop_video`（WebM 錄影）、`browser_video_show_actions`（操作標註）、trace 與操作錄製；`browser_start_recording` 產生的是 Playwright code，並非影片。瀏覽器工具會沿用**該專用 profile 的登入身分**，截圖與錄影可能包含敏感資訊，未經確認不要上傳。
+  - **保留開新頁的操作流程**：開始任務先用 `browser_tabs(action: "new")` 建立專用分頁，不在原有分頁直接導覽；annotation 只對本次新頁操作。`--caps=devtools` 不會改變 CDP 連線或自動替任務開新分頁；使用完只關本次建立的分頁，不呼叫會影響整個 browser 的關閉操作。
+  - **錄影範圍不是只有目前頁**：MCP 0.0.86 的 `browser_start_video` 會錄下該連線已納管的所有分頁，以及錄影中新增的頁。若要保證不錄到原有頁面，須使用只含測試頁的暫時隔離 context／連線；不要把 `--isolated` 寫成既有工作流的預設，否則會失去專用 profile 的登入狀態。單純切到新 tab 不足以限制錄影範圍。
+  - **FFmpeg 是另外下載的錄影依賴**：新版 MCP 可能要求比 E2E 套件更新的 FFmpeg revision；缺少時照錯誤指定版本安裝即可，無須安裝 `@playwright/cli`。執行 `@playwright/mcp install-browser ffmpeg` 前，先在該次安裝的 process 設 `PLAYWRIGHT_SKIP_BROWSER_GC=1`，結束後還原環境變數，避免 Playwright installer 自動清除其他版本仍使用的 browser cache（2026-11-19 實測會移除舊 Chromium、Headless Shell 與 FFmpeg）。
+  - `npx -y` 避免首次安裝確認卡住 stdio 初始化。Claude 的 local scope 設定（`~/.claude.json` 的專案項目）可能覆寫 repo 的 `.mcp.json`；切換 CDP／extension 或 capabilities 時要一併核對，重新連線 MCP，必要時新開 session。Windows 工作目錄路徑的磁碟機字母大小寫可能形成不同專案項目，勿只憑另一個 terminal 的 `claude mcp get playwright` 認定目前 session 使用同一份設定。
 
 ### Skills 現況
 

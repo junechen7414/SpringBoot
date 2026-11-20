@@ -13,8 +13,11 @@
       "args": [
         "/c",
         "npx",
+        "-y",
         "@playwright/mcp@latest",
-        "--extension"
+        "--cdp-endpoint",
+        "http://localhost:9222",
+        "--caps=devtools"
       ]
     }
   }
