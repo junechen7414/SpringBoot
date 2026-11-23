@@ -7,4 +7,6 @@ description: >
   the model itself does not compute the numbers.
 ---
 
-This skill is delivered by `hooks/caveman-stats.js` (read by `hooks/caveman-mode-tracker.js` on `/caveman-stats`). The model does not need to do anything when this skill fires — the hook returns `decision: "block"` with the formatted stats as the reason. The user sees the numbers immediately.
+This skill requires the companion `hooks/caveman-stats.js` and `hooks/caveman-mode-tracker.js` runtime and its active hook configuration. These are not bundled in this repository. If that runtime is unavailable, report that statistics are unavailable and stop; do not invent numbers, read session logs manually, or install hooks automatically.
+
+When the companion runtime is active, it intercepts `/caveman-stats` and returns `decision: "block"` with the formatted stats as the reason. The model does not compute the numbers.

@@ -15,6 +15,8 @@ Cavecrew = three subagent presets that emit caveman output. Same job as Anthropi
 
 ## When to use cavecrew vs alternatives
 
+The companion `cavecrew-investigator`, `cavecrew-builder`, and `cavecrew-reviewer` presets are not bundled in this repository. Use a preset only when it is explicitly available in the current host. Otherwise report that it is unavailable and use an already available agent or work inline; do not invent an agent type or install presets automatically. The same availability check applies to the other named agents below.
+
 | Task | Use |
 |---|---|
 | "Where is X defined / what calls Y / list uses of Z" | `cavecrew-investigator` |

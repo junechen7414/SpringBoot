@@ -161,7 +161,7 @@ git branch -D <branch-name>
 
 > **為什麼是 `-D` 而不是 `-d`**：rebase merge 會重寫 commit SHA，本地分支的 commit 不會是 `main` 的祖先，`git branch -d` **必定**報 `not fully merged`。強刪前先用 `git cherry -v main <branch-name>` 比對 —— 它看 patch-id 而非 SHA，正好對付被重寫過的 commit：每行開頭 `-` 表示該筆內容已在 `main`，出現 `+` 就是還沒進去，**不要刪**。
 
-> **不要用 `git diff --stat main <branch-name>` 當判準**：只要合併期間有別人推了 `main`（多 session 並行時很常見），`main` 就含有分支沒有的內容，這個 diff 必然不為空，會誤報成「內容沒進去」。**反轉參數也沒用** —— `git diff A B` 與 `git diff B A` 列出的檔案集合完全相同，只有 `+`／`-` 方向相反。真要用 diff 就得把範圍限定在分支動過的檔案：`git diff --stat main <branch-name> -- $(git diff --name-only main...<branch-name>)`；PowerShell 沒有 `$(...)`，所以主線用 `git cherry`。
+> **不要用 `git diff --stat main <branch-name>` 當判準**：只要合併期間有別人推了 `main`（多 session 並行時很常見），`main` 就含有分支沒有的內容，這個 diff 必然不為空，會誤報成「內容沒進去」。**反轉參數也沒用** —— `git diff A B` 與 `git diff B A` 列出的檔案集合完全相同，只有 `+`／`-` 方向相反。真要用 diff 就得把範圍限定在分支動過的檔案：`git diff --stat main <branch-name> -- $(git diff --name-only main...<branch-name>)`；PowerShell 也支援 `$(...)`，但參數展開規則不同；主線使用 `git cherry`，直接以 patch-id 比對是否已合併。
 
 > **遠端分支不會自動消失**：本 repo 未啟用 `delete_branch_on_merge`，合併後遠端分支仍在，本地分支也**不會**變成 `[gone]`。所以 `git prune-local` 這類以 `[gone]` 為準的 alias 在這裡沒東西可清，必須自己先刪遠端。
 

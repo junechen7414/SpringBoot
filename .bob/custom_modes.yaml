@@ -191,10 +191,9 @@ customModes:
       # Password: <your_github_personal_access_token>
       ```
 
-      Alternatively, configure Git credential helper to store credentials:
-      ```bash
-      git config --global credential.helper store
-      ```
+      Use the existing OS-backed credential helper (Git Credential Manager on Windows).
+      Do not use `credential.helper store`, which stores credentials in plaintext.
+      Before changing credential configuration, explain its scope and ask for explicit approval.
 
 
       **Import errors:** Verify submodules initialized: `git submodule update --init --recursive`
@@ -277,7 +276,7 @@ customModes:
       - command
     customInstructions: |-
       When executing MCP debugging tasks:
-      1. Execute the user's MCP query as requested (use MCP tools or execute_command) 2. Monitor and track EVERY tool call in the execution chain 3. Capture timing data, request/response payloads, and error details 4. Generate a structured markdown report with these sections:
+      1. Execute only the MCP actions authorized by the user. 2. Track tool names, timing, status and errors. 3. Capture only payload fields needed for diagnosis; redact credentials, Authorization headers, cookies, tokens and personal data before recording. 4. Generate a structured markdown report with these sections:
 
           A. EXECUTION CHAIN FLOWCHART (REQUIRED):
             - Create a visual ASCII flowchart showing the complete tool execution chain
@@ -296,7 +295,7 @@ customModes:
               ❌ FAILURE: Error message here
               ```
           
-          B. Failure Details: Tool name, error, timestamp, full request/response JSON
+          B. Failure Details: Tool name, error, timestamp, and the smallest relevant redacted request/response excerpt. Omit sensitive payloads when safe redaction is not possible.
           C. Root Cause: Brief analysis of what went wrong
           D. Backend Fix: Specific code changes with file locations
           E. Verification Steps: How to test the fix

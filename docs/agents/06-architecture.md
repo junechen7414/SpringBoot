@@ -37,7 +37,7 @@ Exception (例外與錯誤契約: BusinessException, SystemException, ErrorCode,
   - **成功但沒有內容可回**（更新／刪除／內部庫存變動／資格驗證）→ `204 No Content`，body 必須真的是空的
   - **成功且有內容** → `200 OK` + 具名 DTO 或 `PageResponse<T>`；**不回裸純量** —— 線路上的 `true` 或 `5` 沒有說自己是「什麼」，呼叫端只能靠文件外的默契解讀，且日後補第二個欄位就是破壞性變更（範例見 `order/DTO/internal/OrderExistenceResponse`）
   - 這三條由 `src/test/java/com/ibm/demo/contract/ApiSuccessContractTest.java` 釘住 —— 改回裸純量仍然編譯得過、單元測試也全綠，只有它會紅
-- 錯誤側完全交給 `GlobalExceptionHandler`：controller 不寫 `try-catch`、不手組 error body。對外格式是 RFC 9457 `application/problem+json`（見 `docs/handout/03-exception-handling.md`）
+- 錯誤側完全交給 `GlobalExceptionHandler`：controller 不寫 `try-catch`、不手組 error body。對外格式是 RFC 9457 `application/problem+json`（見 `docs/api-response-contract-decision.md`）
 
 ### Service 層
 

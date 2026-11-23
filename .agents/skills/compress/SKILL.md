@@ -19,20 +19,21 @@ Compress natural language files (CLAUDE.md, todos, preferences) into caveman-spe
 
 ## Process
 
-1. This SKILL.md lives alongside `scripts/` in the same directory. Find that directory.
+1. Confirm that the user authorized sending this file's contents to the configured model backend and overwriting the selected file. Check for sensitive content even when the filename looks ordinary; the path denylist is not a content secret scanner. If authorization is unclear, ask before running. This repository uses `AGENTS.md`; do not create a competing `CLAUDE.md` for these upstream examples.
 
-2. Run:
+2. This SKILL.md lives alongside `scripts/` in the same directory. Find that directory, then run:
 
 cd <directory_containing_this_SKILL.md> && python3 -m scripts <absolute_filepath>
 
 3. The CLI will:
-- detect file type (no tokens)
-- call Claude to compress
-- validate output (no tokens)
-- if errors: cherry-pick fix with Claude (targeted fixes only, no recompression)
-- retry up to 2 times
+- resolve the path, reject sensitive-looking names/locations, check size, and detect file type
+- stop for empty input or an existing backup
+- call Claude to compress; stop without writes if the initial reply is empty or unchanged
+- save and read back the backup before writing the candidate to the selected file
+- validate the written candidate (no tokens); if invalid, make one targeted repair call and validate once more
+- keep the backup on success; restore the original and remove that operation's backup if both validation passes fail normally
 
-4. Return result to user
+4. Return the result and backup location to the user. There are at most two validation passes, not two repair retries. Unexpected errors or interruptions after writing the candidate can require manual recovery; do not promise automatic recovery from every failure. See `SECURITY.md` for the data boundary and offline tests.
 
 ## Compression Rules
 
