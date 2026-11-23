@@ -2,7 +2,11 @@
 
 Real session token receipts. No AI estimation.
 
-## What it does
+## Availability
+
+This repository does not bundle `hooks/caveman-stats.js`, `hooks/caveman-mode-tracker.js`, or their active hook configuration. Without that companion runtime, statistics are unavailable. Do not estimate numbers, read session logs manually, or install hooks automatically.
+
+## What it does when the companion runtime is active
 
 Reads the current Claude Code session log directly and reports actual input/output token usage plus estimated savings versus a non-caveman baseline. Numbers come from the JSONL session log on disk — the model itself does not compute or estimate them. Output is injected by the `caveman-mode-tracker` hook, which intercepts `/caveman-stats` and returns the formatted stats as a blocked-decision reason.
 

@@ -7,6 +7,7 @@ Usage:
 """
 
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import List
@@ -15,6 +16,41 @@ from .detect import should_compress
 from .validate import validate
 
 MAX_RETRIES = 2
+
+# Reject sensitive-looking paths before detection or file reads.
+# This is a filename/path heuristic, not a content scanner for secrets.
+SENSITIVE_BASENAME_REGEX = re.compile(
+    r"(?ix)^("
+    r"\.env(\..+)?"
+    r"|\.netrc"
+    r"|credentials(\..+)?"
+    r"|secrets?(\..+)?"
+    r"|passwords?(\..+)?"
+    r"|id_(rsa|dsa|ecdsa|ed25519)(\.pub)?"
+    r"|authorized_keys"
+    r"|known_hosts"
+    r"|.*\.(pem|key|p12|pfx|crt|cer|jks|keystore|asc|gpg)"
+    r")$"
+)
+
+SENSITIVE_PATH_COMPONENTS = frozenset({".ssh", ".aws", ".gnupg", ".kube", ".docker"})
+
+SENSITIVE_NAME_TOKENS = (
+    "secret", "credential", "password", "passwd",
+    "apikey", "accesskey", "token", "privatekey",
+)
+
+
+def is_sensitive_path(filepath: Path) -> bool:
+    """Reject sensitive-looking names and paths without reading file contents."""
+    if SENSITIVE_BASENAME_REGEX.match(filepath.name):
+        return True
+    lowered_parts = {part.lower() for part in filepath.parts}
+    if lowered_parts & SENSITIVE_PATH_COMPONENTS:
+        return True
+    # Normalize separators so "api-key" and "api_key" both match "apikey".
+    lowered_name = re.sub(r"[_\-\s.]", "", filepath.name.lower())
+    return any(token in lowered_name for token in SENSITIVE_NAME_TOKENS)
 
 
 # ---------- Claude Calls ----------
@@ -100,8 +136,16 @@ Return ONLY the fixed compressed file. No explanation.
 
 
 def compress_file(filepath: Path) -> bool:
-    # Resolve and validate path
+    # Resolve and validate path before detection or file reads.
     filepath = filepath.resolve()
+    if is_sensitive_path(filepath):
+        raise ValueError(
+            f"Refusing to compress {filepath}: filename or path looks sensitive "
+            "(credentials, keys, secrets, or known private paths). "
+            "Compression sends file contents to Claude. "
+            "This name check does not scan file contents for secrets."
+        )
+
     MAX_FILE_SIZE = 500_000  # 500KB
     if not filepath.exists():
         raise FileNotFoundError(f"File not found: {filepath}")
@@ -117,6 +161,10 @@ def compress_file(filepath: Path) -> bool:
     original_text = filepath.read_text(errors="ignore")
     backup_path = filepath.with_name(filepath.stem + ".original.md")
 
+    if not original_text.strip():
+        print("Refusing to compress: file is empty or whitespace-only.")
+        return False
+
     # Check if backup already exists to prevent accidental overwriting
     if backup_path.exists():
         print(f"⚠️ Backup file already exists: {backup_path}")
@@ -128,8 +176,27 @@ def compress_file(filepath: Path) -> bool:
     print("Compressing with Claude...")
     compressed = call_claude(build_compress_prompt(original_text))
 
-    # Save original as backup, write compressed to original path
+    if compressed is None or not compressed.strip():
+        print("Compression aborted: Claude returned an empty response.")
+        print("Original file is untouched (no backup created).")
+        return False
+
+    if compressed.strip() == original_text.strip():
+        print("Compression aborted: output is identical to input.")
+        print("Original file is untouched (no backup created).")
+        return False
+
+    # Verify the saved backup before touching the input file.
     backup_path.write_text(original_text)
+    backup_readback = backup_path.read_text(errors="ignore")
+    if backup_readback != original_text:
+        print(f"Backup write verification failed: {backup_path}")
+        print("Backup contents differ from the original. Input file is untouched.")
+        try:
+            backup_path.unlink()
+        except OSError:
+            pass
+        return False
     filepath.write_text(compressed)
 
     # Step 2: Validate + Retry

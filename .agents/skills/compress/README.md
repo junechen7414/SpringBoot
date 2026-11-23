@@ -25,7 +25,7 @@ CLAUDE.md          ← compressed (Claude reads this — fewer tokens every sess
 CLAUDE.original.md ← human-readable backup (you edit this)
 ```
 
-Original never lost. You can read and edit `.original.md`. Run skill again to re-compress after edits.
+A sibling `.original.md` backup is kept after successful compression. An existing backup makes the script stop rather than overwrite it. Review and manage that backup before another run; failures or interruptions are not guaranteed to restore every file automatically.
 
 ## Benchmarks
 
@@ -67,7 +67,7 @@ All validations passed ✅ — headings, code blocks, URLs, file paths preserved
 
 ## Security
 
-`caveman-compress` is flagged as Snyk High Risk due to subprocess and file I/O patterns detected by static analysis. This is a false positive — see [SECURITY.md](./SECURITY.md) for a full explanation of what the skill does and does not do.
+The local `compress` implementation sends file text to the configured Claude backend and overwrites the selected file after verifying a sibling backup. Sensitive-looking paths are rejected, but this is not a content secret scanner. Review the content and obtain authorization before transmission; do not dismiss scanner findings solely because the subprocess arguments are fixed. See [SECURITY.md](./SECURITY.md) for the data boundary and failure-handling limits.
 
 ## Install
 
@@ -103,28 +103,46 @@ Examples:
 | `.py`, `.js`, `.ts`, `.json`, `.yaml` | ❌ Skip (code/config) |
 | `*.original.md` | ❌ Skip (backup files) |
 
+Sensitive-looking names and locations (`.env`, `.env.*`, credentials, keys, `.ssh`, and similar paths) are rejected before detection or reads. Files above 500,000 bytes are rejected. Empty input, an existing backup, and empty or unchanged initial model replies leave the input untouched. Ordinary filenames can still contain secrets; the path check does not inspect content for them.
+
+This repository uses `AGENTS.md`; the upstream `CLAUDE.md` examples below are not instructions to create a competing entry file here. The local package is under `.agents/skills/compress/`; an upstream `/caveman:compress` plugin installation is a separate entry point whose availability depends on the host.
+
 ## How It Work
 
 ```
-/caveman:compress CLAUDE.md
+selected file
         ↓
-detect file type        (no tokens)
+resolve path / reject sensitive-looking paths / check size / detect file type
+        ↓
+read input / reject empty input or an existing backup
         ↓
 Claude compresses       (tokens — one call)
         ↓
-validate output         (no tokens)
-  checks: headings, code blocks, URLs, file paths, bullets
+reject empty or unchanged initial output
         ↓
-if errors: Claude fixes cherry-picked issues only   (tokens — targeted fix)
-  does NOT recompress — only patches broken parts
+write sibling .original.md backup / read it back and compare
         ↓
-retry up to 2 times
+write candidate to the selected file
         ↓
-write compressed → CLAUDE.md
-write original   → CLAUDE.original.md
+validate candidate      (no tokens)
+        ↓
+if invalid: one targeted Claude repair / write repair / validate once more
+        ↓
+valid: keep candidate + backup
+invalid twice: restore original / remove this operation's backup
 ```
 
-Only two things use tokens: initial compression + targeted fix if validation fails. Everything else is local Python.
+There are at most two validation passes and one targeted repair call, not two repair retries. Only the initial compression and optional repair use the backend. Unexpected exceptions or interruptions after the candidate write can still require manual recovery from the backup; this is not an atomic write transaction.
+
+### Offline regression tests
+
+From the repository root, run synthetic-file tests with the model backend mocked:
+
+```bash
+python -I -B -m unittest discover -s .agents/skills/compress/scripts/tests -p 'test_*.py' -v
+```
+
+These tests do not invoke the model SDK, CLI, MCP, or network. See [SECURITY.md](./SECURITY.md) for coverage and limits.
 
 ## What Is Preserved
 

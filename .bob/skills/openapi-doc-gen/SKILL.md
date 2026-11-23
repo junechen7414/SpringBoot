@@ -40,7 +40,7 @@ description: >
 
 ```bash
 # 確認檔案存在且非空
-cat build/docs/swagger.json | python -m json.tool > $null && echo "Valid JSON"
+python -m json.tool build/docs/swagger.json > /dev/null && printf 'Valid JSON\n'
 # 或直接查看
 cat build/docs/swagger.json
 ```
